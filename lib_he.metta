@@ -16,6 +16,13 @@
    (assert (=alpha $A $B)))
 
 (: unify (-> Expression Expression Expression Expression %Undefined%))
+(= (unify $space $pattern $then $else)
+   (if (is-space $space)
+       (let $temp (cut)
+            (case (match $space $pattern $pattern)
+                  (($pattern $then)
+                   (Empty $else)))) (empty)))
+
 (= (unify $a $b $then $else)
    (if (= $a $b)
        (eval $then)
