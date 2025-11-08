@@ -1,5 +1,4 @@
 ;Add item to space without duplicates (cheap exists check due to 'once' despite 'collapse')
-!(add-atom &dup (haha))
 (= (add-atom-no-duplicate $Space $Atom)
    (let $st (s (repra $Atom))
         (if (== () (collapse (once (match &dup $st True))))
