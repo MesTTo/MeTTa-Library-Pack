@@ -19,13 +19,13 @@
 !(addProgn 50)
 
 ;for, runs body for each nondet-generated item without reification:
-(: for (-> Expression Expression %Undefined% %Undefined%))
-(= (for $x $generator $iterator)
+(: for (-> Expression %Undefined% %Undefined%))
+(= (for $generator $iterator)
    (let $itlambda (|-> ($x) (let $temp ($iterator $x) True))
         (forall $generator $itlambda)))
 
 ;select, commit-to-first:
-(: sel (-> Expression Expression %Undefined% %Undefined%))
-(= (sel $x $generator $iterator)
+(: sel (-> Expression %Undefined% %Undefined%))
+(= (sel $generator $iterator)
    (let $itlambda (|-> ($x) (let $temp ($iterator $x) False))
         (forall $generator $itlambda)))
