@@ -29,3 +29,8 @@
 (= (sel $generator $iterator)
    (let $itlambda (|-> ($x) (let $temp ($iterator $x) False))
         (forall $generator $itlambda)))
+
+;fold without reification
+(: fold (-> %Undefined% Expression %Undefined% %Undefined%))
+(= (fold $merge $generator $initval)
+   (foldall $merge $generator $initval))
