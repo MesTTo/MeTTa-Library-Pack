@@ -1,8 +1,10 @@
+;generate a list full of unique variables:
 (= (varrange $K $N)
    (if (< $K $N)
        (superpose ($X (varrange (+ $K 1) $N)))
        (empty)))
 
+;Add progn metta4 functions for procedural execution:
 (= (addProgn $K)
    (if (> $K 0)
        (let* (($varlist (collapse (varrange 0 $K)))
@@ -14,5 +16,16 @@
               ($temp2 (add-atom &self (= $Headern $lastvar))))
              (addProgn (- $K 1)))
        (empty)))
-
 !(addProgn 50)
+
+;for, runs body for each nondet-generated item without reification:
+(: for (-> Expression Expression %Undefined% %Undefined%))
+(= (for $x $generator $iterator)
+   (let $itlambda (|-> ($x) (let $temp ($iterator $x) True))
+        (forall $generator $itlambda)))
+
+;select, commit-to-first:
+(: sel (-> Expression Expression %Undefined% %Undefined%))
+(= (sel $x $generator $iterator)
+   (let $itlambda (|-> ($x) (let $temp ($iterator $x) False))
+        (forall $generator $itlambda)))
