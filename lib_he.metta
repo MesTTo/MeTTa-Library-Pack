@@ -39,7 +39,7 @@
 
 ;Error Handling
 (= (if-error $X $A $B)
-   (if (== (car-atom $X) Error) 
+   (if (= $X (cons Error $_)) 
        $A $B))
 
 (= (return-on-error $result $B)
