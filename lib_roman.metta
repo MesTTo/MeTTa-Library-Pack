@@ -1,5 +1,6 @@
 ;Tracing helper
 (= (traceid $x) (trace! $x $x))
+(= (tracem $msg $x) (trace! ($msg $x) $x))
 
 ;Higher order functions
 (= (map-flat $f ()) ())
@@ -68,7 +69,6 @@
 
 
 ;Reverse Function Matching
-
 (= (@ $a $b) (let $a $b $a))
 
 (= (head $x) (cons $x $xs))
