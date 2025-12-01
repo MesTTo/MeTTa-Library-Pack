@@ -11,3 +11,5 @@
                                                                             (import_prolog_function $function)))
 
 !(import_prolog_functions_from_file ./lib/lib_prolog (static-import!))
+
+!(import_prolog_functions_from_file ./lib/lib_prolog (git-import!))
