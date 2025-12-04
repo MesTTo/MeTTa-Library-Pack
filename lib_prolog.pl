@@ -46,9 +46,9 @@ replace_all(P, R, S, O) :- split_string(S, P, "", Parts),
 %%% Git Import: %%%
 'git-import!'(GitPath, true) :- 'git-import!'(GitPath, './repos', '', true).
      
-'git-import!'(GitPath, BaseDir, true) :- 'git-import!'(GitPath, BaseDir, '', true).
+'git-import!'(GitPath, BuildCmd, true) :- 'git-import!'(GitPath, BuildCmd, './repos', true).
      
-'git-import!'(GitPath, BaseDir, BuildCmd, true) :- ( exists_directory(BaseDir) -> true
+'git-import!'(GitPath, BuildCmd, BaseDir, true) :- ( exists_directory(BaseDir) -> true
                                                                                  ; make_directory_path(BaseDir) ),
                                                    repo_name_from_git(GitPath, Name),
                                                    directory_file_path(BaseDir, Name, LocalDir),
@@ -76,9 +76,8 @@ clone_repo(GitPath, LocalDir) :- format("Cloning ~w into ~w~n", [GitPath, LocalD
 
 run_build_step(_, BuildCmd) :- (BuildCmd = '' ; BuildCmd = ""), !.
 run_build_step(LocalDir, BuildCmd) :- format("Running build: ~w in ~w~n", [BuildCmd, LocalDir]),
-                                      atom_string(BuildAtom, BuildCmd),
                                       process_create(path(sh),
-                                                     ['-c', BuildAtom],
+                                                     [BuildCmd],
                                                      [cwd(LocalDir),
                                                       stdout(pipe(Out)), stderr(pipe(Err))]),
                                       read_string(Out, _, _),
