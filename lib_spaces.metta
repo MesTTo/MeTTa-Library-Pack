@@ -18,4 +18,4 @@
 ;Efficiently count the amount of particular items in the space without listifying the items:
 (: match-count (-> %Undefined% Expression %Undefined%))
 (= (match-count $space $pattern)
-   (foldall + ((|-> () (match $space $pattern 1))) 0))
+   (foldall + (match $space $pattern 1) 0))
