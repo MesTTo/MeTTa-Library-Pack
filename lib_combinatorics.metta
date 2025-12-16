@@ -10,6 +10,13 @@
            (let $i (range 0 $j)
                 ((index-atom $L $i) (index-atom $L $j)))))
 
+; choose exactly k elements, unordered
+(= (chooseK $L 0) (let $temp (cut) (())))
+(= (chooseK () $k) (let $temp (cut) ()))
+(= (chooseK (cons $h $t) $k)
+   (append (map-atom (chooseK $t (- $k 1)) (|-> ($c) (cons $h $c)))
+           (chooseK $t $k)))
+
 ;Take the first K items from the list:
 (= (takeK $k ()) ())
 (= (takeK $k (cons $head $tail))
