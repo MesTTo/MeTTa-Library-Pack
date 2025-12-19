@@ -87,6 +87,3 @@
 
 ;(= (prog1 (cons $x $xs)) $x)
 ;(= (progn (rcons $xs $x)) $x)
-
-(= (clear-space $space) (let $as (get-atoms $space) (prog1 (remove-atom $space $as) (cut))))
-(= (clear-space $space) false)
