@@ -71,12 +71,6 @@
 
 (= (&^& $f1 $f2 $arg) (superpose (($f1 $arg) ($f2 $arg))))
 
-(: compose (-> Expression Atom Atom))
-(= (compose (cons $f $rest) $args)
-   (if (== $rest ())
-       (let $func (cons $f $args) (eval $func))
-       ($f (compose $rest $args))))
-
 ;Reverse Function Matching
 (= (@ $a $b) (let $a $b $a))
 
