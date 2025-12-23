@@ -11,7 +11,7 @@
 (= (@ $a $b) (let $a $b $a))
 
 ;For loop
-(: for (-> Expression Expression Expression Atom))
+(: for (-> Expression Expression Expression Expression))
 (= (for $var $collection $body)
    (quote (let $var (superpose $collection)
                                $body)))
