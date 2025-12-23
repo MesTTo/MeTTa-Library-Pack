@@ -9,3 +9,10 @@
 
 ;Reverse Function Matching
 (= (@ $a $b) (let $a $b $a))
+
+;For loop
+(: for (-> Expression Expression Expression Atom))
+(= (for $var $collection $body)
+   (quote (let $var (superpose $collection)
+                               $body)))
+!(add-translator-rule! for)
