@@ -3,7 +3,7 @@
 (= (. (cons $f $rest) $args)
    (if (== $rest ())
        (if (== (length $args) 1) ;optimization for single arg, avoids
-           (let ($arg) $args ($f $arg)) ;eval for function call
+           (let ($arg) $args ($f $arg)) ;reduce for function call
            (let $func (cons $f $args) (reduce $func)))
        ($f (. $rest $args))))
 
