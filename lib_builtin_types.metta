@@ -7,11 +7,15 @@
 (: / (-> Number Number Number))
 (: % (-> Number Number Number))
 
-;; Type definitions of comparison operators
+;; Type definitions of ordered comparison operators
 (: < (-> Number Number Bool))
 (: <= (-> Number Number Bool))
 (: > (-> Number Number Bool))
 (: >= (-> Number Number Bool))
+
+;; Type definitions of equality and negated equality operators
+(: == (-> $a $b Bool))
+(: != (-> $a $b Bool))
 
 ;; Type definitions of common mathematical functions
 (: pow-math (-> Number Number Number))
@@ -30,7 +34,16 @@
 (: atan-math (-> Number Number))
 (: min-atom (-> $a Number))
 (: max-atom (-> $a Number))
+(: min (-> Number Number Number))
+(: max (-> Number Number Number))
+(: exp (-> Number Number))
 
 ;; Type definitions of isnan and isinf predicates
 (: isnan-math (-> Number Bool))
 (: isinf-math (-> Number Bool))
+
+;; Type definitions of boolean operators
+(: and (-> Bool Bool Bool))
+(: or (-> Bool Bool Bool))
+(: not (-> Bool Bool))
+(: xor (-> Bool Bool Bool))
