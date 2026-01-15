@@ -11,6 +11,14 @@
          ((True True)
           (Empty False))))
 
+;Check whether a predicate succeeds
+(: succeedsPredicate (-> Expression Bool))
+(= (succeedsPredicate $pattern)
+   (quote (case (translatePredicate (catch (Predicate $pattern) $_ fail))
+                (($item True)
+                 (Empty False)))))
+!(add-translator-rule! succeedsPredicate)
+
 ;Remove all atoms of a space:
 (= (remove-all-atoms $space) 
    (collapse (match $space $x (remove-atom $space $x))))
