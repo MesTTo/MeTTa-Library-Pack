@@ -29,7 +29,8 @@
           ($outmsg    (py-call (builtins.index $output 1))) ;0 is ResponseReasoningItem
           ($content   (py-call (getattr $outmsg "content")))
           ($part      (py-call (builtins.index $content 0)))
-          ($text      (py-call (getattr $part "text"))))
+          ($text      (py-call (getattr $part "text")))
+          ($_ (cut)))
          $text))
 
 (= (sread-safe $w)
@@ -46,5 +47,6 @@
           ($res        (py-call (builtins.apply_kwargs $create $kwargs)))
           ($data       (py-call (getattr $res "data")))
           ($item       (py-call (builtins.index $data 0)))
-          ($vector     (py-call (getattr $item "embedding"))))
+          ($vector     (py-call (getattr $item "embedding")))
+          ($_ (cut)))
          $vector))
