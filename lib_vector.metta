@@ -8,6 +8,6 @@
 (= (norm $v)
    (sqrt-math (dot $v $v)))
 
-(= (cosine-with-normalize $a $b)
+(= (cosine $a $b)
    (/ (dot $a $b)
       (* (norm $a) (norm $b))))
