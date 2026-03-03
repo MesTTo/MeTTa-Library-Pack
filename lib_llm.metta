@@ -1,5 +1,5 @@
 ;Import Python helpers for OpenRouter
-!(import! &self "lib/lib_llm.py")
+!(import! &self (library lib_llm.py))
 
 ;Create string by appending the list entries
 (= (py-str-helper () $outp) $outp)
