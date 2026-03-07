@@ -34,7 +34,7 @@
           ($res       (py-call (builtins.apply_kwargs $create $kwargs)))
           ($text      (py-call (getattr $res "output_text")))
           ($_ (cut)))
-     $text))
+         $text))
 
 ;Function to prompt a model via OpenRouter API:
 (= (useOpenRouter $model $prompt)
