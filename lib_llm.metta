@@ -57,7 +57,7 @@
           ($item       (py-call (builtins.index $data 0)))
           ($vector     (py-call (getattr $item "embedding")))
           ($_ (cut)))
-     $vector))
+         $vector))
 
 (= (useOpenRouterEmbedding $model $text)
    (py-call (lib_llm.openrouter_embed $model $text)))
