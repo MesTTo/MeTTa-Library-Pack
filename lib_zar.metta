@@ -1,9 +1,9 @@
 ;Prolog interop: predicate-style consult/use_module wrappers
 (= (consult_file $prologfile)
-   (callPredicate (Predicate (quote (consult $prologfile)))))
+   (callPredicate (Predicate (quote (consult_global $prologfile)))))
 
 (= (use_module_file $prologfile)
-   (callPredicate (Predicate (quote (use_module $prologfile)))))
+   (callPredicate (Predicate (quote (use_module_global $prologfile)))))
 
 ;Import Prolog functions from a file (predicate-style, no main.pl wrappers needed)
 (: import_prolog_functions_from_file_pred (-> %Undefined% Expression %Undefined%))
