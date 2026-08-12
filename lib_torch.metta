@@ -36,6 +36,8 @@
 (= (torch-shape $a) (py-call (list (py-call (getattr $a shape)))))
 
 ;Autograd:
-(= (torch-requires-grad $a) (py-call (.requires_grad_ $a True)))
+;requires_grad_ defaults to True; py-call would pass the boolean atom as the
+;string "true", so the argument-free form is the correct spelling here.
+(= (torch-requires-grad $a) (py-call (.requires_grad_ $a)))
 (= (torch-backward $a) (py-call (.backward $a)))
 (= (torch-grad $a) (py-call (getattr $a grad)))
