@@ -1,3 +1,10 @@
+; Purpose: weighted-superposition operations for normalization, ranking,
+; sampling, aggregation, and expectation.
+; Open Obligations:
+;   To Do: None
+;   Hacks: None
+;   Future Enhancements: None
+;
 ;Weighted superpositions: alternatives that carry a measure.
 ;
 ;A weighted superposition is a tuple of (weight value) pairs, the head shape
@@ -16,15 +23,23 @@
 
 ;Scale every weight so the mass is one; a distribution:
 (= (ws-normalize $ps)
-   (let $t (ws-total $ps)
-        (map-atom $ps (|-> ($p) ((/ (index-atom $p 0) $t) (index-atom $p 1))))))
+   (if (== $ps ())
+       ()
+       (let $t (ws-total $ps)
+            (if (<= (abs-math $t) 0.0)
+                (Error $ps "ws-normalize requires nonzero total mass")
+                (map-atom $ps
+                  (|-> ($p) ((/ (index-atom $p 0) $t)
+                              (index-atom $p 1))))))))
 
 ;Softmax with a temperature: scores become a distribution. Low temperature
 ;sharpens toward the best pair, high temperature flattens toward uniform.
 (= (ws-softmax $ps $temp)
-   (ws-normalize
-     (map-atom $ps (|-> ($p) ((exp-math (/ (index-atom $p 0) $temp))
-                              (index-atom $p 1))))))
+   (if (<= (abs-math $temp) 0.0)
+       (Error $ps "ws-softmax requires a nonzero temperature")
+       (ws-normalize
+         (map-atom $ps (|-> ($p) ((exp-math (/ (index-atom $p 0) $temp))
+                                  (index-atom $p 1)))))))
 
 ;The pair with more weight, then the best value; the temperature-zero limit:
 (= (ws-pickmax $a $b) (if (>= (index-atom $a 0) (index-atom $b 0)) $a $b))
