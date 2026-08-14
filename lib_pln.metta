@@ -194,7 +194,7 @@
 
 (= (Truth_inversion (stv $Bs $Bc) (stv $ABs $ABc))
    ; confidence depends on Truth of (target) B node, which is not according to OpenCOG classic.
-   ; confidence penality not according to OpenCOG classic PLN. Is weaker in this implementation.
+   ; confidence penalty not according to OpenCOG classic PLN. Is weaker in this implementation.
    (stv $ABs (* $Bc (* $ABc 0.6))))
 
 ; see https://github.com/opencog/pln/blob/master/opencog/pln/rules/wip/equivalence-to-implication.scm
@@ -413,7 +413,7 @@
        (let $lowestPriorityItem (BestCandidate PriorityRankNeg () $L)
             (LimitSize (Without $L $lowestPriorityItem) $size))))
 
-;;Priority-queue based task ranking deriver with belief buffer
+;;Priority-queue based task ranking engine with belief buffer
 (= (PLN.Derive $Tasks $Beliefs $steps $maxsteps $taskqueuesize $beliefqueuesize)
    (if (or (> $steps $maxsteps) (== $Tasks ()))
        ($Tasks $Beliefs)
@@ -463,4 +463,3 @@
 
 (= (PLN.Query $kb $term)
    (PLN.Query $kb $term (PLN.Config.MaxSteps))) ;default steps bound
-
