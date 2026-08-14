@@ -4,7 +4,7 @@
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
 % Open Obligations:
-%   To Do: Resolve the remaining memoization findings in ai-prolog-review.md.
+%   To Do: None
 %   Hacks: None
 %   Future Enhancements: None
 
