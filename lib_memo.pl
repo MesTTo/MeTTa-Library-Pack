@@ -1,5 +1,8 @@
 % Purpose: memoize MeTTa function calls with bounded LRU or WTinyLFU
 %   eviction and dependency-based invalidation.
+% Guarantees:
+%   - Routine cache eviction does not write diagnostics to user_error
+%     [tested 2026-08-14: memo_eviction_output].
 % Open Obligations:
 %   To Do: Resolve the remaining memoization findings in ai-prolog-review.md.
 %   Hacks: None
@@ -388,9 +391,7 @@ evict_global_space(NeededBytes, Attempts) :-
       -> true  % Space available now
       ; % Need to evict
         ( find_global_oldest(Fun, Arity, VictimAVs)
-        -> format(user_error, 'DEBUG: Global eviction ~d: ~w/~d (needed ~w, current ~w, limit ~w)~n',
-                 [Attempts, Fun, Arity, NeededBytes, Current, Limit]),
-           evict_entry(Fun, Arity, VictimAVs),
+        -> evict_entry(Fun, Arity, VictimAVs),
            NewAttempts is Attempts + 1,
            evict_global_space(NeededBytes, NewAttempts)
         ; format(user_error, 'WARNING: No entries to evict, but global limit exceeded.~n', []),
