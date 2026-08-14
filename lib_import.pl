@@ -52,10 +52,6 @@ transform_chars([' '|T], false, [','|R]) :- !,
 
 %Keep all other characters unchanged
 transform_chars([H|T], Q, [H|R]) :- transform_chars(T, Q, R).
-%Helper predicate for string replacement:
-replace_all(P, R, S, O) :- split_string(S, P, "", Parts),
-                           atomic_list_concat(Parts, R, O).
-
 %The static import function that allows loading static data files fast:
 'static-import!'(Space, File, true) :- style_check(-discontiguous),
                                        atom_string(File, SFile),

@@ -705,22 +705,6 @@ cache_probe_and_store_variant(Fun, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
         finish_in_progress(Fun, Arity, CurGen, KeyAVs)),
     cache_store(Fun, Arity, CurGen, KeyAVs, ProbeResults).
 
-cache_probe_and_store_ground(Fun, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
-    setup_call_cleanup(
-        true,
-        memo_probe_ground_results(Fun, AVs, ProbeResults),
-        finish_in_progress(Fun, Arity, CurGen, KeyAVs)),
-    apply_aggregate_mode(ProbeResults, AggregatedResults),
-    cache_store(Fun, Arity, CurGen, KeyAVs, AggregatedResults).
-
-cache_call_cached_ground(Fun, Arity, CurGen, KeyAVs, Out) :-
-    cache_lookup(Fun, Arity, CurGen, KeyAVs, CachedResults),
-    !,
-    member(Answer, CachedResults),
-    replay_ground_answer(Out, Answer).
-cache_call_cached_ground(_, _, _, _, _) :-
-    fail.
-
 cache_call_store_ground(Fun, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
     _ = Goal,
     % For ground+quantized keys, collisions are intentional. Guarding "in-progress"
