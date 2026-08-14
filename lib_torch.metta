@@ -1,7 +1,7 @@
 ;Purpose: PyTorch from plain MeTTa through py-call, no Python-side setup
 ;  needed beyond torch being importable. The pettorch Python package registers
 ;  a richer operation set (identity-preserving tensors, modules as functions,
-;  knn); this library is the CLI-reachable half, in the shape examples/torch.metta
+;  knn); this library is the CLI-reachable half, in the shape examples/integration/torch.metta
 ;  established.
 ;Open Obligations:
 ;  To Do: None
