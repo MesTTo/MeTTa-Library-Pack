@@ -217,7 +217,7 @@
        (let $lowestPriorityItem (BestCandidate PriorityRankNeg () $L)
             (LimitSize (exclude-item $lowestPriorityItem $L) $size))))
 
-;;Priority-queue based task ranking deriver with belief buffer
+;;Priority-queue based task ranking engine with belief buffer
 (= (NARS.Derive $Tasks $Beliefs $steps $maxsteps $taskqueuesize $beliefqueuesize)
    (if (or (> $steps $maxsteps) (== $Tasks ()))
        ($Tasks $Beliefs)

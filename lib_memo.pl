@@ -1,3 +1,13 @@
+% Purpose: memoize MeTTa function calls with bounded LRU or WTinyLFU
+%   eviction and dependency-based invalidation.
+% Guarantees:
+%   - Routine cache eviction does not write diagnostics to user_error
+%     [tested 2026-08-14: memo_eviction_output].
+% Open Obligations:
+%   To Do: None
+%   Hacks: None
+%   Future Enhancements: None
+
 :- use_module(library(lists)).
 :- use_module(library(solution_sequences)).
 
@@ -223,9 +233,9 @@ cache_clear :-
     retractall(metta_memo_total_bytes(_)),
     asserta(metta_memo_total_bytes(0)),
     retractall(metta_memo_stat(_, _)),
-    ( catch(nb_current(metta_cms, _), _, fail) -> nb_delete(metta_cms) ; true ),
-    ( catch(nb_current(metta_cms_size, _), _, fail) -> nb_delete(metta_cms_size) ; true ),
-    ( catch(nb_current(metta_memo_accesses, _), _, fail) -> nb_delete(metta_memo_accesses) ; true ).
+    ( catch(nb_current('$petta_memo_cms', _), _, fail) -> nb_delete('$petta_memo_cms') ; true ),
+    ( catch(nb_current('$petta_memo_cms_size', _), _, fail) -> nb_delete('$petta_memo_cms_size') ; true ),
+    ( catch(nb_current('$petta_memo_accesses', _), _, fail) -> nb_delete('$petta_memo_accesses') ; true ).
 
 'clear-memoize'(true) :-
     cache_clear.
@@ -260,23 +270,23 @@ with_cms_mutex(Goal) :-
 % Frequency Sketch (WTinyLFU)
 
 ensure_cms :-
-    ( catch(nb_current(metta_cms, _), _, fail),
-      catch(nb_current(metta_cms_size, _), _, fail)
+    ( catch(nb_current('$petta_memo_cms', _), _, fail),
+      catch(nb_current('$petta_memo_cms_size', _), _, fail)
     -> true
     ; current_prolog_flag(max_arity, MaxArity0),
       ( integer(MaxArity0), MaxArity0 > 0 -> MaxArity = MaxArity0 ; MaxArity = 1024 ),
       SketchSize is min(8192, MaxArity),
       functor(CMS, v, SketchSize),
       forall(between(1, SketchSize, I), nb_setarg(I, CMS, 0)),
-      nb_setval(metta_cms, CMS),
-      nb_setval(metta_cms_size, SketchSize),
-      nb_setval(metta_memo_accesses, 0)
+      nb_setval('$petta_memo_cms', CMS),
+      nb_setval('$petta_memo_cms_size', SketchSize),
+      nb_setval('$petta_memo_accesses', 0)
     ).
 
 get_freq(Fun, Arity, AVs, Freq) :-
     with_cms_mutex(
-        ( catch(nb_current(metta_cms, CMS), _, fail)
-        -> ( catch(nb_current(metta_cms_size, SketchSize), _, fail)
+        ( catch(nb_current('$petta_memo_cms', CMS), _, fail)
+        -> ( catch(nb_current('$petta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
             term_hash((Fun, Arity, AVs), HashRaw),
@@ -288,8 +298,8 @@ get_freq(Fun, Arity, AVs, Freq) :-
 
 record_hit(Fun, Arity, AVs) :-
     with_cms_mutex(
-        ( catch(nb_current(metta_cms, CMS), _, fail)
-        -> ( catch(nb_current(metta_cms_size, SketchSize), _, fail)
+        ( catch(nb_current('$petta_memo_cms', CMS), _, fail)
+        -> ( catch(nb_current('$petta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
             term_hash((Fun, Arity, AVs), HashRaw),
@@ -303,23 +313,23 @@ record_hit(Fun, Arity, AVs) :-
 record_miss(Fun, Arity, AVs) :-
     with_cms_mutex(
         ( ensure_cms,
-          nb_getval(metta_cms_size, SketchSize),
+          nb_getval('$petta_memo_cms_size', SketchSize),
           term_hash((Fun, Arity, AVs), HashRaw),
           Hash is (abs(HashRaw) mod SketchSize) + 1,
-          nb_getval(metta_cms, CMS),
+          nb_getval('$petta_memo_cms', CMS),
           arg(Hash, CMS, Val),
           ( integer(Val) -> NextVal is Val + 1 ; NextVal = 1 ),
           nb_setarg(Hash, CMS, NextVal),
-          nb_getval(metta_memo_accesses, Acc),
+          nb_getval('$petta_memo_accesses', Acc),
           NextAcc is Acc + 1,
-          nb_setval(metta_memo_accesses, NextAcc),
+          nb_setval('$petta_memo_accesses', NextAcc),
           ( NextAcc > SketchSize -> halve_cms ; true )
         )).
 
 halve_cms :-
-    nb_setval(metta_memo_accesses, 0),
-    nb_getval(metta_cms_size, SketchSize),
-    nb_getval(metta_cms, CMS),
+    nb_setval('$petta_memo_accesses', 0),
+    nb_getval('$petta_memo_cms_size', SketchSize),
+    nb_getval('$petta_memo_cms', CMS),
     forall(between(1, SketchSize, I),
         ( arg(I, CMS, Val),
           ( integer(Val) -> NewVal is Val // 2 ; NewVal = 0 ),
@@ -381,9 +391,7 @@ evict_global_space(NeededBytes, Attempts) :-
       -> true  % Space available now
       ; % Need to evict
         ( find_global_oldest(Fun, Arity, VictimAVs)
-        -> format(user_error, 'DEBUG: Global eviction ~d: ~w/~d (needed ~w, current ~w, limit ~w)~n',
-                 [Attempts, Fun, Arity, NeededBytes, Current, Limit]),
-           evict_entry(Fun, Arity, VictimAVs),
+        -> evict_entry(Fun, Arity, VictimAVs),
            NewAttempts is Attempts + 1,
            evict_global_space(NeededBytes, NewAttempts)
         ; format(user_error, 'WARNING: No entries to evict, but global limit exceeded.~n', []),
@@ -696,22 +704,6 @@ cache_probe_and_store_variant(Fun, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
         memo_probe_results(Fun, AVs, ProbeResults),
         finish_in_progress(Fun, Arity, CurGen, KeyAVs)),
     cache_store(Fun, Arity, CurGen, KeyAVs, ProbeResults).
-
-cache_probe_and_store_ground(Fun, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
-    setup_call_cleanup(
-        true,
-        memo_probe_ground_results(Fun, AVs, ProbeResults),
-        finish_in_progress(Fun, Arity, CurGen, KeyAVs)),
-    apply_aggregate_mode(ProbeResults, AggregatedResults),
-    cache_store(Fun, Arity, CurGen, KeyAVs, AggregatedResults).
-
-cache_call_cached_ground(Fun, Arity, CurGen, KeyAVs, Out) :-
-    cache_lookup(Fun, Arity, CurGen, KeyAVs, CachedResults),
-    !,
-    member(Answer, CachedResults),
-    replay_ground_answer(Out, Answer).
-cache_call_cached_ground(_, _, _, _, _) :-
-    fail.
 
 cache_call_store_ground(Fun, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
     _ = Goal,
