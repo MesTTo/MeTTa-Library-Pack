@@ -76,3 +76,33 @@ metta_table_clear(Call, true) :-
 
 metta_table_clear_all(true) :-
     abolish_all_tables.
+
+%A table answers from the equations that were compiled when it was built,
+%so changing any equation makes every table that could have read it stale.
+%Measured before this, in the workspace review's P07: tabling a one-clause
+%function, adding a second equation, then calling it answered only the
+%cached first answer, and only an explicit abolish exposed both.
+%
+%Every table goes, not the changed function's alone. Deciding which tables
+%could have read a given equation needs a call graph over compiled clauses
+%that the engine does not keep, and answering that question wrongly is a
+%stale answer with no symptom. Definition changes are rare beside calls,
+%tables rebuild lazily on the next call, and this is the same funnel that
+%already invalidates the specializer and the memo cache
+%[tested: tabling_equation_change_drops_tables].
+:- multifile metta_on_function_changed/1.
+metta_on_function_changed(_) :-
+    metta_tabling_declared, !,
+    abolish_all_tables.
+metta_on_function_changed(_).
+
+:- multifile metta_on_function_removed/1.
+metta_on_function_removed(_) :-
+    metta_tabling_declared, !,
+    abolish_all_tables.
+metta_on_function_removed(_).
+
+%Nothing is tabled in the overwhelming majority of programs, and this hook
+%runs on every equation the loader compiles, so the test that decides it is
+%one indexed lookup on a predicate that is usually empty.
+metta_tabling_declared :- 'get-atoms'('&petta', [tabled|_]), !.
