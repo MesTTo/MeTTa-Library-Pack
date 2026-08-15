@@ -30,6 +30,7 @@
 
 :- use_module(library(lists)).
 :- use_module(library(solution_sequences)).
+:- use_module(library(ugraphs)). %vertices_edges_to_ugraph/3, reachable/3
 
 % State Declarations
 %
@@ -270,21 +271,17 @@ bump_metta_memo_generation(Fun, Module, Arity) :-
     retractall(metta_memo_generation(Fun, Module, Arity, _)),
     assertz(metta_memo_generation(Fun, Module, Arity, Next)).
 
+%Which functions an invalidation has to reach: this one, and every caller
+%that reaches it through any chain. The dependency facts are caller to
+%callee, so the graph is built with the edges reversed and reachability
+%answers the closure, seed included and in standard order
+%[source: SWI-Prolog 10.1 Reference Manual A.63, library(ugraphs)].
 impacted_functions(SeedFun, SeedModule, Impacted) :-
-    impacted_closure([SeedFun-SeedModule], [], Raw),
-    sort(Raw, Impacted).
-
-impacted_closure([], Seen, Seen).
-impacted_closure([Key|Rest], Seen, Impacted) :-
-    ( memberchk(Key, Seen)
-    -> impacted_closure(Rest, Seen, Impacted)
-    ; Key = Fun-Module,
-      findall(Caller-CallerModule,
-          metta_memo_dep(Caller, CallerModule, _, Fun, Module, _),
-          Callers),
-      append(Rest, Callers, Next),
-      impacted_closure(Next, [Key|Seen], Impacted)
-    ).
+    findall((Callee-CalleeModule)-(Caller-CallerModule),
+            metta_memo_dep(Caller, CallerModule, _, Callee, CalleeModule, _),
+            Edges),
+    vertices_edges_to_ugraph([SeedFun-SeedModule], Edges, Graph),
+    reachable(SeedFun-SeedModule, Graph, Impacted).
 
 cache_invalidate_single(Fun, Module) :-
     findall(Arity,
