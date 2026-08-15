@@ -14,10 +14,15 @@
 %     unchanged [tested 2026-08-15: memo_space_isolation].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
-%   name stays the first argument of every table so first-argument
-%   indexing keeps discriminating; a module argument in front would key
-%   almost every clause on user
-%   [source: SWI-Prolog 10.1 Reference Manual 2.17, hash quality].
+%   name stays the first argument, which is where it earns its place on
+%   the tables consulted with only a name bound: memo_enabled/2 and
+%   metta_memo_generation/4 both index on argument 1 at 47x over sixty
+%   functions in one module, and memo_enabled/2 is what the dispatch
+%   hook's fast-fail guard reads. metta_memo_entry/6 does NOT depend on
+%   the ordering: SWI assesses every instantiated argument and picks the
+%   canonicalized key, deep-indexing into it at 19.8x over 1,200 entries
+%   [measured 2026-08-15 with library(prolog_jiti), jiti_list/1]
+%   [source: SWI-Prolog 10.1 Reference Manual 2.17, index selection].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -118,10 +123,11 @@ metta_memoized_dispatch_call(Fun, Args, Out, Goal) :-
     memoization_enabled_for_call(Fun, Module, CallArity),
     Goal = cache_call(Fun, CallModule, Args, Out).
 
-%A first-argument-indexed guard that runs before anything else: this hook is
-%consulted for every reduced call and every compiled call site, and reading
-%the module, then resolving the owner, is work wasted whenever nothing by
-%this name is memoized at all.
+%The guard that runs before anything else: this hook is consulted for every
+%reduced call and every compiled call site, and reading the module, then
+%resolving the owner, is work wasted whenever nothing by this name is
+%memoized at all. memo_enabled/2 indexes on the name it is given
+%[measured 2026-08-15: argument 1, 47x over sixty functions, jiti_list/1].
 memo_name_enabled(Fun) :- memo_enabled(Fun, _), !.
 memo_name_enabled(Fun) :- memo_enabled(Fun, _, _).
 
