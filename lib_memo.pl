@@ -1,8 +1,23 @@
 % Purpose: memoize MeTTa function calls with bounded LRU or WTinyLFU
 %   eviction and dependency-based invalidation.
+% Assumes:
+%   - a named space compiles its equations into a module of its own and
+%     inherits the rest from user, so a function name alone does not name
+%     a function [source: src/spaces.pl:129, space_module/2]
+%   - translated_from/2 is engine-wide, and a clause's module is what
+%     places an equation in a space
+%     [source: src/spaces.pl, metta_remove_atom/3]
 % Guarantees:
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
+%   - Memoizing a function in one space leaves every other space's answers
+%     unchanged [tested 2026-08-15: memo_space_isolation].
+% Decides: cache state is keyed by the module that holds the function's
+%   clauses, the way lib_tabling.pl keys its declarations. The function
+%   name stays the first argument of every table so first-argument
+%   indexing keeps discriminating; a module argument in front would key
+%   almost every clause on user
+%   [source: SWI-Prolog 10.1 Reference Manual 2.17, hash quality].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -12,57 +27,131 @@
 :- use_module(library(solution_sequences)).
 
 % State Declarations
+%
+% Every table is keyed by (Fun, Module): the module is the one whose
+% clauses answer the call. Keyed by name alone, enabling memoization in
+% one space enabled it in all of them, one cache served every space, and
+% two spaces defining the same name answered with each other's equations.
 
 % Tracks functions currently enabled for memoization.
-% memo_enabled/1 means all arities for Fun are memoized.
-% memo_enabled/2 means only a specific call arity (input-argument count).
-:- dynamic memo_enabled/1.
+% memo_enabled/2 means all arities for Fun in Module are memoized.
+% memo_enabled/3 means only a specific call arity (input-argument count).
 :- dynamic memo_enabled/2.
+:- dynamic memo_enabled/3.
 :- dynamic arity/2.
 
-% Cached results: metta_memo_entry(Fun, Arity, Gen, AVs, Results)
-:- dynamic metta_memo_entry/5.
+% Cached results: metta_memo_entry(Fun, Module, Arity, Gen, AVs, Results)
+:- dynamic metta_memo_entry/6.
 
-% Generation counter per (Fun, Arity) for invalidation
-:- dynamic metta_memo_generation/3.
+% Generation counter per (Fun, Module, Arity) for invalidation
+:- dynamic metta_memo_generation/4.
 
 % Queue state for LRU/WTinyLFU eviction
-:- dynamic metta_memo_count/3.
-:- dynamic metta_memo_head/3.
-:- dynamic metta_memo_tail/3.
-:- dynamic metta_memo_q/4.
+:- dynamic metta_memo_count/4.
+:- dynamic metta_memo_head/4.
+:- dynamic metta_memo_tail/4.
+:- dynamic metta_memo_q/5.
 
 % Global memory tracking
 :- dynamic metta_memo_total_bytes/1.
 
 % Tracks keys currently being computed (avoids duplicate recursive probes)
-:- dynamic metta_memo_in_progress/4.
+:- dynamic metta_memo_in_progress/5.
 
 % Coarse function-level dependency graph: Caller -> Callee
-:- dynamic metta_memo_dep/4.
+:- dynamic metta_memo_dep/6.
 
 % Lightweight runtime metrics
 :- dynamic metta_memo_stat/2.
 
 % Per-thread call context to build dependency graph cheaply
-:- thread_local metta_memo_call_ctx/2.
+:- thread_local metta_memo_call_ctx/3.
+
+% Module Resolution
+
+%The module a call is dispatched in is not always the module holding the
+%clauses: a named space compiles its own equations into its own module and
+%inherits everything else from user. Cache under the module that defines
+%the predicate, or one shared function reached from two spaces gets two
+%caches and neither invalidates the other. imported_from/1 is the
+%documented way to ask
+%[source: SWI-Prolog 10.1 Reference Manual 4.15, predicate_property/2].
+memo_owner_module(Fun, CallModule, PredArity, Module) :-
+    functor(Head, Fun, PredArity),
+    (   predicate_property(CallModule:Head, imported_from(From))
+    ->  Module = From
+    ;   Module = CallModule ).
+
+%Which module a call from the running space is asking about: its own when
+%the space defines the function, user's when it only inherits it. Used by
+%the public API, where no arity is in hand and the equations answer.
+memo_scope_module(Fun, Module) :-
+    current_metta_module(CallModule),
+    (   CallModule \== user,
+        memo_equation(Fun, CallModule, any, _)
+    ->  Module = CallModule
+    ;   Module = user ).
+
+%This module's equations for Fun, with a fixed input arity when one is
+%asked for and every arity for `any`. The clause's module is the test:
+%translated_from/2 is engine-wide, and the same equation imported into two
+%spaces has one entry per module.
+memo_equation(Fun, Module, Arities, Term) :-
+    translated_from(Ref, Term),
+    Term = [=, [Fun|Args], _],
+    ( Arities == any -> true ; length(Args, Arities) ),
+    clause_property(Ref, module(Module)).
+
+%The space a module's equations belong to, inverting space_module/2.
+memo_module_space(user, '&self') :- !.
+memo_module_space(Module, Module).
 
 % Runtime Hook Integration
 
 :- multifile metta_memoized_dispatch_call/4.
 metta_memoized_dispatch_call(Fun, Args, Out, Goal) :-
+    memo_name_enabled(Fun),
+    current_metta_module(CallModule),
     length(Args, CallArity),
-    memoization_enabled_for_call(Fun, CallArity),
-    Goal = cache_call(Fun, Args, Out).
+    PredArity is CallArity + 1,
+    memo_owner_module(Fun, CallModule, PredArity, Module),
+    memoization_enabled_for_call(Fun, Module, CallArity),
+    Goal = cache_call(Fun, CallModule, Args, Out).
 
+%A first-argument-indexed guard that runs before anything else: this hook is
+%consulted for every reduced call and every compiled call site, and reading
+%the module, then resolving the owner, is work wasted whenever nothing by
+%this name is memoized at all.
+memo_name_enabled(Fun) :- memo_enabled(Fun, _), !.
+memo_name_enabled(Fun) :- memo_enabled(Fun, _, _).
+
+%The engine's change hook names a function, not a space. Every module
+%holding state for that name is invalidated: over-invalidation costs one
+%recomputation, under-invalidation answers from a stale cache.
 :- multifile metta_on_function_changed/1.
 metta_on_function_changed(Fun) :-
-    cache_invalidate(Fun).
+    memo_state_modules(Fun, Modules),
+    forall(member(Module, Modules), cache_invalidate(Fun, Module)).
 
+%The removal hook fires only once no space defines the name any more
+%[source: src/spaces.pl, metta_remove_atom/3], so the disable is global.
 :- multifile metta_on_function_removed/1.
 metta_on_function_removed(Fun) :-
-    cache_invalidate(Fun),
+    memo_state_modules(Fun, Modules),
+    forall(member(Module, Modules), cache_invalidate(Fun, Module)),
     disable_memoization(Fun).
+
+memo_state_modules(Fun, Modules) :-
+    findall(M,
+        ( memo_enabled(Fun, M)
+        ; memo_enabled(Fun, M, _)
+        ; metta_memo_entry(Fun, M, _, _, _, _)
+        ; metta_memo_generation(Fun, M, _, _)
+        ; metta_memo_dep(Fun, M, _, _, _, _)
+        ; metta_memo_dep(_, _, _, Fun, M, _)
+        ),
+        Raw),
+    sort(Raw, Modules).
 
 % Configuration API
 
@@ -155,81 +244,85 @@ memo_stats_snapshot(Stats) :-
 
 % Lifecycle, Dependencies, and Invalidation
 
-enable_memoization(Fun) :-
-    ( memo_enabled(Fun) -> true ; assertz(memo_enabled(Fun)) ).
+enable_memoization(Fun, Module) :-
+    ( memo_enabled(Fun, Module) -> true ; assertz(memo_enabled(Fun, Module)) ).
 
-enable_memoization(Fun, CallArity) :-
-    ( memo_enabled(Fun, CallArity) -> true ; assertz(memo_enabled(Fun, CallArity)) ).
+enable_memoization(Fun, Module, CallArity) :-
+    ( memo_enabled(Fun, Module, CallArity) -> true
+    ; assertz(memo_enabled(Fun, Module, CallArity)) ).
 
 disable_memoization(Fun) :-
-    retractall(memo_enabled(Fun)),
-    retractall(memo_enabled(Fun, _)).
+    retractall(memo_enabled(Fun, _)),
+    retractall(memo_enabled(Fun, _, _)).
 
-memo_current_generation(Fun, Arity, Gen) :-
-    ( metta_memo_generation(Fun, Arity, Found) -> Gen = Found ; Gen = 0 ).
+memo_current_generation(Fun, Module, Arity, Gen) :-
+    ( metta_memo_generation(Fun, Module, Arity, Found) -> Gen = Found ; Gen = 0 ).
 
-bump_metta_memo_generation(Fun, Arity) :-
-    memo_current_generation(Fun, Arity, Prev),
+bump_metta_memo_generation(Fun, Module, Arity) :-
+    memo_current_generation(Fun, Module, Arity, Prev),
     Next is Prev + 1,
-    retractall(metta_memo_generation(Fun, Arity, _)),
-    assertz(metta_memo_generation(Fun, Arity, Next)).
+    retractall(metta_memo_generation(Fun, Module, Arity, _)),
+    assertz(metta_memo_generation(Fun, Module, Arity, Next)).
 
-impacted_functions(SeedFun, Impacted) :-
-    impacted_functions([SeedFun], [], Raw),
+impacted_functions(SeedFun, SeedModule, Impacted) :-
+    impacted_closure([SeedFun-SeedModule], [], Raw),
     sort(Raw, Impacted).
 
-impacted_functions([], Seen, Seen).
-impacted_functions([Fun|Rest], Seen, Impacted) :-
-    ( memberchk(Fun, Seen)
-    -> impacted_functions(Rest, Seen, Impacted)
-    ; findall(Caller, metta_memo_dep(Caller, _, Fun, _), Callers),
+impacted_closure([], Seen, Seen).
+impacted_closure([Key|Rest], Seen, Impacted) :-
+    ( memberchk(Key, Seen)
+    -> impacted_closure(Rest, Seen, Impacted)
+    ; Key = Fun-Module,
+      findall(Caller-CallerModule,
+          metta_memo_dep(Caller, CallerModule, _, Fun, Module, _),
+          Callers),
       append(Rest, Callers, Next),
-      impacted_functions(Next, [Fun|Seen], Impacted)
+      impacted_closure(Next, [Key|Seen], Impacted)
     ).
 
-cache_invalidate_single(Fun) :-
+cache_invalidate_single(Fun, Module) :-
     findall(Arity,
         ( arity(Fun, Arity)
-        ; metta_memo_generation(Fun, Arity, _)
-        ; metta_memo_entry(Fun, Arity, _, _, _)
-        ; metta_memo_count(Fun, Arity, _)
-        ; metta_memo_head(Fun, Arity, _)
-        ; metta_memo_tail(Fun, Arity, _)
-        ; metta_memo_q(Fun, Arity, _, _)
-        ; current_predicate(Fun/Arity)
+        ; metta_memo_generation(Fun, Module, Arity, _)
+        ; metta_memo_entry(Fun, Module, Arity, _, _, _)
+        ; metta_memo_count(Fun, Module, Arity, _)
+        ; metta_memo_head(Fun, Module, Arity, _)
+        ; metta_memo_tail(Fun, Module, Arity, _)
+        ; metta_memo_q(Fun, Module, Arity, _, _)
+        ; current_predicate(Module:Fun/Arity)
         ),
         RawArities),
     sort(RawArities, Arities),
     ( Arities == []
     -> true
     ; forall(member(Arity, Arities),
-        with_cache_fun_mutex(Fun, Arity,
-            ( bump_metta_memo_generation(Fun, Arity),
-              invalidate_entries_for_fun_arity(Fun, Arity, FreedBytes),
+        with_cache_fun_mutex(Fun, Module, Arity,
+            ( bump_metta_memo_generation(Fun, Module, Arity),
+              invalidate_entries_for_fun_arity(Fun, Module, Arity, FreedBytes),
               update_total_bytes_subtract(FreedBytes),
-              retractall(metta_memo_count(Fun, Arity, _)),
-              retractall(metta_memo_head(Fun, Arity, _)),
-              retractall(metta_memo_tail(Fun, Arity, _)),
-              retractall(metta_memo_q(Fun, Arity, _, _)),
-              retractall(metta_memo_in_progress(Fun, Arity, _, _))
+              retractall(metta_memo_count(Fun, Module, Arity, _)),
+              retractall(metta_memo_head(Fun, Module, Arity, _)),
+              retractall(metta_memo_tail(Fun, Module, Arity, _)),
+              retractall(metta_memo_q(Fun, Module, Arity, _, _)),
+              retractall(metta_memo_in_progress(Fun, Module, Arity, _, _))
             )))
     ),
-    retractall(metta_memo_dep(Fun, _, _, _)),
-    retractall(metta_memo_dep(_, _, Fun, _)).
+    retractall(metta_memo_dep(Fun, Module, _, _, _, _)),
+    retractall(metta_memo_dep(_, _, _, Fun, Module, _)).
 
-cache_invalidate(Fun) :-
-    impacted_functions(Fun, Impacted),
-    forall(member(F, Impacted), cache_invalidate_single(F)).
+cache_invalidate(Fun, Module) :-
+    impacted_functions(Fun, Module, Impacted),
+    forall(member(F-M, Impacted), cache_invalidate_single(F, M)).
 
 cache_clear :-
-    retractall(metta_memo_entry(_, _, _, _, _)),
-    retractall(metta_memo_generation(_, _, _)),
-    retractall(metta_memo_count(_, _, _)),
-    retractall(metta_memo_head(_, _, _)),
-    retractall(metta_memo_tail(_, _, _)),
-    retractall(metta_memo_q(_, _, _, _)),
-    retractall(metta_memo_in_progress(_, _, _, _)),
-    retractall(metta_memo_dep(_, _, _, _)),
+    retractall(metta_memo_entry(_, _, _, _, _, _)),
+    retractall(metta_memo_generation(_, _, _, _)),
+    retractall(metta_memo_count(_, _, _, _)),
+    retractall(metta_memo_head(_, _, _, _)),
+    retractall(metta_memo_tail(_, _, _, _)),
+    retractall(metta_memo_q(_, _, _, _, _)),
+    retractall(metta_memo_in_progress(_, _, _, _, _)),
+    retractall(metta_memo_dep(_, _, _, _, _, _)),
     retractall(metta_memo_total_bytes(_)),
     asserta(metta_memo_total_bytes(0)),
     retractall(metta_memo_stat(_, _)),
@@ -237,31 +330,36 @@ cache_clear :-
     ( catch(nb_current('$petta_memo_cms_size', _), _, fail) -> nb_delete('$petta_memo_cms_size') ; true ),
     ( catch(nb_current('$petta_memo_accesses', _), _, fail) -> nb_delete('$petta_memo_accesses') ; true ).
 
+%Every space's cache, because the memory budget it resets is one global
+%budget. Use invalidate-memoize to drop one function in one space.
 'clear-memoize'(true) :-
     cache_clear.
 
 'invalidate-memoize'(Fun, true) :-
-    cache_invalidate(Fun).
+    memo_scope_module(Fun, Module),
+    cache_invalidate(Fun, Module).
 
 'is-memoized'(Fun, true) :-
-    ( memo_enabled(Fun)
-    ; memo_enabled(Fun, _)
+    memo_scope_module(Fun, Module),
+    ( memo_enabled(Fun, Module)
+    ; memo_enabled(Fun, Module, _)
     ), !.
 'is-memoized'(_, false).
 
 'is-memoized'(Fun, CallArity, true) :-
-    ( memo_enabled(Fun)
-    ; memo_enabled(Fun, CallArity)
+    memo_scope_module(Fun, Module),
+    ( memo_enabled(Fun, Module)
+    ; memo_enabled(Fun, Module, CallArity)
     ), !.
 'is-memoized'(_, _, false).
 
 % Synchronization Helpers
 
-cache_fun_mutex_id(Fun, Arity, Mutex) :-
-    atomic_list_concat(['metta_cache_fun_', Fun, '_', Arity], Mutex).
+cache_fun_mutex_id(Fun, Module, Arity, Mutex) :-
+    atomic_list_concat(['metta_cache_fun_', Module, '_', Fun, '_', Arity], Mutex).
 
-with_cache_fun_mutex(Fun, Arity, Goal) :-
-    cache_fun_mutex_id(Fun, Arity, Mutex),
+with_cache_fun_mutex(Fun, Module, Arity, Goal) :-
+    cache_fun_mutex_id(Fun, Module, Arity, Mutex),
     with_mutex(Mutex, Goal).
 
 with_cms_mutex(Goal) :-
@@ -283,26 +381,26 @@ ensure_cms :-
       nb_setval('$petta_memo_accesses', 0)
     ).
 
-get_freq(Fun, Arity, AVs, Freq) :-
+get_freq(Fun, Module, Arity, AVs, Freq) :-
     with_cms_mutex(
         ( catch(nb_current('$petta_memo_cms', CMS), _, fail)
         -> ( catch(nb_current('$petta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
-            term_hash((Fun, Arity, AVs), HashRaw),
+            term_hash((Fun, Module, Arity, AVs), HashRaw),
             Hash is (abs(HashRaw) mod SketchSize) + 1,
             arg(Hash, CMS, Val),
             ( integer(Val) -> Freq = Val ; Freq = 0 )
         ; Freq = 0 )
         ).
 
-record_hit(Fun, Arity, AVs) :-
+record_hit(Fun, Module, Arity, AVs) :-
     with_cms_mutex(
         ( catch(nb_current('$petta_memo_cms', CMS), _, fail)
         -> ( catch(nb_current('$petta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
-            term_hash((Fun, Arity, AVs), HashRaw),
+            term_hash((Fun, Module, Arity, AVs), HashRaw),
             Hash is (abs(HashRaw) mod SketchSize) + 1,
             arg(Hash, CMS, Val),
             ( integer(Val) -> NextVal is Val + 1 ; NextVal = 1 ),
@@ -310,11 +408,11 @@ record_hit(Fun, Arity, AVs) :-
         ; true )
         ).
 
-record_miss(Fun, Arity, AVs) :-
+record_miss(Fun, Module, Arity, AVs) :-
     with_cms_mutex(
         ( ensure_cms,
           nb_getval('$petta_memo_cms_size', SketchSize),
-          term_hash((Fun, Arity, AVs), HashRaw),
+          term_hash((Fun, Module, Arity, AVs), HashRaw),
           Hash is (abs(HashRaw) mod SketchSize) + 1,
           nb_getval('$petta_memo_cms', CMS),
           arg(Hash, CMS, Val),
@@ -338,18 +436,18 @@ halve_cms :-
 
 % Storage and Eviction
 
-get_memo_queue_state(Fun, Arity, Count, Head, Tail) :-
-    ( metta_memo_count(Fun, Arity, C) -> Count = C ; Count = 0 ),
-    ( metta_memo_head(Fun, Arity, H) -> Head = H ; Head = 0 ),
-    ( metta_memo_tail(Fun, Arity, T) -> Tail = T ; Tail = 0 ).
+get_memo_queue_state(Fun, Module, Arity, Count, Head, Tail) :-
+    ( metta_memo_count(Fun, Module, Arity, C) -> Count = C ; Count = 0 ),
+    ( metta_memo_head(Fun, Module, Arity, H) -> Head = H ; Head = 0 ),
+    ( metta_memo_tail(Fun, Module, Arity, T) -> Tail = T ; Tail = 0 ).
 
-set_memo_queue_state(Fun, Arity, Count, Head, Tail) :-
-    retractall(metta_memo_count(Fun, Arity, _)),
-    retractall(metta_memo_head(Fun, Arity, _)),
-    retractall(metta_memo_tail(Fun, Arity, _)),
-    asserta(metta_memo_count(Fun, Arity, Count)),
-    asserta(metta_memo_head(Fun, Arity, Head)),
-    asserta(metta_memo_tail(Fun, Arity, Tail)).
+set_memo_queue_state(Fun, Module, Arity, Count, Head, Tail) :-
+    retractall(metta_memo_count(Fun, Module, Arity, _)),
+    retractall(metta_memo_head(Fun, Module, Arity, _)),
+    retractall(metta_memo_tail(Fun, Module, Arity, _)),
+    asserta(metta_memo_count(Fun, Module, Arity, Count)),
+    asserta(metta_memo_head(Fun, Module, Arity, Head)),
+    asserta(metta_memo_tail(Fun, Module, Arity, Tail)).
 
 % Storage - Eviction Policies (LRU and WTinyLFU)
 
@@ -360,16 +458,16 @@ entry_size(AVs, Results, Bytes) :-
     Bytes is (S1 + S2) * 8.
 
 % Find oldest entry globally (across all functions/entries)
-% Returns Fun, Arity, and AVs of the oldest entry
-find_global_oldest(Fun, Arity, AVs) :-
-    findall((HeadVal, F, A),
-        metta_memo_head(F, A, HeadVal),
+% Returns Fun, Module, Arity, and AVs of the oldest entry
+find_global_oldest(Fun, Module, Arity, AVs) :-
+    findall((HeadVal, F, M, A),
+        metta_memo_head(F, M, A, HeadVal),
         Heads),
     Heads = [_|_],
     sort(Heads, Sorted),
-    Sorted = [(MinHead, Fun, Arity)|_],
+    Sorted = [(MinHead, Fun, Module, Arity)|_],
     Next is MinHead + 1,
-    metta_memo_q(Fun, Arity, Next, AVs).
+    metta_memo_q(Fun, Module, Arity, Next, AVs).
 
 % Maximum eviction attempts to prevent infinite recursion
 max_eviction_attempts(1000).
@@ -390,8 +488,8 @@ evict_global_space(NeededBytes, Attempts) :-
       ( NewTotal =< Limit
       -> true  % Space available now
       ; % Need to evict
-        ( find_global_oldest(Fun, Arity, VictimAVs)
-        -> evict_entry(Fun, Arity, VictimAVs),
+        ( find_global_oldest(Fun, Module, Arity, VictimAVs)
+        -> evict_entry(Fun, Module, Arity, VictimAVs),
            NewAttempts is Attempts + 1,
            evict_global_space(NeededBytes, NewAttempts)
         ; format(user_error, 'WARNING: No entries to evict, but global limit exceeded.~n', []),
@@ -401,22 +499,22 @@ evict_global_space(NeededBytes, Attempts) :-
     ).
 
 % Evict a specific entry and update size tracking
-evict_entry(Fun, Arity, AVs) :-
-    ( metta_memo_entry(Fun, Arity, _, AVs, CachedResults)
+evict_entry(Fun, Module, Arity, AVs) :-
+    ( metta_memo_entry(Fun, Module, Arity, _, AVs, CachedResults)
     -> entry_size(AVs, CachedResults, Bytes),
-       retractall(metta_memo_entry(Fun, Arity, _, AVs, _)),
-       ( metta_memo_q(Fun, Arity, _, AVs)
-       -> ( metta_memo_head(Fun, Arity, Head)
+       retractall(metta_memo_entry(Fun, Module, Arity, _, AVs, _)),
+       ( metta_memo_q(Fun, Module, Arity, _, AVs)
+       -> ( metta_memo_head(Fun, Module, Arity, Head)
           -> Head1 is Head + 1,
-             retractall(metta_memo_head(Fun, Arity, _)),
-             asserta(metta_memo_head(Fun, Arity, Head1))
+             retractall(metta_memo_head(Fun, Module, Arity, _)),
+             asserta(metta_memo_head(Fun, Module, Arity, Head1))
           ; true
           ),
-          retractall(metta_memo_q(Fun, Arity, _, AVs)),
-          ( metta_memo_count(Fun, Arity, Count)
+          retractall(metta_memo_q(Fun, Module, Arity, _, AVs)),
+          ( metta_memo_count(Fun, Module, Arity, Count)
           -> Count1 is Count - 1,
-             retractall(metta_memo_count(Fun, Arity, _)),
-             asserta(metta_memo_count(Fun, Arity, Count1))
+             retractall(metta_memo_count(Fun, Module, Arity, _)),
+             asserta(metta_memo_count(Fun, Module, Arity, Count1))
           ; true
           )
        ; true
@@ -431,14 +529,14 @@ evict_entry(Fun, Arity, AVs) :-
     ).
 
 % Update total bytes when adding entry
-invalidate_entries_for_fun_arity(Fun, Arity, FreedBytes) :-
+invalidate_entries_for_fun_arity(Fun, Module, Arity, FreedBytes) :-
     findall(Bytes,
-        ( metta_memo_entry(Fun, Arity, _, AVs, CachedResults),
+        ( metta_memo_entry(Fun, Module, Arity, _, AVs, CachedResults),
           entry_size(AVs, CachedResults, Bytes)
         ),
         Sizes),
     sum_list(Sizes, FreedBytes),
-    retractall(metta_memo_entry(Fun, Arity, _, _, _)).
+    retractall(metta_memo_entry(Fun, Module, Arity, _, _, _)).
 
 update_total_bytes_subtract(Bytes) :-
     ( retract(metta_memo_total_bytes(Current))
@@ -456,9 +554,9 @@ update_total_bytes_add(Bytes) :-
     ),
     asserta(metta_memo_total_bytes(New)).
 
-memo_store(Fun, Arity, Gen, AVs, CachedResults) :-
+memo_store(Fun, Module, Arity, Gen, AVs, CachedResults) :-
     memo_unique_limit(Max),
-    get_memo_queue_state(Fun, Arity, Count, Head, Tail),
+    get_memo_queue_state(Fun, Module, Arity, Count, Head, Tail),
     % Check global size limit first
     entry_size(AVs, CachedResults, NewBytes),
     evict_global_space(NewBytes),
@@ -466,17 +564,17 @@ memo_store(Fun, Arity, Gen, AVs, CachedResults) :-
     ( Count < Max
     -> Count1 is Count + 1,
         Tail1 is Tail + 1,
-        assertz(metta_memo_q(Fun, Arity, Tail1, AVs)),
-        assertz(metta_memo_entry(Fun, Arity, Gen, AVs, CachedResults)),
+        assertz(metta_memo_q(Fun, Module, Arity, Tail1, AVs)),
+        assertz(metta_memo_entry(Fun, Module, Arity, Gen, AVs, CachedResults)),
         update_total_bytes_add(NewBytes),
-        set_memo_queue_state(Fun, Arity, Count1, Head, Tail1)
+        set_memo_queue_state(Fun, Module, Arity, Count1, Head, Tail1)
     ; Head1 is Head + 1,
-        ( retract(metta_memo_q(Fun, Arity, Head1, VictimAVs))
+        ( retract(metta_memo_q(Fun, Module, Arity, Head1, VictimAVs))
         -> ( Strategy == lru
             -> % Evict victim and add new - update global size
-                ( metta_memo_entry(Fun, Arity, _, VictimAVs, VictimResults)
+                ( metta_memo_entry(Fun, Module, Arity, _, VictimAVs, VictimResults)
                 -> entry_size(VictimAVs, VictimResults, VictimBytes),
-                   retractall(metta_memo_entry(Fun, Arity, _, VictimAVs, _)),
+                   retractall(metta_memo_entry(Fun, Module, Arity, _, VictimAVs, _)),
                    % Subtract victim size, add new size
                    ( retract(metta_memo_total_bytes(CurrentTotal))
                    -> NewTotal is CurrentTotal - VictimBytes + NewBytes
@@ -486,16 +584,16 @@ memo_store(Fun, Arity, Gen, AVs, CachedResults) :-
                 ; true
                 ),
                 Tail1 is Tail + 1,
-                assertz(metta_memo_q(Fun, Arity, Tail1, AVs)),
-                assertz(metta_memo_entry(Fun, Arity, Gen, AVs, CachedResults)),
-                set_memo_queue_state(Fun, Arity, Count, Head1, Tail1)
-            ; get_freq(Fun, Arity, VictimAVs, VictimFreq),
-                get_freq(Fun, Arity, AVs, NewFreq),
+                assertz(metta_memo_q(Fun, Module, Arity, Tail1, AVs)),
+                assertz(metta_memo_entry(Fun, Module, Arity, Gen, AVs, CachedResults)),
+                set_memo_queue_state(Fun, Module, Arity, Count, Head1, Tail1)
+            ; get_freq(Fun, Module, Arity, VictimAVs, VictimFreq),
+                get_freq(Fun, Module, Arity, AVs, NewFreq),
                 ( NewFreq >= VictimFreq
                 -> % Admit new entry - evict victim
-                    ( metta_memo_entry(Fun, Arity, _, VictimAVs, VictimResults)
+                    ( metta_memo_entry(Fun, Module, Arity, _, VictimAVs, VictimResults)
                     -> entry_size(VictimAVs, VictimResults, VictimBytes),
-                       retractall(metta_memo_entry(Fun, Arity, _, VictimAVs, _)),
+                       retractall(metta_memo_entry(Fun, Module, Arity, _, VictimAVs, _)),
                        ( retract(metta_memo_total_bytes(CurrentTotal))
                        -> NewTotal is CurrentTotal - VictimBytes + NewBytes
                        ; NewTotal is NewBytes
@@ -504,53 +602,53 @@ memo_store(Fun, Arity, Gen, AVs, CachedResults) :-
                     ; true
                     ),
                     Tail1 is Tail + 1,
-                    assertz(metta_memo_q(Fun, Arity, Tail1, AVs)),
-                    assertz(metta_memo_entry(Fun, Arity, Gen, AVs, CachedResults)),
-                    set_memo_queue_state(Fun, Arity, Count, Head1, Tail1)
+                    assertz(metta_memo_q(Fun, Module, Arity, Tail1, AVs)),
+                    assertz(metta_memo_entry(Fun, Module, Arity, Gen, AVs, CachedResults)),
+                    set_memo_queue_state(Fun, Module, Arity, Count, Head1, Tail1)
                 ; % Reject new entry, keep victim
                     _ = Gen,
                     Tail1 is Tail + 1,
-                    assertz(metta_memo_q(Fun, Arity, Tail1, VictimAVs)),
-                    set_memo_queue_state(Fun, Arity, Count, Head1, Tail1)
+                    assertz(metta_memo_q(Fun, Module, Arity, Tail1, VictimAVs)),
+                    set_memo_queue_state(Fun, Module, Arity, Count, Head1, Tail1)
                 )
             )
         ; Tail1 is Tail + 1,
-            assertz(metta_memo_q(Fun, Arity, Tail1, AVs)),
-            assertz(metta_memo_entry(Fun, Arity, Gen, AVs, CachedResults)),
+            assertz(metta_memo_q(Fun, Module, Arity, Tail1, AVs)),
+            assertz(metta_memo_entry(Fun, Module, Arity, Gen, AVs, CachedResults)),
             update_total_bytes_add(NewBytes),
             Count1 is min(Max, Count + 1),
-            set_memo_queue_state(Fun, Arity, Count1, Head1, Tail1)
+            set_memo_queue_state(Fun, Module, Arity, Count1, Head1, Tail1)
         )
     ).
 
-store_if_current_generation(Fun, Arity, ExpectedGen, AVs, CachedResults) :-
-    with_cache_fun_mutex(Fun, Arity,
-        ( memo_current_generation(Fun, Arity, CurGen),
+store_if_current_generation(Fun, Module, Arity, ExpectedGen, AVs, CachedResults) :-
+    with_cache_fun_mutex(Fun, Module, Arity,
+        ( memo_current_generation(Fun, Module, Arity, CurGen),
           ( CurGen =:= ExpectedGen
-          -> memo_store(Fun, Arity, CurGen, AVs, CachedResults)
+          -> memo_store(Fun, Module, Arity, CurGen, AVs, CachedResults)
           ; true )
         )).
 
 % Key Canonicalization and Replay
 
-memoization_enabled_for_call(Fun, CallArity) :-
-    memo_enabled(Fun)
-    ; memo_enabled(Fun, CallArity).
+memoization_enabled_for_call(Fun, Module, CallArity) :-
+    memo_enabled(Fun, Module)
+    ; memo_enabled(Fun, Module, CallArity).
 
-memoization_enabled_for_predicate_arity(Fun, PredArity) :-
+memoization_enabled_for_predicate_arity(Fun, Module, PredArity) :-
     integer(PredArity),
     PredArity >= 1,
     CallArity is PredArity - 1,
-    memoization_enabled_for_call(Fun, CallArity).
+    memoization_enabled_for_call(Fun, Module, CallArity).
 
-memoizable_fun(Fun, Arity) :-
-    current_predicate(Fun/Arity),
-    memoization_enabled_for_predicate_arity(Fun, Arity),
+memoizable_fun(Fun, Module, Arity) :-
+    current_predicate(Module:Fun/Arity),
+    memoization_enabled_for_predicate_arity(Fun, Module, Arity),
     integer(Arity),
     Arity >= 1,
     length(HeadArgs, Arity),
     Head =.. [Fun | HeadArgs],
-    \+ predicate_property(Head, built_in).
+    \+ predicate_property(Module:Head, built_in).
 
 quantize_float(V, Q) :-
     memo_float_precision(Prec),
@@ -580,19 +678,19 @@ canonicalize_args_key(AVs, KeyAVs) :-
     copy_term(Quantized, KeyAVs),
     numbervars(KeyAVs, 0, _).
 
-with_memo_call_context(Fun, Arity, Goal) :-
-    ( metta_memo_call_ctx(ParentFun, ParentArity)
-    -> ( ParentFun == Fun, ParentArity == Arity
+with_memo_call_context(Fun, Module, Arity, Goal) :-
+    ( metta_memo_call_ctx(ParentFun, ParentModule, ParentArity)
+    -> ( ParentFun == Fun, ParentModule == Module, ParentArity == Arity
        -> true
-       ; ( metta_memo_dep(ParentFun, ParentArity, Fun, Arity)
+       ; ( metta_memo_dep(ParentFun, ParentModule, ParentArity, Fun, Module, Arity)
          -> true
-         ; asserta(metta_memo_dep(ParentFun, ParentArity, Fun, Arity))
+         ; asserta(metta_memo_dep(ParentFun, ParentModule, ParentArity, Fun, Module, Arity))
          ))
     ; true ),
     setup_call_cleanup(
-        asserta(metta_memo_call_ctx(Fun, Arity)),
+        asserta(metta_memo_call_ctx(Fun, Module, Arity)),
         Goal,
-        retract(metta_memo_call_ctx(Fun, Arity))).
+        retract(metta_memo_call_ctx(Fun, Module, Arity))).
 
 replay_variant_answer(AVs, Out, answer(CachedAVs, CachedOut)) :-
     AVs = CachedAVs,
@@ -601,30 +699,30 @@ replay_variant_answer(AVs, Out, answer(CachedAVs, CachedOut)) :-
 replay_ground_answer(Out, answer(CachedOut)) :-
     Out = CachedOut.
 
-start_in_progress(Fun, Arity, Gen, KeyAVs, Started) :-
-    with_cache_fun_mutex(Fun, Arity,
-        ( metta_memo_in_progress(Fun, Arity, Gen, KeyAVs)
+start_in_progress(Fun, Module, Arity, Gen, KeyAVs, Started) :-
+    with_cache_fun_mutex(Fun, Module, Arity,
+        ( metta_memo_in_progress(Fun, Module, Arity, Gen, KeyAVs)
         -> Started = false
-        ; asserta(metta_memo_in_progress(Fun, Arity, Gen, KeyAVs)),
+        ; asserta(metta_memo_in_progress(Fun, Module, Arity, Gen, KeyAVs)),
           Started = true
         )).
 
-finish_in_progress(Fun, Arity, Gen, KeyAVs) :-
-    with_cache_fun_mutex(Fun, Arity,
-        retractall(metta_memo_in_progress(Fun, Arity, Gen, KeyAVs))).
+finish_in_progress(Fun, Module, Arity, Gen, KeyAVs) :-
+    with_cache_fun_mutex(Fun, Module, Arity,
+        retractall(metta_memo_in_progress(Fun, Module, Arity, Gen, KeyAVs))).
 
-wait_for_cached_variant(Fun, Arity, CurGen, KeyAVs, AVs, Out) :-
-    wait_for_cached_variant(Fun, Arity, CurGen, KeyAVs, AVs, Out, 25).
+wait_for_cached_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Out) :-
+    wait_for_cached_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Out, 25).
 
-wait_for_cached_variant(_, _, _, _, _, _, 0) :- fail.
-wait_for_cached_variant(Fun, Arity, CurGen, KeyAVs, AVs, Out, Attempts) :-
-    ( cache_lookup(Fun, Arity, CurGen, KeyAVs, CachedResults),
+wait_for_cached_variant(_, _, _, _, _, _, _, 0) :- fail.
+wait_for_cached_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Out, Attempts) :-
+    ( cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults),
       member(Answer, CachedResults),
       replay_variant_answer(AVs, Out, Answer)
     -> true
     ; sleep(0.001),
       Next is Attempts - 1,
-      wait_for_cached_variant(Fun, Arity, CurGen, KeyAVs, AVs, Out, Next)
+      wait_for_cached_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Out, Next)
     ).
 
 % Probe and Aggregation
@@ -655,137 +753,142 @@ truncate_answers(Answers, Answers).
 
 % Runtime Dispatch
 
-memo_probe_results(Fun, AVs, ProbeResults) :-
+memo_probe_results(Fun, Module, AVs, ProbeResults) :-
     memo_answer_limit(Limit),
     append(AVs, [Result], RawArgs),
     RawGoal =.. [Fun | RawArgs],
     findnsols(Limit, answer(SolvedAVs, SolvedResult),
-        ( call(RawGoal),
+        ( call(Module:RawGoal),
           copy_term((AVs, Result), (SolvedAVs, SolvedResult))
         ),
         ProbeResults).
 
 % Ground calls should not re-unify raw input args on replay, because
 % float quantization intentionally maps slightly different inputs to one key.
-memo_probe_ground_results(Fun, AVs, ProbeResults) :-
+memo_probe_ground_results(Fun, Module, AVs, ProbeResults) :-
     memo_answer_limit(Limit),
     append(AVs, [Result], RawArgs),
     RawGoal =.. [Fun | RawArgs],
     findnsols(Limit, answer(SolvedResult),
-        ( call(RawGoal),
+        ( call(Module:RawGoal),
           copy_term(Result, SolvedResult)
         ),
         ProbeResults).
 
-cache_lookup(Fun, Arity, CurGen, KeyAVs, CachedResults) :-
-    metta_memo_entry(Fun, Arity, CurGen, KeyAVs, CachedResults).
+cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults) :-
+    metta_memo_entry(Fun, Module, Arity, CurGen, KeyAVs, CachedResults).
 
-cache_replay_hit_ground(Fun, Arity, KeyAVs, CachedResults, Out) :-
+cache_replay_hit_ground(Fun, Module, Arity, KeyAVs, CachedResults, Out) :-
     memo_stat_inc(cache_hit),
-    record_hit(Fun, Arity, KeyAVs),
+    record_hit(Fun, Module, Arity, KeyAVs),
     member(Answer, CachedResults),
     replay_ground_answer(Out, Answer).
 
-cache_replay_hit_variant(Fun, Arity, KeyAVs, CachedResults, AVs, Out) :-
+cache_replay_hit_variant(Fun, Module, Arity, KeyAVs, CachedResults, AVs, Out) :-
     memo_stat_inc(cache_hit),
-    record_hit(Fun, Arity, KeyAVs),
+    record_hit(Fun, Module, Arity, KeyAVs),
     member(Answer, CachedResults),
     replay_variant_answer(AVs, Out, Answer).
 
-cache_store(Fun, Arity, CurGen, KeyAVs, ProbeResults) :-
+cache_store(Fun, Module, Arity, CurGen, KeyAVs, ProbeResults) :-
     truncate_answers(ProbeResults, LimitedResults),
     ( LimitedResults == ProbeResults -> true ; memo_stat_inc(answer_limit_truncated) ),
-    store_if_current_generation(Fun, Arity, CurGen, KeyAVs, LimitedResults),
-    record_miss(Fun, Arity, KeyAVs).
+    store_if_current_generation(Fun, Module, Arity, CurGen, KeyAVs, LimitedResults),
+    record_miss(Fun, Module, Arity, KeyAVs).
 
-cache_probe_and_store_variant(Fun, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
+cache_probe_and_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
     setup_call_cleanup(
         true,
-        memo_probe_results(Fun, AVs, ProbeResults),
-        finish_in_progress(Fun, Arity, CurGen, KeyAVs)),
-    cache_store(Fun, Arity, CurGen, KeyAVs, ProbeResults).
+        memo_probe_results(Fun, Module, AVs, ProbeResults),
+        finish_in_progress(Fun, Module, Arity, CurGen, KeyAVs)),
+    cache_store(Fun, Module, Arity, CurGen, KeyAVs, ProbeResults).
 
-cache_call_store_ground(Fun, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
+cache_call_store_ground(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
     _ = Goal,
     % For ground+quantized keys, collisions are intentional. Guarding "in-progress"
     % entries here can cause large duplicate recomputation in recursive workloads
     % Keep the ground path as direct probe/store.
-    memo_probe_ground_results(Fun, AVs, ProbeResults),
+    memo_probe_ground_results(Fun, Module, AVs, ProbeResults),
     apply_aggregate_mode(ProbeResults, FinalResults),
-    cache_store(Fun, Arity, CurGen, KeyAVs, FinalResults),
+    cache_store(Fun, Module, Arity, CurGen, KeyAVs, FinalResults),
     memo_stat_inc(cache_miss),
     member(Answer, FinalResults),
     replay_ground_answer(Out, Answer).
 
-cache_call_store_variant(Fun, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
-    start_in_progress(Fun, Arity, CurGen, KeyAVs, Started),
+cache_call_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
+    start_in_progress(Fun, Module, Arity, CurGen, KeyAVs, Started),
     ( Started == true
-    -> cache_probe_and_store_variant(Fun, Arity, CurGen, KeyAVs, AVs, ProbeResults),
+    -> cache_probe_and_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, ProbeResults),
        memo_stat_inc(cache_miss),
        member(Answer, ProbeResults),
        replay_variant_answer(AVs, Out, Answer)
-    ; ( wait_for_cached_variant(Fun, Arity, CurGen, KeyAVs, AVs, Out)
+    ; ( wait_for_cached_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Out)
       -> memo_stat_inc(waited_on_in_progress)
       ; memo_stat_inc(in_progress_fallback),
-        call(Goal)
+        call(Module:Goal)
       )
     ).
 
-cache_call(Fun, AVs, Out) :-
-    append(AVs, [Out], GoalArgs),
-    Goal =.. [Fun | GoalArgs],
+%CallModule is the module the compiled call site lives in, fixed when the
+%clause was translated; the module that owns the clauses is resolved here,
+%on every call, so a space defining the function after the caller was
+%compiled is still cached under itself.
+cache_call(Fun, CallModule, AVs, Out) :-
     length(AVs, NArgs),
     Arity is NArgs + 1,
-    with_memo_call_context(Fun, Arity,
+    memo_owner_module(Fun, CallModule, Arity, Module),
+    append(AVs, [Out], GoalArgs),
+    Goal =.. [Fun | GoalArgs],
+    with_memo_call_context(Fun, Module, Arity,
     ( args_worth_caching(AVs),
-      memoizable_fun(Fun, Arity)
+      memoizable_fun(Fun, Module, Arity)
     -> canonicalize_args_key(AVs, KeyAVs),
-        memo_current_generation(Fun, Arity, CurGen),
+        memo_current_generation(Fun, Module, Arity, CurGen),
         ( ground(AVs)
-        -> ( cache_lookup(Fun, Arity, CurGen, KeyAVs, CachedResults)
-           -> cache_replay_hit_ground(Fun, Arity, KeyAVs, CachedResults, Out)
-           ; cache_call_store_ground(Fun, Arity, CurGen, KeyAVs, AVs, Goal, Out)
+        -> ( cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults)
+           -> cache_replay_hit_ground(Fun, Module, Arity, KeyAVs, CachedResults, Out)
+           ; cache_call_store_ground(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out)
            )
-        ; ( cache_lookup(Fun, Arity, CurGen, KeyAVs, CachedResults)
-          -> cache_replay_hit_variant(Fun, Arity, KeyAVs, CachedResults, AVs, Out)
-          ; cache_call_store_variant(Fun, Arity, CurGen, KeyAVs, AVs, Goal, Out)
+        ; ( cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults)
+          -> cache_replay_hit_variant(Fun, Module, Arity, KeyAVs, CachedResults, AVs, Out)
+          ; cache_call_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out)
           )
         )
     ; memo_stat_inc(cache_bypass),
-      call(Goal)
+      call(Module:Goal)
     )).
 
 % Public API
 
 'memoize'(Fun, true) :-
-    ( atom(Fun), fun(Fun)
-    -> true
-    ; throw(error(domain_error(function_symbol, Fun), 'memoize!/2'))
-    ),
-    findall(Term,
-        (translated_from(_, Term), Term = [=, [Fun|_], _]),
-        RawTerms),
-    sort(RawTerms, Terms),
-    forall(member(Term, Terms), 'remove-atom'('&self', Term, _)),
-    enable_memoization(Fun),
-    forall(member(Term, Terms), 'add-atom'('&self', Term, _)).
+    memo_target(Fun, any, 'memoize!/2', Space, Module, Terms),
+    memo_recompile(Space, Terms, enable_memoization(Fun, Module)).
 
 'memoize'(Fun, CallArity, true) :-
-    ( atom(Fun), fun(Fun)
-    -> true
-    ; throw(error(domain_error(function_symbol, Fun), 'memoize!/3'))
-    ),
     ( integer(CallArity), CallArity >= 0
     -> true
     ; throw(error(domain_error(nonneg_integer, CallArity), 'memoize!/3'))
     ),
-    findall(Term,
-        ( translated_from(_, Term),
-          Term = [=, [Fun|Args], _],
-          length(Args, CallArity)
-        ),
-        RawTerms),
-    sort(RawTerms, Terms),
-    forall(member(Term, Terms), 'remove-atom'('&self', Term, _)),
-    enable_memoization(Fun, CallArity),
-    forall(member(Term, Terms), 'add-atom'('&self', Term, _)).
+    memo_target(Fun, CallArity, 'memoize!/3', Space, Module, Terms),
+    memo_recompile(Space, Terms, enable_memoization(Fun, Module, CallArity)).
+
+%The space that asks owns the equations, unless it only inherits them from
+%&self. Recompiling in the wrong space is how memoizing in one space used
+%to rewrite every other space's equations into it.
+memo_target(Fun, Arities, Context, Space, Module, Terms) :-
+    ( atom(Fun), fun(Fun)
+    -> true
+    ; throw(error(domain_error(function_symbol, Fun), Context))
+    ),
+    memo_scope_module(Fun, Module),
+    memo_module_space(Module, Space),
+    findall(Term, memo_equation(Fun, Module, Arities, Term), RawTerms),
+    sort(RawTerms, Terms).
+
+%Recompiling is what makes memoization take effect: the translator bakes
+%the dispatch into every compiled call site, so equations already compiled
+%go through the compiler again with the flag set.
+memo_recompile(Space, Terms, Enable) :-
+    forall(member(Term, Terms), 'remove-atom'(Space, Term, _)),
+    call(Enable),
+    forall(member(Term, Terms), 'add-atom'(Space, Term, _)).

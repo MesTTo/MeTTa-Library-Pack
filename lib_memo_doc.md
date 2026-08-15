@@ -36,10 +36,36 @@ This document explains the public API, configuration options, internal behavior 
 
 ### Clear Memoization
 ```metta
-!(clear-memoize)            ; Clears all cached entries and resets generation/queue state
-!(invalidate-memoize my-fun) ; Invalidate one function and its dependents
+!(clear-memoize)            ; Clears every space's cached entries and resets generation/queue state
+!(invalidate-memoize my-fun) ; Invalidate one function in this space, and its dependents
 !(clear-memoize-stats)      ; Reset runtime counters
 ```
+`clear-memoize` is process-wide because the memory budget it resets is one
+global budget. `invalidate-memoize` drops one function in the space that
+asks.
+
+## Memoization is per space
+
+A named space compiles its own equations into a module of its own, so two
+spaces defining the same function name hold two different functions. Every
+memoization decision follows that: `!(memoize f)` enables the `f` of the
+space it runs in, that space gets its own cache, and no other space's
+answers change. `!(is-memoized f)` answers for the space that asks.
+
+```metta
+!(bind! &metric (new-space))
+!(add-atom &metric (= (shipping-cost $w) (* $w 9)))
+(= (shipping-cost $w) (* $w 2))
+
+!(memoize shipping-cost)                              ; this space's function
+!(test (shipping-cost 3) 6)
+!(test (evalc (shipping-cost 3) &metric) 27)          ; still its own answer
+!(test (evalc (is-memoized shipping-cost) &metric) false)
+```
+
+A space that does not define the function but inherits `&self`'s is calling
+the same function, so it shares the one cache rather than building a second.
+`examples/libraries/memo_spaces.metta` runs the whole property.
 ## Configuration Options
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -71,23 +97,26 @@ Choose `wtinylfu` when you expect a stable hot set; choose `lru` when recency is
 - In-progress guard: for variant keys, the runtime uses `metta_memo_in_progress/4` to avoid duplicated concurrent recomputation. Callers will briefly wait for in-progress work to finish and then replay results; if waiting fails they fall back to direct execution.
 ## Core State (short reference)
 Dynamic predicates exposed in the runtime (for debugging and reasoning):
-- `memo_enabled/1` — functions with memoization enabled
-- `memo_enabled/2` — arity-specific memoization enables (`Fun`, InputArity)
-- `metta_memo_entry/5` — cached results (Fun, Arity, Gen, Args, Results)
-- `metta_memo_generation/3` — generation counter per function (used for invalidation)
-- `metta_memo_count/3`, `metta_memo_head/3`, `metta_memo_tail/3`, `metta_memo_q/4` — per-function queue state
+Every table below is keyed by `(Fun, Module)`, where the module is the one
+holding the function's clauses. See "Memoization is per space" above.
+
+- `memo_enabled/2` — functions with memoization enabled (`Fun`, Module)
+- `memo_enabled/3` — arity-specific memoization enables (`Fun`, Module, InputArity)
+- `metta_memo_entry/6` — cached results (Fun, Module, Arity, Gen, Args, Results)
+- `metta_memo_generation/4` — generation counter per function (used for invalidation)
+- `metta_memo_count/4`, `metta_memo_head/4`, `metta_memo_tail/4`, `metta_memo_q/5` — per-function queue state
 - `metta_memo_total_bytes/1` — global estimated bytes used by cache entries
-- `metta_memo_in_progress/4` — keys currently being computed (variant path)
-- `metta_memo_dep/4` — coarse caller→callee dependency graph (used for dependency-aware invalidation)
+- `metta_memo_in_progress/5` — keys currently being computed (variant path)
+- `metta_memo_dep/6` — coarse caller→callee dependency graph (used for dependency-aware invalidation)
 - `metta_memo_stat/2` — runtime counters (cache_hit, cache_miss, waited_on_in_progress, etc.)
 Refer to source predicates if you need deeper internal debugging; avoid relying on internal facts for program logic unless you intend to keep compatibility with future changes.
 ## Integration Hooks & Synchronization
 The library integrates with the MeTTa runtime via multifile hooks:
-- `metta_memoized_dispatch_call/4` — intercepts dispatch to memoized functions
+- `metta_memoized_dispatch_call/5` — intercepts dispatch to memoized functions, and is told the module the call site lives in
 - `metta_on_function_changed/1` — triggers invalidation when a function implementation changes
 - `metta_on_function_removed/1` — invalidates and disables memoization when a function is removed
 Synchronization primitives:
-- `with_cache_fun_mutex/3` — per-(Fun,Arity) mutex to protect queue/state for that function
+- `with_cache_fun_mutex/4` — per-(Fun,Module,Arity) mutex to protect queue/state for that function
 - `with_cms_mutex/1` — global mutex used for the Count‑Min Sketch updates
 ## Practical Recommendations & Effective API Usage
 These are concise, actionable guidelines derived from observed behaviors and common pitfalls.
