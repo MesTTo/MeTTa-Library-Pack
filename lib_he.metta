@@ -89,9 +89,8 @@
 (= (for-each-in-atom $L $f)
    (map-atom $L $f))
 
-(: evalc (-> Atom %Undefined% %Undefined%))
-(= (evalc $expression &self)
-   (eval $expression))
+;evalc is an engine builtin now, and it takes any space rather than only the
+;literal &self this shim matched.
 
 ;Quoting
 (: unquote (-> Atom %Undefined%))
