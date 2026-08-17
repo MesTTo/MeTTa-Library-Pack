@@ -27,8 +27,8 @@
 
 !(import_prolog_functions_from_file (library lib_import.pl) (static-import! use-module!))
 
-;Documentation, as atoms. A @doc form is inert data, so a library can document
-;itself without importing lib_doc; only READING the docs needs it.
+;Documentation, as atoms. A @doc form is inert data, and get-doc/help!
+;are engine builtins now, so writing AND reading docs needs no import.
 (@doc import_prolog_functions_from_file
       (@desc "Consults a Prolog file and registers the named predicates as MeTTa functions")
       (@params ((@param "the Prolog file, as (library name.pl) or a path")
