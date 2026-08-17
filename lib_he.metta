@@ -54,26 +54,20 @@
 (= (assertAlphaEqualToResultMsg $A $B $M)
    (assertAlphaEqualToResult $A $B))
 
-(: unify (-> Atom Atom Atom Atom %Undefined%))
-(= (unify $space $pattern $then $else)
-   (if (is-space $space)
-       (let $temp (cut)
-            (case (match $space $pattern $pattern)
-                  (($pattern (eval $then))
-                   (Empty (eval $else))))) (empty)))
+;unify is an engine special form now, for the same reason add-reduct
+;below is: it is standard library, not a compatibility shim. The engine
+;form also does what the shim here could not: bindings flow from the
+;match into the selected branch, numbers compare promoted, a space
+;operand queries through every context kind, and grounded values with
+;their own matching logic are consulted, per the arbiter's matcher.
 
-(= (unify $a $b $then $else)
-   (if (= $a $b)
-       (eval $then)
-       (eval $else)))
-
-(: add-reduct (-> %Undefined% Atom Bool))
-(= (add-reduct $space $f)
-   (let* (($headbody (cdr-atom $f))
-          ($head (car-atom $headbody))
-          ($body (cdr-atom $headbody))
-          ($bodyreduced (eval $body)))
-         (add-atom $space (= $head $bodyreduced))))
+;add-reduct is an engine builtin now, along with add-atoms and add-reducts,
+;because all three are standard library operations rather than compatibility
+;shims and a program should not have to import anything to reach them. The
+;shim that used to sit here also had the wrong contract: it destructured its
+;argument as an equation and reduced only the body, where the standard library
+;says "Reduces atom (second argument) and adds it into the [space]", so
+;`(add-reduct &self (+ 1000 1))` has to add 1001 and this added the call.
 
 ;Error Handling
 (= (if-error $X $A $B)
@@ -114,3 +108,29 @@
 
 (= (match-type-or $value $type1 $type2)
    (match-types $type1 $type2 True $value))
+
+;HE's type-cast: the atom itself when it has the type, (Error $atom BadType)
+;when it does not. Three ways it can have it. The requested type IS the atom's
+;metatype, so (type-cast A Symbol &self) casts any symbol. A declared type is
+;equal to the requested one. Or the atom has no declaration at all, which
+;PeTTa answers as %Undefined%, and an undeclared atom is not the wrong type.
+;
+;Atom on the parameters because a cast is about the atom as written: casting
+;(+ 1 1) asks about that expression, not about 2. The RESULT is %Undefined%
+;rather than HE's Atom: in PeTTa an Atom output type means the body is not
+;translated at all, which is how a macro returns its own text, and declaring
+;it here answered the unevaluated (if (== type1 (get-metatype A)) ...).
+(: type-cast (-> Atom Atom Atom %Undefined%))
+(= (type-cast $atom $type $space)
+   (if (== $type (get-metatype $atom))
+       $atom
+       (if (type-cast-holds $atom $type $space)
+           $atom
+           (Error $atom BadType))))
+
+(= (type-cast-holds $atom $type $space)
+   (foldl-atom (collapse (get-type-space $space $atom)) False $acc $declared
+      (or $acc (type-cast-check $declared $type))))
+
+(= (type-cast-check $declared $wanted)
+   (if (== $declared %Undefined%) True (== $declared $wanted)))

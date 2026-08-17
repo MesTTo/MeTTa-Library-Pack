@@ -23,7 +23,8 @@
 
 !(import! &self (library lib_import))
 !(import_prolog_functions_from_file (library lib_tabling.pl)
-  (metta_tabled_decl metta_untabled_decl metta_table_clear metta_table_clear_all))
+  (metta_tabled_decl metta_untabled_decl metta_table_clear metta_table_clear_all
+   metta_table_statistics))
 
 ;Keep arbitrary Prolog-source loading available for experts; tabling no
 ;longer rides through it.
@@ -49,3 +50,17 @@
 ;(table-clear-all) abolishes every table in the process.
 (: table-clear-all (-> Bool))
 (= (table-clear-all) (metta_table_clear_all))
+
+;(table-stats (reach $x $y)) answers what this function's tables have
+;actually done, as ((tables 1) (answers 2) (complete-call 3)
+;(invalidated 1) (reevaluated 1)).
+;
+;The pair worth reading is invalidated against reevaluated. A write to a
+;space a tabled function reads invalidates its table, and the next call
+;re-evaluates it; reevaluated LOWER than invalidated is SWI having decided
+;a dependency changed without changing this table's answers, which is the
+;incremental win rather than a rebuild. Before this the guarantee was only
+;testable by its effect, a fresh answer, which a table rebuilt from
+;scratch produces too.
+(: table-stats (-> Atom Expression))
+(= (table-stats $call) (metta_table_statistics (quote $call)))

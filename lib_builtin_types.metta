@@ -47,3 +47,280 @@
 (: or (-> Bool Bool Bool))
 (: not (-> Bool Bool))
 (: xor (-> Bool Bool Bool))
+
+;; Type definitions of time control.
+;; timeout and elapsed take their expression as Atom so it is NOT evaluated
+;; before they see it. Without that the work would already be finished by the
+;; time the bound was applied, or by the time the clock started.
+(: sleep (-> Number Bool))
+(: timeout (-> Number Atom %Undefined%))
+(: elapsed (-> Atom %Undefined%))
+
+;; Interpreter settings, MeTTa HE's spelling.
+(: pragma! (-> Symbol %Undefined% Bool))
+
+;; HE's metta/3: interpret an atom in a named space. The Type argument is
+;; accepted and ignored, as HE does for %Undefined%.
+(: metta (-> Atom Type SpaceType Atom))
+
+;; ===========================================================================
+;; The rest of the engine's surface: 117 names that answered %Undefined%.
+;;
+;; The types come from the reference corelib dump wherever it has one, because
+;; a type PeTTa does not already have is additive and the reference governs
+;; there [source: /home/user/Dev/LeaTTa/stdlib.md, 146 typed entries; 39 of
+;; these names are in it]. Two vocabulary translations were needed: HE's unit
+;; result `(->)` is PeTTa's `Bool`, because every one of these answers `true`;
+;; and HE's `SpaceType` is PeTTa's `Symbol`, because `(get-metatype &self)`
+;; answers `Symbol`. Divergences from the dump are marked where they occur.
+;;
+;; THIS FILE HAS TWO ROLES AND THEY DIFFER. The engine reads it at boot into
+;; `builtin_type_declaration/2`, which `get_type_candidate/2` consults LAST, so
+;; the declarations answer `get-type` and change no call site: the engine's own
+;; type surface, reported without being enforced twice. A program that also
+;; writes `!(import! &self (library lib_builtin_types))` puts the same
+;; declarations into `&self`, where `type_declaration/2` DOES see them and they
+;; become live typed dispatch. Both are wanted; only the second costs anything.
+;;
+;; Two of the three groups below could not go live even then, which is worth
+;; knowing when reading them.
+;;
+;; A SPECIAL FORM is compiled by the translator and never reaches typed
+;; dispatch at all. Proven rather than assumed: `(= (f $n) (if (> $n 1) yes no))`
+;; compiles to a byte-identical clause with and without `(: if ...)` present
+;; [measured 2026-08-16].
+;;
+;; A RUNTIME-GUARDED builtin enforces its own input contract inside its own
+;; predicate, so dispatch is skipped for it too. `runtime_type_guarded/1` in
+;; src/metta.pl is the list.
+;;
+;; The rest WOULD become checks on import, so a parameter there carries a
+;; concrete type only where the implementation was read and it is certain, and
+;; `%Undefined%` everywhere else, which the translator skips entirely.
+;; `%Undefined%` in a parameter is not a gap in the declaration; it is the
+;; accurate statement that the predicate accepts anything there, and the arrow
+;; still tells a reader and a tool the arity.
+;; ===========================================================================
+
+;; --- Special forms: control ---
+;; Compiled by the translator. Nothing here reaches typed dispatch.
+(: if (-> Bool Atom Atom $t))
+(: case (-> Atom Expression %Undefined%))
+(: let (-> Atom %Undefined% Atom %Undefined%))
+(: chain (-> Atom Variable Atom %Undefined%))
+(: quote (-> Atom Atom))
+(: sealed (-> Expression Atom Atom))
+(: catch (-> Atom %Undefined%))
+(: once (-> Atom %Undefined%))
+(: cut (-> Bool))
+(: and-then (-> Atom Atom %Undefined%))
+(: or-else (-> Atom Atom %Undefined%))
+(: progn (-> Atom %Undefined%))
+(: prog1 (-> Atom %Undefined%))
+(: forall (-> Atom Atom Bool))
+(: foldall (-> Atom Atom %Undefined% %Undefined%))
+
+;; --- Special forms: evaluation and nondeterminism ---
+(: eval (-> Atom Atom))
+(: evalc (-> Atom Symbol Atom))
+(: reduce (-> Atom %Undefined%))
+(: collapse (-> Atom Atom))
+(: superpose (-> Expression %Undefined%))
+(: hyperpose (-> Expression %Undefined%))
+(: |-> (-> Expression Atom %Undefined%))
+
+;; --- Special forms: spaces ---
+;These five answer the UNIT value, `(->)`, which is the type the standard
+;library gives them and which the engine now returns. They were declared Bool
+;here because the implementation answered `true`; that read the type off the
+;implementation instead of correcting the implementation to the type.
+;
+;The second parameter is `Atom` in every one of them, so the argument arrives
+;UNREDUCED. That is load-bearing for the reducing three: `add-reduct` reduces
+;the atom itself, and a caller that reduced it first would hand it a value
+;`reduce/3` has nothing left to do with.
+(: add-atom (-> Symbol Atom (->)))
+(: remove-atom (-> Symbol Atom (->)))
+(: add-atoms (-> Symbol Atom (->)))
+(: add-reduct (-> Symbol Atom (->)))
+(: add-reducts (-> Symbol Atom (->)))
+(: match (-> Symbol Atom Atom %Undefined%))
+
+;; --- Special forms: collections ---
+(: map-atom (-> Expression Variable Atom Expression))
+(: filter-atom (-> Expression Variable Atom Expression))
+(: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
+
+;; --- Special forms: transactions and threads ---
+(: transaction (-> Atom %Undefined%))
+(: with_mutex (-> Symbol Atom %Undefined%))
+
+;; --- Special forms: the Prolog seams ---
+;; Both take the goal as written, which is what makes them seams at all.
+(: translatePredicate (-> Atom %Undefined%))
+(: call (-> Atom %Undefined%))
+
+;; --- Special forms: assertions ---
+(: test (-> Atom Atom Bool))
+(: test-no-answer (-> Atom Bool))
+
+;; --- Runtime-guarded: the CLP(FD) family ---
+;; `#` operators post constraints rather than computing, so an argument may be
+;; an unbound domain variable. Number is still right: clpfd constrains
+;; integers, and each predicate refuses anything else itself.
+(: #+ (-> Number Number Number))
+(: #- (-> Number Number Number))
+(: #* (-> Number Number Number))
+(: #div (-> Number Number Number))
+(: #mod (-> Number Number Number))
+(: #min (-> Number Number Number))
+(: #max (-> Number Number Number))
+(: #< (-> Number Number Bool))
+(: #> (-> Number Number Bool))
+
+;; --- Runtime-guarded: the rest ---
+(: exp-math (-> Number Number))
+(: implies (-> Bool Bool Bool))
+(: random-int (-> Number Number Number))
+(: random-float (-> Number Number Number))
+
+;; --- Checked on import: expression structure ---
+;; car-atom's result is %Undefined% in the dump and stays so: the head of an
+;; expression is whatever that expression holds.
+(: car-atom (-> Expression %Undefined%))
+(: cdr-atom (-> Expression Expression))
+(: cons-atom (-> Atom Expression Atom))
+(: decons-atom (-> Expression Atom))
+(: size-atom (-> Expression Number))
+(: index-atom (-> Expression Number Atom))
+;; PeTTa's own, no dump entry. cons/decons are the un-suffixed spellings and
+;; first/second-from-pair read a two-element expression.
+(: cons (-> Atom Expression Expression))
+(: decons (-> Expression Expression))
+(: first (-> Expression Atom))
+(: first-from-pair (-> Expression Atom))
+(: second-from-pair (-> Expression Atom))
+
+;; --- Checked on import: set and list operations ---
+(: union-atom (-> Expression Expression Atom))
+(: intersection-atom (-> Expression Expression Atom))
+(: subtraction-atom (-> Expression Expression Atom))
+(: unique-atom (-> Expression Atom))
+(: alpha-unique-atom (-> Expression Atom))
+(: sort-atom (-> Expression Expression))
+(: exclude-item (-> Atom Expression Expression))
+(: is-member (-> Atom Expression Bool))
+(: is-alpha-member (-> Atom Expression Bool))
+
+;; --- Checked on import: the metatype predicates ---
+;; Each takes anything and answers a Bool, which is the whole point of them.
+(: is-var (-> Atom Bool))
+(: is-ground (-> Atom Bool))
+(: is-expr (-> Atom Bool))
+(: is-space (-> Atom Bool))
+(: get-metatype (-> Atom Atom))
+;; An error term carries the expression that caused it, so both arguments are
+;; masked: (Error (+ 1 2) (+ 1 +)) has to hold the malformed term rather than
+;; evaluate it, which is the one thing an error channel exists for
+;; [source: metta-lang-docs, types_basics/metatypes].
+(: Error (-> Atom Atom ErrorType))
+;; noeval is the Atom mask twice over: the argument is not reduced going in and
+;; the Atom return type stops the result being reduced coming out. That is how
+;; the reference implements it, and it is the whole definition.
+(: noeval (-> Atom Atom))
+(: get-type (-> Atom %Undefined%))
+(: =alpha (-> Atom Atom Bool))
+(: id (-> $t $t))
+(: empty (-> %Undefined%))
+
+;; --- Checked on import: spaces and state ---
+(: get-atoms (-> Symbol Atom))
+(: bind! (-> Symbol %Undefined% Bool))
+(: context-space (-> Symbol))
+(: import! (-> Atom Atom Bool))
+;; DIVERGENCE from the dump, which types these over `(StateMonad $t)`.
+;; PeTTa's state is a named global: change-state! is nb_setval/2 and get-state
+;; is nb_getval/2, so the first argument is the NAME and there is no monadic
+;; cell to type over [source: src/metta.pl, 'change-state!'/3, 'get-state'/2].
+(: change-state! (-> Symbol %Undefined% Bool))
+(: get-state (-> Symbol %Undefined%))
+
+;; --- Checked on import: text and printing ---
+(: repr (-> Atom String))
+(: repra (-> Atom Symbol))
+(: parse (-> String Atom))
+(: sread (-> String Atom))
+(: println! (-> %Undefined% Bool))
+(: readln! (-> String))
+(: read-form! (-> Atom))
+(: sread-command (-> String Atom))
+
+;; --- Checked on import: time, files, process ---
+(: current-time (-> Number))
+(: format-time (-> String String))
+(: exists_file (-> %Undefined% Bool))
+(: argv (-> Number %Undefined%))
+
+;; --- Checked on import: SWI predicates registered as MeTTa builtins ---
+;; Their modes are Prolog's, so most parameters are genuinely unconstrained:
+;; append/3 runs in every direction and maplist/3 takes a closure. The arrow
+;; is here for the arity and the result, which is what a reader needs.
+(: append (-> %Undefined% %Undefined% %Undefined%))
+(: length (-> Expression Number))
+(: reverse (-> Expression Expression))
+(: msort (-> Expression Expression))
+(: sort (-> Expression Expression))
+(: last (-> Expression Atom))
+(: member (-> Atom Expression Bool))
+(: list_to_set (-> Expression Expression))
+(: maplist (-> Atom %Undefined% %Undefined%))
+(: foldl (-> Atom %Undefined% %Undefined% %Undefined%))
+(: copy_term (-> Atom Atom))
+(: atom_chars (-> %Undefined% %Undefined%))
+(: atom_concat (-> %Undefined% %Undefined% %Undefined%))
+(: term_hash (-> Atom Number))
+
+;; --- Checked on import: the Prolog interface ---
+;; Predicate builds a goal from its parts; the four *Predicate operations take
+;; one and run or assert it. Each answers true.
+(: Predicate (-> Expression %Undefined%))
+(: callPredicate (-> %Undefined% Bool))
+(: assertaPredicate (-> %Undefined% Bool))
+(: assertzPredicate (-> %Undefined% Bool))
+(: retractPredicate (-> %Undefined% Bool))
+(: assert (-> Atom Bool))
+(: import_prolog_function (-> Symbol Bool))
+
+;; --- Checked on import: the compiler's own surface ---
+(: add-translator-rule! (-> Symbol Bool))
+(: remove-translator-rule! (-> Symbol Bool))
+
+;; --- Checked on import: Python and the outside world ---
+(: py-call (-> Expression %Undefined%))
+;; py-atom RESOLVES where py-call applies, so what comes back is a value: a
+;; Python callable MeTTa can hold, pass and apply. Atom parameters throughout,
+;; because a name is a name rather than something to evaluate first.
+(: new-space (-> SpaceType))
+(: py-atom (-> Atom %Undefined%))
+(: py-atom (-> Atom Atom %Undefined%))
+(: py-dot (-> %Undefined% Atom %Undefined%))
+(: py-list (-> Atom %Undefined%))
+(: py-tuple (-> Atom %Undefined%))
+(: py-dict (-> Atom %Undefined%))
+(: py-iter (-> %Undefined% %Undefined%))
+;; Kwargs takes its pairs UNEVALUATED, because the name half of a pair is a
+;; name: without the mask `(Kwargs (reverse true))` was read as a call to the
+;; `reverse` builtin and the whole form vanished. The VALUE half is evaluated
+;; at the call, so `(Kwargs (n (+ 1 2)))` passes 3.
+;;
+;; One declaration per arity because MeTTa has no variadic type and the mask is
+;; per position. Six pairs is well past what any call site uses; a seventh
+;; simply gets the old behaviour rather than an error.
+(: Kwargs (-> Atom %Undefined%))
+(: Kwargs (-> Atom Atom %Undefined%))
+(: Kwargs (-> Atom Atom Atom %Undefined%))
+(: Kwargs (-> Atom Atom Atom Atom %Undefined%))
+(: Kwargs (-> Atom Atom Atom Atom Atom %Undefined%))
+(: Kwargs (-> Atom Atom Atom Atom Atom Atom %Undefined%))
+(: library (-> %Undefined% %Undefined%))
+(: git-import! (-> String Bool))

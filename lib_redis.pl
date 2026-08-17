@@ -29,7 +29,7 @@
 :- multifile metta_foreign_add/2.
 :- multifile metta_foreign_remove/3.
 :- multifile metta_foreign_atoms/2.
-:- multifile metta_foreign_match/2.
+:- multifile metta_foreign_match/3.
 :- multifile metta_foreign_clear/1.
 
 redis_space_address(Address, Host:Port) :-
@@ -176,6 +176,15 @@ redis_space_event(Space, Payload) :-
 metta_foreign_space(Space) :-
     redis_space_conn(Space, _, _, _, _, _, _).
 
+%Everything, declared rather than inferred. A set in Redis can be read, added
+%to, removed from, enumerated and deleted, so this space answers all five.
+%Saying so is what lets the engine refuse an operation a DIFFERENT provider
+%does not answer instead of reading the failure as "there is nothing there".
+:- multifile metta_foreign_capability/2.
+metta_foreign_capability(Space, Capability) :-
+    redis_space_conn(Space, _, _, _, _, _, _),
+    member(Capability, [add, remove, match, enumerate, clear]).
+
 metta_foreign_add(Space, Atom) :-
     redis_space_conn(Space, Conn, _, _, _, Key, Channel), !,
     swrite(Atom, S),
@@ -198,8 +207,10 @@ metta_foreign_atoms(Space, Pattern) :-
     sread(Text, Pattern).
 
 %The engine's foreign match clause hands one non-conjunctive pattern at
-%a time; candidates enumerate here and unify in place.
-metta_foreign_match(Space, Pattern) :-
+%a time; candidates enumerate here and unify in place. The options are ignored:
+%a Redis set has no way to answer fewer members than a SMEMBERS returns, and
+%ignoring a bound is always correct because the engine applies its own.
+metta_foreign_match(Space, Pattern, _Options) :-
     redis_space_conn(Space, Conn, _, _, _, Key, _), !,
     redis(Conn, smembers(Key), Members),
     member(Text, Members),

@@ -1,9 +1,8 @@
-!(import_prolog_function consult_global)
-
-(= (import_prolog_functions_from_file $prologfile $importfunctions) (let* (($prologfile (exists_file))
-                                                                           ($prologfile (consult_global))
-                                                                           ($function (superpose $importfunctions)))
-                                                                          (import_prolog_function $function)))
+;lib_import owns import_prolog_functions_from_file. This library used to carry
+;its own copy of the definition, so a program importing both got TWO equations
+;for one function: (collapse (import_prolog_functions_from_file ...)) answered
+;(true true) and every named predicate was consulted and registered twice.
+!(import! &self (library lib_import))
 
 !(import_prolog_functions_from_file
     (library lib_memo.pl)

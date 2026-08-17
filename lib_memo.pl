@@ -114,8 +114,8 @@ memo_module_space(Module, Module).
 
 % Runtime Hook Integration
 
-:- multifile metta_memoized_dispatch_call/4.
-metta_memoized_dispatch_call(Fun, Args, Out, Goal) :-
+:- multifile metta_dispatch_call/4.
+metta_dispatch_call(Fun, Args, Out, Goal) :-
     memo_name_enabled(Fun),
     current_metta_module(CallModule),
     length(Args, CallArity),
@@ -123,6 +123,12 @@ metta_memoized_dispatch_call(Fun, Args, Out, Goal) :-
     memo_owner_module(Fun, CallModule, PredArity, Module),
     memoization_enabled_for_call(Fun, Module, CallArity),
     Goal = cache_call(Fun, CallModule, Args, Out).
+
+:- multifile prolog:error_message//1.
+prolog:error_message(permission_error(memoize, volatile_function, Name)) -->
+    [ '~w is declared volatile, so its answers are not reproducible and a \c
+       cache would skip whatever the call does. Ask the library that \c
+       registered it, or memoize a wrapper whose answers are.'-[Name] ].
 
 %The guard that runs before anything else: this hook is consulted for every
 %reduced call and every compiled call site, and reading the module, then
@@ -883,10 +889,73 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
     -> true
     ; throw(error(domain_error(function_symbol, Fun), Context))
     ),
+    %A library may declare that its function must not be cached, with
+    %(volatility name volatile) in its export block. Caching a function whose
+    %answers are not reproducible skips its effect on the second call, and
+    %before this nothing recorded whether that was sound: the review's own
+    %probe cached a side-effecting registered predicate and watched the effect
+    %disappear. An undeclared function is still cacheable, because
+    %memoization is opt-in by the caller and refusing silence would break
+    %every existing (memoize f).
+    ( metta_function_cacheable(Fun)
+    -> true
+    ; throw(error(permission_error(memoize, volatile_function, Fun),
+                  context(Context,
+                          'the library that registered this declared it volatile')))
+    ),
     memo_scope_module(Fun, Module),
+    memo_refuse_uncacheable(Fun, Module, Context),
     memo_module_space(Module, Space),
     findall(Term, memo_equation(Fun, Module, Arities, Term), RawTerms),
     sort(RawTerms, Terms).
+
+%The BODY, not only the declaration above it. Opting in is the CALLER saying
+%they want the cache; it is not the caller establishing that the function is
+%safe to cache, and nothing was establishing that: `(memoize viapy)` was
+%accepted, `is-memoized` answered true, and mutating the data the Python
+%operation reads left the cache answering the old value
+%[source: ai-metta-python-seams.md item 1].
+%
+%The walk is the engine's, the same one tabling uses, so one judgement covers
+%both. The criterion here is STRICTER, and the reason is what each does after
+%caching: tabling resolves every space read to its storage predicate and
+%carries the incremental property against it, so a read is something it can
+%invalidate on. Memoization invalidates on an equation change and on nothing
+%else, so a read it cannot see change is a cache that goes stale in silence.
+memo_refuse_uncacheable(Fun, Module, Context) :-
+    findall(Arity, current_predicate(Module:Fun/Arity), Arities),
+    forall(member(Arity, Arities),
+           memo_refuse_uncacheable_arity(Fun, Module, Arity, Context)).
+
+%(cache Fun unchecked) in &petta is the caller's declared acceptance of
+%staleness, so the walk is skipped for this function. The volatility gate is
+%NOT skipped: it runs before this predicate is reached, and a library's
+%explicit volatile keeps refusing whatever the caller declares
+%[tested: an_unchecked_declaration_memoizes_an_impure_body].
+memo_refuse_uncacheable_arity(Fun, _Module, _Arity, _Context) :-
+    metta_cache_unchecked(Fun),
+    !.
+memo_refuse_uncacheable_arity(Fun, Module, Arity, Context) :-
+    catch(metta_effect_walk(Module, [Fun/Arity], Reads),
+          error(metta_impure_goal(Goal), _),
+          throw(error(permission_error(memoize, impure_function, Fun),
+                      context(Context, Goal)))),
+    (   Reads == []
+    ->  true
+    ;   throw(error(permission_error(memoize, space_reading_function, Fun),
+                    context(Context, Reads)))
+    ).
+
+:- multifile prolog:error_message//1.
+prolog:error_message(permission_error(memoize, impure_function, Name)) -->
+    [ '~w calls something nothing declares pure, so a cached answer would \c
+       hide whatever it does. Declare that operation with \c
+       metta_pure_operation/1 if it only inspects its arguments'-[Name] ].
+prolog:error_message(permission_error(memoize, space_reading_function, Name)) -->
+    [ '~w reads a space, and memoization invalidates on an equation change \c
+       and on nothing else, so the cache would outlive the atoms it was \c
+       computed from. Table it instead: tabling resolves the read and \c
+       invalidates on it'-[Name] ].
 
 %Recompiling is what makes memoization take effect: the translator bakes
 %the dispatch into every compiled call site, so equations already compiled
