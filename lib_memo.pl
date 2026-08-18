@@ -3,7 +3,7 @@
 % Assumes:
 %   - a named space compiles its equations into a module of its own and
 %     inherits the rest from user, so a function name alone does not name
-%     a function [source: src/spaces.pl:129, space_module/2]
+%     a function [source: src/spaces.pl, space_module/2]
 %   - translated_from/2 is engine-wide, and a clause's module is what
 %     places an equation in a space
 %     [source: src/spaces.pl, metta_remove_atom/3]

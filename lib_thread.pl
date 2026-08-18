@@ -543,7 +543,7 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
 %[source: src/ext_points.pl:17-19, python/petta/shim.pl:1277-1281], so the
 %write itself delivers. Installing the hook also takes the space off the bulk
 %add fast path for as long as the wait lasts, which is what makes per-atom
-%events fire at all [source: src/spaces.pl:175-178, metta_add_hooks_idle/1].
+%events fire at all [source: src/spaces.pl, metta_add_hooks_idle/1].
 space_await(Space, Pattern, Out) :-
     space_await_(Space, Pattern, infinite, Out).
 
