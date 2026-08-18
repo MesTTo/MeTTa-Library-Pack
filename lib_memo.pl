@@ -12,6 +12,10 @@
 %     [tested 2026-08-14: memo_eviction_output].
 %   - Memoizing a function in one space leaves every other space's answers
 %     unchanged [tested 2026-08-15: memo_space_isolation].
+%   - Dependency invalidation's own use of term_size/2 and library(ugraphs)
+%     works under autoload=false, not only the engine's default [measured
+%     2026-08-18: NO_AUTOLOAD=1 sh test.sh, the seven test_memo_*.metta and
+%     memo_spaces.metta examples].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
@@ -30,7 +34,23 @@
 
 :- use_module(library(lists)).
 :- use_module(library(solution_sequences)).
+:- use_module(library(terms)). %term_size/2, for eviction cost accounting
 :- use_module(library(ugraphs)). %vertices_edges_to_ugraph/3, reachable/3
+%ugraphs.pl declares its own :- autoload(library(lists),[append/3]) but
+%calls the OTHER append/2 (concatenate a list of lists) from top_sort/2's
+%layering step without declaring it, so that call resolves by GLOBAL
+%autoload today. With autoload=false it raises
+%existence_error(procedure,ugraphs:append/2) the first time this file's
+%dependency graph gets topologically sorted, which every memo-invalidating
+%write does [measured 2026-08-18: examples/libraries/memo_spaces.metta and
+%six sibling test_memo_*.metta examples under NO_AUTOLOAD=1]. use_module
+%does not help from here: it would add append/2 to lib_memo's OWN import
+%list, not ugraphs's, and the failing call is inside ugraphs.pl's own
+%clause body. Injecting the import into ugraphs's namespace directly is
+%what SWI's use_module/2 is for; this is the third instance of a shipped
+%library assuming autoload for its own internal reference (metta.pl's
+%Dependencies section has the first, filereader.pl's has the second).
+:- ugraphs:use_module(library(lists), [append/2]).
 
 % State Declarations
 %

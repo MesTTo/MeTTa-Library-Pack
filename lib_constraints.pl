@@ -10,6 +10,11 @@
 %     variables [tested: each_constraint_domain_answers].
 %   - a list argument stays a list, so card/2's count list is not read as an
 %     operator application [tested: a_list_argument_stays_a_list].
+%   - library(clpq)'s and library(clpb)'s own internal, undeclared
+%     references into library(ugraphs), library(lists), library(pairs) and
+%     library(apply) work under autoload=false, not only the engine's
+%     default [measured 2026-08-18: NO_AUTOLOAD=1 sh test.sh,
+%     examples/basics/constraint_domains.metta].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -17,6 +22,55 @@
 
 :- use_module(library(clpq), [entailed/1]).
 :- use_module(library(clpb), [sat/1, labeling/1, taut/2]).
+%library(clpq) pulls in library(ugraphs) for its own variable-elimination
+%ordering (clpqr/ordering.pl); ugraphs.pl declares
+%:- autoload(library(lists),[append/3]) but its top_sort/2 also calls the
+%OTHER append/2 (concatenate a list of lists), undeclared, so that one
+%resolves by GLOBAL autoload today. With autoload=false, extracting a
+%solved CLP(Q) system's residual goals raises
+%existence_error(procedure,ugraphs:append/2) from inside
+%clpqr_ordering:arrangement/2 [measured 2026-08-18:
+%examples/basics/constraint_domains.metta's residual-goals test, under
+%NO_AUTOLOAD=1]. Same trap, same fix, as lib_memo.pl's independent use of
+%library(ugraphs): inject the missing import into ugraphs's own namespace
+%once its real file is loaded, since ugraphs.pl itself is not this repo's
+%to patch and use_module is idempotent regardless of which caller (this
+%file's clpq, or lib_memo.pl) reaches library(ugraphs) first in a given
+%process.
+:- ugraphs:use_module(library(lists), [append/2]).
+%library(clpb) does not declare library(lists) at all, not even a local
+%:- autoload like ugraphs's partial one above, and calls six of its
+%predicates unqualified across its sat/1 compilation, labeling/1 and
+%weighted-labeling steps: same_length/2 and member/2 confirmed by running
+%the corpus [measured 2026-08-18:
+%examples/basics/constraint_domains.metta's card/2 and sat/1 tests, under
+%NO_AUTOLOAD=1: existence_error(procedure,clpb:same_length/2), then
+%clpb:member/2]; append/3, memberchk/2, reverse/2 and sum_list/2 read from
+%clpb.pl directly (lines 833-1639) rather than found by crashing on each
+%in turn.
+:- clpb:use_module(library(lists),
+                   [same_length/2, member/2, memberchk/2, append/3,
+                    reverse/2, sum_list/2]).
+%Same gap, library(pairs): clpb.pl's sat/1 variable-weight bookkeeping
+%calls pairs_values/2, pairs_keys_values/3 and pairs_keys/2 unqualified
+%[measured 2026-08-18: examples/basics/constraint_domains.metta under
+%NO_AUTOLOAD=1, existence_error(procedure,clpb:pairs_values/2)].
+:- clpb:use_module(library(pairs),
+                   [pairs_values/2, pairs_keys_values/3, pairs_keys/2]).
+%Same gap, library(apply): clpb.pl calls apply_macros's own targets
+%(maplist, foldl, include, exclude, partition) unqualified too, and
+%apply_macros's compile-time inlining evidently does not cover every
+%call shape here (a Goal built from a partial application like
+%exclude(eq_1) or maplist(monotonic_variable) is not the literal
+%lambda/named-predicate pattern it inlines), so at least foldl/5 falls
+%through to a real, uninlined call and needs the predicate to exist
+%[measured 2026-08-18: examples/basics/constraint_domains.metta under
+%NO_AUTOLOAD=1, existence_error(procedure,clpb:foldl/5)]. The full set
+%below is every arity clpb.pl (lines 348-1784) actually calls, read
+%directly rather than found by crashing on each in turn.
+:- clpb:use_module(library(apply),
+                   [maplist/2, maplist/3, maplist/4, foldl/4, foldl/5,
+                    include/3, exclude/3, partition/4, partition/5]).
 
 %ONE ENTRY POINT EACH, taking the constraint as an expression, rather than a
 %prefixed operator family like the engine's `#`. That is a decision about the
