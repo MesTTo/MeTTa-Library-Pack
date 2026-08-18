@@ -1,9 +1,10 @@
 % Purpose: memoize MeTTa function calls with bounded LRU or WTinyLFU
 %   eviction and dependency-based invalidation.
 % Assumes:
-%   - a named space compiles its equations into a module of its own and
-%     inherits the rest from user, so a function name alone does not name
-%     a function [source: src/spaces.pl, space_module/2]
+%   - every space, &self included, compiles its equations into a module of
+%     its own and inherits the rest through that module's base chain, so a
+%     function name alone does not name a function
+%     [source: src/spaces.pl, space_module/2]
 %   - translated_from/2 is engine-wide, and a clause's module is what
 %     places an equation in a space
 %     [source: src/spaces.pl, metta_remove_atom/3]
@@ -96,8 +97,8 @@
 % Module Resolution
 
 %The module a call is dispatched in is not always the module holding the
-%clauses: a named space compiles its own equations into its own module and
-%inherits everything else from user. Cache under the module that defines
+%clauses: a space compiles its own equations into its own module and
+%inherits everything else through it. Cache under the module that defines
 %the predicate, or one shared function reached from two spaces gets two
 %caches and neither invalidates the other. imported_from/1 is the
 %documented way to ask
@@ -109,14 +110,15 @@ memo_owner_module(Fun, CallModule, PredArity, Module) :-
     ;   Module = CallModule ).
 
 %Which module a call from the running space is asking about: its own when
-%the space defines the function, user's when it only inherits it. Used by
+%the space defines the function, &self's when it only inherits it. Used by
 %the public API, where no arity is in hand and the equations answer.
 memo_scope_module(Fun, Module) :-
     current_metta_module(CallModule),
-    (   CallModule \== user,
+    metta_self_module(Self),
+    (   CallModule \== Self,
         memo_equation(Fun, CallModule, any, _)
     ->  Module = CallModule
-    ;   Module = user ).
+    ;   Module = Self ).
 
 %This module's equations for Fun, with a fixed input arity when one is
 %asked for and every arity for `any`. The clause's module is the test:
@@ -128,9 +130,6 @@ memo_equation(Fun, Module, Arities, Term) :-
     ( Arities == any -> true ; length(Args, Arities) ),
     clause_property(Ref, module(Module)).
 
-%The space a module's equations belong to, inverting space_module/2.
-memo_module_space(user, '&self') :- !.
-memo_module_space(Module, Module).
 
 % Runtime Hook Integration
 
@@ -925,7 +924,7 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
     ),
     memo_scope_module(Fun, Module),
     memo_refuse_uncacheable(Fun, Module, Context),
-    memo_module_space(Module, Space),
+    metta_module_space(Module, Space),
     findall(Term, memo_equation(Fun, Module, Arities, Term), RawTerms),
     sort(RawTerms, Terms).
 

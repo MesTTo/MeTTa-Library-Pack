@@ -84,7 +84,8 @@ capability_hook(clear, metta_foreign_clear/1).
 %error on a system built with protect_static_code.
 conformance_hook_defined(Name, Arity) :-
     functor(Head, Name, Arity),
-    catch(predicate_property(user:Head, number_of_clauses(Count)), _, fail),
+    petta_engine_module(Engine),
+    catch(predicate_property(Engine:Head, number_of_clauses(Count)), _, fail),
     Count > 0.
 
 conformance_atoms(Space, Atoms) :-

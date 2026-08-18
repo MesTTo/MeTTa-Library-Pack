@@ -93,7 +93,7 @@ metta_tabling_module(Name, CompiledArity, Module) :-
 metta_tabling_candidate(Module) :-
     current_metta_space(Space),
     space_module(Space, Module).
-metta_tabling_candidate(user).
+metta_tabling_candidate(Module) :- metta_self_module(Module).
 
 %A table over a space also has to survive writes to that space, and SWI
 %does that when both the table and the dynamic predicates it reads carry
@@ -203,11 +203,11 @@ prolog:error_message(petta_tabling_foreign_space(Operation, Space)) -->
        table. Do not table a function that reads a foreign space.'-[Space, Operation] ].
 
 %The live-declaration record in &petta: the space whose module holds the
-%predicate (user's functions belong to '&self'), the function name, and
-%its INPUT arity, the arity a MeTTa caller sees. Declaring removes any
-%previous record before adding, so repetition never duplicates.
+%predicate, the function name, and its INPUT arity, the arity a MeTTa caller
+%sees. Declaring removes any previous record before adding, so repetition
+%never duplicates.
 metta_tabling_reflect(Module, Name, CompiledArity, [tabled, Space, Name, InputArity]) :-
-    ( Module == user -> Space = '&self' ; Space = Module ),
+    metta_module_space(Module, Space),
     InputArity is CompiledArity - 1.
 
 %Clear answers, keep the declaration: unifying subgoal tables of this
