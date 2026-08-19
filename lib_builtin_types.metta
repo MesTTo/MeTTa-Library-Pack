@@ -74,7 +74,7 @@
 ;;
 ;; The types come from the reference corelib dump wherever it has one, because
 ;; a type PeTTa does not already have is additive and the reference governs
-;; there [source: /home/user/Dev/LeaTTa/stdlib.md, 146 typed entries; 39 of
+;; there [source: LeaTTa stdlib.md, 146 typed entries; 39 of
 ;; these names are in it]. One vocabulary translation was needed: HE's unit
 ;; result `(->)` is PeTTa's `Bool`, because every one of these answers `true`.
 ;; `SpaceType` is written as itself, because a space handle answers `Grounded`
