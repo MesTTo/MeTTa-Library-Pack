@@ -14,8 +14,8 @@
 (: >= (-> Number Number Bool))
 
 ;; Type definitions of equality and negated equality operators
-(: == (-> $a $b Bool))
-(: != (-> $a $b Bool))
+(: == (-> $a $a Bool))
+(: != (-> $a $a Bool))
 
 ;; Type definitions of common mathematical functions
 (: pow-math (-> Number Number Number))
