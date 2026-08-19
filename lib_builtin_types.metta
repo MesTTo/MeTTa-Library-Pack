@@ -75,10 +75,15 @@
 ;; The types come from the reference corelib dump wherever it has one, because
 ;; a type PeTTa does not already have is additive and the reference governs
 ;; there [source: /home/user/Dev/LeaTTa/stdlib.md, 146 typed entries; 39 of
-;; these names are in it]. Two vocabulary translations were needed: HE's unit
-;; result `(->)` is PeTTa's `Bool`, because every one of these answers `true`;
-;; and HE's `SpaceType` is PeTTa's `Symbol`, because `(get-metatype &self)`
-;; answers `Symbol`. Divergences from the dump are marked where they occur.
+;; these names are in it]. One vocabulary translation was needed: HE's unit
+;; result `(->)` is PeTTa's `Bool`, because every one of these answers `true`.
+;; `SpaceType` is written as itself, because a space handle answers `Grounded`
+;; here as it does there and carries that type
+;; [tested: spaces:space_handle_type]. It was written `Symbol` until
+;; 2026-08-20, when `(get-metatype &self)` still answered `Symbol` here, and
+;; the two disagreed the moment the handle gained its own type: every one of
+;; these declarations then REFUSED a space handle as a first argument.
+;; Divergences from the dump are marked where they occur.
 ;;
 ;; THIS FILE HAS TWO ROLES AND THEY DIFFER. The engine reads it at boot into
 ;; `builtin_type_declaration/2`, which `get_type_candidate/2` consults LAST, so
@@ -128,7 +133,7 @@
 
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
-(: evalc (-> Atom Symbol Atom))
+(: evalc (-> Atom SpaceType Atom))
 ;; The argument is a CALL and it arrives unevaluated, because which function is
 ;; being delegated to has to be known before the call runs: the module holding
 ;; it is resolved when the equation compiles.
@@ -149,12 +154,12 @@
 ;UNREDUCED. That is load-bearing for the reducing three: `add-reduct` reduces
 ;the atom itself, and a caller that reduced it first would hand it a value
 ;`reduce/3` has nothing left to do with.
-(: add-atom (-> Symbol Atom (->)))
-(: remove-atom (-> Symbol Atom (->)))
-(: add-atoms (-> Symbol Atom (->)))
-(: add-reduct (-> Symbol Atom (->)))
-(: add-reducts (-> Symbol Atom (->)))
-(: match (-> Symbol Atom Atom %Undefined%))
+(: add-atom (-> SpaceType Atom (->)))
+(: remove-atom (-> SpaceType Atom (->)))
+(: add-atoms (-> SpaceType Atom (->)))
+(: add-reduct (-> SpaceType Atom (->)))
+(: add-reducts (-> SpaceType Atom (->)))
+(: match (-> SpaceType Atom Atom %Undefined%))
 
 ;; --- Special forms: collections ---
 (: map-atom (-> Expression Variable Atom Expression))
@@ -260,9 +265,9 @@
 (: id (-> $t $t))
 
 ;; --- Checked on import: spaces and state ---
-(: get-atoms (-> Symbol Atom))
+(: get-atoms (-> SpaceType Atom))
 (: bind! (-> Symbol %Undefined% Bool))
-(: context-space (-> Symbol))
+(: context-space (-> SpaceType))
 (: import! (-> Atom Atom (->)))
 ;; include pastes a module's source into the space that included it and
 ;; answers its LAST directive's answers, so its result type is open where
