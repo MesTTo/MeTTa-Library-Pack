@@ -218,6 +218,15 @@
 (: unique-atom (-> Expression Atom))
 (: alpha-unique-atom (-> Expression Atom))
 (: sort-atom (-> Expression Expression))
+;; The corelib's own two, whose blocks read `(-> String Expression String)` and
+;; `(-> Expression Expression)`. Both are load-bearing: they are what turns
+;; `(format-args n ())` into `(BadArgType 1 String Number)` and
+;; `(sort-strings s)` into `(BadArgType 1 Expression String)`, where an
+;; argument the type does not decide earns the operation's own words instead
+;; [source: LeaTTa MettaHyperonFull/Minimal/Stdlib.lean, the corelib blocks;
+;; tests/semantics/grounded/07-partial-core.metta].
+(: format-args (-> String Expression String))
+(: sort-strings (-> Expression Expression))
 (: exclude-item (-> Atom Expression Expression))
 (: is-member (-> Atom Expression Bool))
 (: is-alpha-member (-> Atom Expression Bool))

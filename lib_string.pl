@@ -211,71 +211,6 @@ pad_with(Value, Width, Pad, Side, Out) :-
         ; string_concat(Text, Fill, Out) )
     ).
 
-%MeTTa HE's spelling: (format-args "Probability of {} is {}%" (head 50)).
-%Extra {} beyond the arguments are left standing rather than erroring, so a
-%template is never destroyed by a short argument list; extra arguments are
-%ignored for the same reason.
-'format-args'(Template, Args, Out) :-
-    metta_text(Template, TemplateText),
-    must_be(list, Args),
-    maplist(format_arg_text, Args, Texts),
-    filled_pieces(TemplateText, Texts, Pieces),
-    atomics_to_string(Pieces, Out).
-
-%An argument keeps its written form, so a symbol arrives as its name and a
-%string without its quotes, which is what a template is for.
-format_arg_text(Value, Text) :-
-    (   string(Value)
-    ->  Text = Value
-    ;   atom(Value)
-    ->  atom_string(Value, Text)
-    ;   number(Value)
-    ->  number_string(Value, Text)
-    ;   swrite(Value, Text)
-    ).
-
-%Pieces rather than nested concatenation, for the same reason as
-%replacement_pieces/4: concatenating the filled tail onto the head at every
-%level recopies the remainder of the template once per argument. Worth 5.12x
-%at 4,000 placeholders [measured 2026-08-16: 183,959,570 against 942,434,771
-%instructions:u, min-of-2, setup subtracted]. Inferences see only 1.50x of
-%that, 16,004 against 24,002, because string_concat/3 is one inference
-%whatever it copies, which is why this needs instructions or wall clock.
-%
-%STILL QUADRATIC, and deliberately. sub_string/5 copies the remaining template
-%at every placeholder, so this is O(n^2) in the template's LENGTH even though
-%the output is assembled once. A single pass over string_codes/2, sharing the
-%tail instead of copying it, is genuinely linear and byte-identical on every
-%case tested, and it is NOT taken because it is 2x SLOWER where format
-%templates actually live [measured 2026-08-16, instructions:u per call]:
-%
-%  placeholders |        5 |       20 |     1,000 |      4,000 |      8,000
-%  this         |   33,452 |  124,396 | 16,459,512| 183,959,771| 684,290,019
-%  one pass     |   67,966 |  246,339 | 11,726,072|  46,852,464|  93,715,771
-%
-%The crossover is near 1,000 placeholders. string_codes/2 over the whole
-%template plus rebuilding each piece from codes costs more than a couple of
-%sub_string/5 calls, and a template has a handful of holes. Recorded here so
-%the linear rewrite is not made a third time.
-filled_pieces(Text, [], [Text]).
-filled_pieces(Text, [Arg|Rest], Pieces) :-
-    (   sub_string(Text, Before, 2, After, "{}")
-    ->  sub_string(Text, 0, Before, _, Head),
-        Resume is Before + 2,
-        sub_string(Text, Resume, After, _, Tail),
-        Pieces = [Head, Arg|More],
-        filled_pieces(Tail, Rest, More)
-    ;   Pieces = [Text]
-    ).
-
-%MeTTa HE's spelling. Alphabetical, and duplicates are kept, because this
-%sorts a list rather than making a set: sort-atom and unique-atom are the
-%operations that remove duplicates.
-'sort-strings'(List, Sorted) :-
-    must_be(list, List),
-    maplist(metta_text, List, Texts),
-    msort(Texts, Sorted).
-
 %Text to Number, with no answer when the text is not a number, so a caller
 %can test with a match rather than catching.
 'parse-number'(Value, Number) :-
@@ -315,13 +250,9 @@ filled_pieces(Text, [Arg|Rest], Pieces) :-
 :- det('string-repeat'/3).
 :- det('string-pad-left'/4).
 :- det('string-pad-right'/4).
-:- det('format-args'/3).
-:- det('sort-strings'/2).
 :- det('number-to-string'/2).
 :- det(metta_text/2).
 :- det(char_to_string/2).
 :- det(separated_by/3).
 :- det(replacement_pieces/4).
-:- det(filled_pieces/3).
-:- det(format_arg_text/2).
 :- det(pad_with/5).

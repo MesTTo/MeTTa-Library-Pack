@@ -17,9 +17,9 @@
 ;is its inverse. (string-repeat $s $n), (string-pad-left $s $width $pad) and
 ;(string-pad-right ...) round it out.
 ;
-;(format-args $template $args) is MeTTa HE's spelling and fills {} in order:
-;(format-args "Probability of {} is {}%" (head 50)) gives
-;"Probability of head is 50%". (sort-strings $list) is HE's too.
+;(format-args $template $args) and (sort-strings $list) are corelib names and
+;are always loaded, so this library no longer carries them: importing it is
+;not what makes them work.
 ;(parse-number $s) answers a Number, or nothing when the text is not one, so
 ;you test it with a match rather than a catch. (number-to-string $n) inverts.
 ;
@@ -34,4 +34,4 @@
    string-starts-with string-ends-with string-contains string-index-of
    string-replace string-chars string-from-chars string-repeat
    string-pad-left string-pad-right
-   format-args sort-strings parse-number number-to-string))
+   parse-number number-to-string))
