@@ -123,6 +123,10 @@
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
 (: evalc (-> Atom Symbol Atom))
+;; The argument is a CALL and it arrives unevaluated, because which function is
+;; being delegated to has to be known before the call runs: the module holding
+;; it is resolved when the equation compiles.
+(: super (-> Atom %Undefined%))
 (: reduce (-> Atom %Undefined%))
 (: collapse (-> Atom Atom))
 (: superpose (-> Expression %Undefined%))
