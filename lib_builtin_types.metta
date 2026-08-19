@@ -56,8 +56,14 @@
 (: timeout (-> Number Atom %Undefined%))
 (: elapsed (-> Atom %Undefined%))
 
-;; Interpreter settings, MeTTa HE's spelling.
-(: pragma! (-> Symbol %Undefined% Bool))
+;; pragma! is UNDECLARED, and the absence is the answer: the official corelib
+;; block for it reads `Type %Undefined%`, which is the gradual default rather
+;; than a type, so `!(get-type pragma!)` answers `%Undefined%` on both engines
+;; even when the program has written `(: pragma! Number)` into the space
+;; [source: LeaTTa wiki/Hyperon-Divergences.md, the grounded-operation-type
+;; row, measured 2026-08-16; tests/semantics/types-basic/
+;; 20-undefined-stdlib-operation.metta, STATUS conforms]. It answers the UNIT
+;; value, for the reason add-atom does.
 
 ;; HE's metta/3: interpret an atom in a named space. The Type argument is
 ;; accepted and ignored, as HE does for %Undefined%.
