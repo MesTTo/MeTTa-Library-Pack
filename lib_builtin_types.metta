@@ -208,7 +208,15 @@
 (: cons (-> Atom Expression Expression))
 (: decons (-> Expression Expression))
 (: first (-> Expression Atom))
-(: first-from-pair (-> Expression Atom))
+;; first-from-pair is UNDECLARED, with empty, nop, pragma!, type-cast,
+;; match-types and match-type-or: each official corelib block reads
+;; `Type %Undefined%`, which is the gradual default rather than a type, so
+;; get-type answers %Undefined% and a wrong-arity call stays unreduced instead
+;; of being refused by an arity the declaration invented
+;; [source: LeaTTa wiki/Hyperon-Divergences.md, the undeclared-helpers row,
+;; measured 2026-08-15; tests/semantics/types-basic/
+;; 61-undeclared-type-helpers-surface.metta and eval-core/
+;; empty-argument-arity.metta].
 (: second-from-pair (-> Expression Atom))
 
 ;; --- Checked on import: set and list operations ---
@@ -250,7 +258,6 @@
 (: get-type (-> Atom %Undefined%))
 (: =alpha (-> Atom Atom Bool))
 (: id (-> $t $t))
-(: empty (-> %Undefined%))
 
 ;; --- Checked on import: spaces and state ---
 (: get-atoms (-> Symbol Atom))
