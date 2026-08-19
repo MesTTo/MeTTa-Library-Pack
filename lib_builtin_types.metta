@@ -264,6 +264,11 @@
 (: bind! (-> Symbol %Undefined% Bool))
 (: context-space (-> Symbol))
 (: import! (-> Atom Atom (->)))
+;; include pastes a module's source into the space that included it and
+;; answers its LAST directive's answers, so its result type is open where
+;; import!'s is unit [source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean,
+;; the include corelib block].
+(: include (-> Atom %Undefined%))
 ;; DIVERGENCE from the dump, which types these over `(StateMonad $t)`.
 ;; PeTTa's state is a named global: change-state! is nb_setval/2 and get-state
 ;; is nb_getval/2, so the first argument is the NAME and there is no monadic
