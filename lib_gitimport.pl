@@ -7,11 +7,11 @@
 
 % Runtime git-import! is a core primitive.  Declarative git-dependency forms use
 % the same acquisition machinery before the file's runnable forms execute.
-'git-import!'(Url, true) :-
-    'git-import!'(Url, '', './repos', true).
-'git-import!'(Url, Build, true) :-
-    'git-import!'(Url, Build, './repos', true).
-'git-import!'(Url0, Build0, Base0, true) :-
+'git-import!'(Url, []) :-
+    'git-import!'(Url, '', './repos', _).
+'git-import!'(Url, Build, []) :-
+    'git-import!'(Url, Build, './repos', _).
+'git-import!'(Url0, Build0, Base0, []) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
     acquire_unpinned_repository('git-import!', Url, Build, Base,
                                 Name, LocalDir),

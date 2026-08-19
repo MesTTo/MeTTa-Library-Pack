@@ -256,7 +256,7 @@
 (: get-atoms (-> Symbol Atom))
 (: bind! (-> Symbol %Undefined% Bool))
 (: context-space (-> Symbol))
-(: import! (-> Atom Atom Bool))
+(: import! (-> Atom Atom (->)))
 ;; DIVERGENCE from the dump, which types these over `(StateMonad $t)`.
 ;; PeTTa's state is a named global: change-state! is nb_setval/2 and get-state
 ;; is nb_getval/2, so the first argument is the NAME and there is no monadic
@@ -342,4 +342,4 @@
 (: Kwargs (-> Atom Atom Atom Atom Atom %Undefined%))
 (: Kwargs (-> Atom Atom Atom Atom Atom Atom %Undefined%))
 (: library (-> %Undefined% %Undefined%))
-(: git-import! (-> String Bool))
+(: git-import! (-> String (->)))
