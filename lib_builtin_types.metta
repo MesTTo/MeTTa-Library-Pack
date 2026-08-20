@@ -337,6 +337,8 @@
 ;; Python callable MeTTa can hold, pass and apply. Atom parameters throughout,
 ;; because a name is a name rather than something to evaluate first.
 (: new-space (-> SpaceType))
+;;A ground expression held as Atom becomes a parametric space identifier.
+(: new-space (-> Atom SpaceType))
 ;;The Atom descriptor is held as data: `(inherits &parent)` and
 ;;`(restricted (grants file ...))` select creation-time execution bases.
 (: new-space (-> SpaceType Atom SpaceType))
