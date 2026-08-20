@@ -1,3 +1,25 @@
+; Purpose: provide NARS truth functions, inference rules, and bounded derivation.
+; Guarantees: malformed truth-function inputs fail instead of surviving as
+;   residual calls under the P3 dispatch default.
+; [tested: bindings/python/tests/test_translation.py::test_a_prelude_derived_form_matches_its_fused_twin_on_the_corpus; commit=WORKTREE]
+!(add-atom &petta (dispatch-policy Truth_Deduction NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Abduction NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Exemplification NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Negation NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Intersection NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Comparison NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Analogy NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Resemblance NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Union NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Difference NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_DecomposePNN NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_DecomposeNPP NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_DecomposePNP NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_DecomposeNNN NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Eternalize NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Revision NoMatchEnum NoMatchFail))
+!(add-atom &petta (dispatch-policy Truth_Expectation NoMatchEnum NoMatchFail))
+
 ;; Truth functions
 (= (Truth_c2w $c)
    (/ $c (- 1 $c)))
