@@ -4,10 +4,10 @@
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
 %     function name alone does not name a function
-%     [source: src/spaces.pl, space_module/2]
+%     [source: engine/spaces.pl, space_module/2]
 %   - translated_from/2 is engine-wide, and a clause's module is what
 %     places an equation in a space
-%     [source: src/spaces.pl, metta_remove_atom/3]
+%     [source: engine/spaces.pl, metta_remove_atom/3]
 % Guarantees:
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
@@ -166,7 +166,7 @@ metta_on_function_changed(Fun) :-
     forall(member(Module, Modules), cache_invalidate(Fun, Module)).
 
 %The removal hook fires only once no space defines the name any more
-%[source: src/spaces.pl, metta_remove_atom/3], so the disable is global.
+%[source: engine/spaces.pl, metta_remove_atom/3], so the disable is global.
 :- multifile metta_on_function_removed/1.
 metta_on_function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
