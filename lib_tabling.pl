@@ -27,6 +27,10 @@
 %   - A read that cannot be resolved to one space predicate, or that names
 %     a foreign space, is refused rather than tabled without the guarantee
 %     [tested: tabling_refuses_unresolvable_reads].
+%   - Reads of a parametric native space resolve to its reserved predicate in
+%     its canonical storage module [tested:
+%     test_two_instances_of_a_parametric_space_answer_independently;
+%     commit=3c7bcde6a0670ec5c563584b26977b41cc727580].
 % Fails when:
 %   - the caller depends on the ORDER of a function's answers. Tabling
 %     changes it. An untabled MeTTa function answers in clause order, and a
@@ -99,9 +103,10 @@ metta_tabling_candidate(Module) :- metta_self_module(Module).
 %does that when both the table and the dynamic predicates it reads carry
 %the incremental property [source: SWI-Prolog 10.1 Reference Manual 7.7].
 %The predicates it reads are recoverable exactly: a match compiles to
-%match(Space, Pattern, _, _) with the space an atom and the pattern a
-%list, so the storage predicate is Space/(1 + arguments), and the walk
-%follows the calls the body makes. Deriving them costs nothing per write,
+%match(Space, Pattern, _, _) with a literal space identifier and list pattern.
+%An atomic space uses its name as the storage functor; a parametric space uses
+%the reserved functor in its canonical module. The walk follows the calls the
+%body makes. Deriving them costs nothing per write,
 %where a flag consulted on the write path measured two inferences of
 %every five that add_sexp/3 spends [measured 2026-08-15].
 %
@@ -162,14 +167,15 @@ metta_tabling_resolve(read(Operation, Space, Pattern), Reads0, Reads) :-
 %One space read, resolved to the dynamic predicates that answer it: one
 %per conjunct, since a conjunction reads each of its patterns.
 metta_tabling_read(Operation, Space, Pattern, Reads) :-
-    ( atom(Space) -> true
+    ( petta_space_name(Space) -> true
     ; throw(error(petta_tabling_unresolved_read(Operation, Space), none)) ),
     ( metta_foreign_space(Space)
       -> throw(error(petta_tabling_foreign_space(Operation, Space), none))
     ; true ),
     native_storage_module(Space, Storage),
+    native_storage_functor(Space, Functor),
     metta_tabling_patterns(Operation, Pattern, Shapes),
-    findall(Storage:Space/Arity,
+    findall(Storage:Functor/Arity,
             ( member(Shape, Shapes),
               length(Shape, Count),
               Arity is Count + 1 ),
