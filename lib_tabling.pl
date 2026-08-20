@@ -36,7 +36,7 @@
 %     depends on the trie's layout, so it moves when something unrelated
 %     moves. Measured 2026-08-15: (collapse (pick a)) over two equations
 %     answered (one two), and adding three facts that NOTHING CALLS to
-%     src/translator.pl flipped it to (two one); removing them flipped it
+%     engine/translator.pl flipped it to (two one); removing them flipped it
 %     back, deterministically, seven runs each way. Adding only comments
 %     changed nothing, so it tracks new atoms rather than new lines.
 %
@@ -154,7 +154,7 @@ metta_tabling_reads(Module, Name, CompiledArity, Reads) :-
 %to the storage predicates that answer it, so the table can carry the
 %incremental property against them. Memoization calls the same walk and does
 %the opposite with the same reads, because it has no invalidation to hang on
-%them [source: src/metta.pl, metta_effect_walk/3].
+%them [source: engine/metta.pl, metta_effect_walk/3].
 metta_tabling_resolve(read(Operation, Space, Pattern), Reads0, Reads) :-
     metta_tabling_read(Operation, Space, Pattern, Found),
     append(Found, Reads0, Reads).
@@ -272,7 +272,7 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %If-then-else, not a cut. Every caller of this hook enumerates the whole
 %predicate with forall/2, so a cut in one clause's body cuts THAT predicate's
 %clause choice points and no handler ordered after this one runs. Clause order
-%among multifile contributors is load order, and src/duals.pl installs its
+%among multifile contributors is load order, and engine/duals.pl installs its
 %handler with assertz, which appends: with tabling declared, a changed
 %function abolished the tables and never dropped the stale dual, so
 %(not-provable (pq 2)) answered both False from the recompiled path and True

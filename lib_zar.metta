@@ -4,7 +4,7 @@
 ;because a Prolog library belongs to the process rather than to a space: SWI
 ;loads a file into the module the load runs in, and under per-space equations a
 ;runnable runs in its space's module, where register_fun/1 cannot see the
-;arities. See the note on consult_global/1 in src/metta.pl.
+;arities. See the note on consult_global/1 in engine/metta.pl.
 ;
 ;The path is %Undefined% rather than Atom so it can be computed. Atom means the
 ;argument arrives unevaluated, which is right for a literal but stops
@@ -37,7 +37,7 @@
 ;Expression.
 ;
 ;The declaration describes the argument rather than deciding how it is
-;compiled: prolog_function_importer/1 in src/translator.pl names all four
+;compiled: prolog_function_importer/1 in engine/translator.pl names all four
 ;importer spellings, and the translator keeps their name list literal before
 ;typed dispatch is reached. It has to. Without it a list holding a name that
 ;had already become a function compiled to a CALL, so a second import

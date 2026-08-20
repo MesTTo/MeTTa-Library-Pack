@@ -9,9 +9,9 @@
 %   maintained in two places drifts; a list the engine answers cannot.
 % Assumes:
 %   - builtin_fun/1, fun/1 and arity/2 are the engine's own registries
-%     [source: src/metta.pl:1136, 1306, 1312]
+%     [source: engine/metta.pl:1136, 1306, 1312]
 %   - every translator special form is a clause of translate_special_dl/5
-%     [source: src/translator.pl, 40 clauses as of 2026-08-15]
+%     [source: engine/translator.pl, 40 clauses as of 2026-08-15]
 % Guarantees:
 %   - every predicate here is a pure reader; nothing it answers changes what
 %     the engine does [assumed 2026-08-16: nothing checks the surface is unchanged after a read]
@@ -110,7 +110,7 @@ special_form_head(Head) :-
 %Every extension point the engine declares, as [Name, Arity, Kind].
 %
 %The kind is the fact a handler author needs and the one that used to be
-%readable only by a person, in a comment at the top of src/ext_points.pl. An
+%readable only by a person, in a comment at the top of engine/ext_points.pl. An
 %event or declaration seam has every clause read, so a cut in one silently
 %disables every clause after it; an ownership seam is claimed by the first
 %handler that succeeds, and a cut after a guard proving the request is yours

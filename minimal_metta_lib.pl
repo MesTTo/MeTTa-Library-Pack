@@ -18,7 +18,7 @@
 %     `expression` rather than `other`, so the argument arrived as the
 %     expression rather than as 3]
 %   - eval/2 evaluates to completion and offers one solution per answer
-%     [source: src/metta.pl, eval/2 compiles a runnable and runs it]
+%     [source: engine/metta.pl, eval/2 compiles a runnable and runs it]
 % Guarantees:
 %   - `function` terminates: the loop is bounded and answers
 %     (Error <atom> NoReturn) rather than looping [tested: examples/libraries/minimal_metta.metta]
@@ -98,7 +98,7 @@ metta_return_value(Term, Value) :-
 %
 %That the variable renders as $_0 rather than $a is the one thing PeTTa cannot
 %match here. The parser resolves $x to a plain Prolog variable and keeps the
-%name only inside the parse [source: src/parser.pl, var_symbol//3 threads a
+%name only inside the parse [source: engine/parser.pl, var_symbol//3 threads a
 %Name-Var environment that sread/2 does not return], so no name reaches
 %runtime. LeaTTa renders $a because its atoms carry the name [source:
 %Core/SeqRuntime.lean, encodeUnified,

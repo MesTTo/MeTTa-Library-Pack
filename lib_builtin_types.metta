@@ -103,7 +103,7 @@
 ;;
 ;; A RUNTIME-GUARDED builtin enforces its own input contract inside its own
 ;; predicate, so dispatch is skipped for it too. `runtime_type_guarded/1` in
-;; src/metta.pl is the list.
+;; engine/metta.pl is the list.
 ;;
 ;; The rest WOULD become checks on import, so a parameter there carries a
 ;; concrete type only where the implementation was read and it is certain, and
@@ -277,7 +277,7 @@
 ;; DIVERGENCE from the dump, which types these over `(StateMonad $t)`.
 ;; PeTTa's state is a named global: change-state! is nb_setval/2 and get-state
 ;; is nb_getval/2, so the first argument is the NAME and there is no monadic
-;; cell to type over [source: src/metta.pl, 'change-state!'/3, 'get-state'/2].
+;; cell to type over [source: engine/metta.pl, 'change-state!'/3, 'get-state'/2].
 (: change-state! (-> Symbol %Undefined% Bool))
 (: get-state (-> Symbol %Undefined%))
 

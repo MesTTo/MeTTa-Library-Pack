@@ -8,7 +8,7 @@
 %   other space, and there is no new type to learn.
 % Assumes:
 %   - a MeTTa string is an SWI string and a space is an atom beginning with &
-%     [source: src/metta.pl, 'is-space'/2]
+%     [source: engine/metta.pl, 'is-space'/2]
 % Guarantees:
 %   - decode and encode round-trip an object, an array, a string, a number and
 %     the three literals [tested: lib_json]

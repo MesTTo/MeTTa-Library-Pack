@@ -5,10 +5,10 @@
 %   hand-rolls a scheduler. Every predicate follows the compiled convention,
 %   inputs then one output.
 % Assumes:
-%   - eval_metta_in_module/3 in src/translator.pl evaluates one MeTTa
+%   - eval_metta_in_module/3 in engine/translator.pl evaluates one MeTTa
 %     expression under a named space's module, which is what a worker thread
 %     needs because SWI global variables are thread-local [source:
-%     src/translator.pl, eval_metta_in_module/3]
+%     engine/translator.pl, eval_metta_in_module/3]
 %   - concurrent_maplist/3 already sizes its pool to min(cpu_count, length)
 %     and calls each goal once [source 2026-08-15:
 %     /usr/lib/swi-prolog/library/thread.pl, workers/2 and once_in_module/5]
@@ -540,10 +540,10 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
 %
 %Event-driven, not polled: this installs a clause on the engine's own
 %metta_on_atom_added/2 extension point, the same one Python subscriptions use
-%[source: src/ext_points.pl:17-19, python/petta/shim.pl:1277-1281], so the
+%[source: engine/ext_points.pl:17-19, python/petta/shim.pl:1277-1281], so the
 %write itself delivers. Installing the hook also takes the space off the bulk
 %add fast path for as long as the wait lasts, which is what makes per-atom
-%events fire at all [source: src/spaces.pl, metta_add_hooks_idle/1].
+%events fire at all [source: engine/spaces.pl, metta_add_hooks_idle/1].
 space_await(Space, Pattern, Out) :-
     space_await_(Space, Pattern, infinite, Out).
 
