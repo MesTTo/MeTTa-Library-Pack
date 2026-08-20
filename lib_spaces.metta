@@ -14,9 +14,9 @@
 ;Check whether a predicate succeeds
 (: succeedsPredicate (-> Atom Bool))
 (= (succeedsPredicate $pattern)
-   (quote (case (translatePredicate (catch (Predicate $pattern) $_ fail))
-                (($item True)
-                 (Empty False)))))
+   (noeval (case (translatePredicate (catch (Predicate $pattern) $_ fail))
+                 (($item True)
+                  (Empty False)))))
 !(add-translator-rule! succeedsPredicate)
 
 ;Remove all atoms of a space:
