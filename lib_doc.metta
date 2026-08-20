@@ -1,3 +1,13 @@
+; Purpose: preserve the old lib_doc import path after its vocabulary moved
+; into the engine.
+; Guarantees:
+;   - importing this file adds no duplicate definitions
+;     [tested: prelude_docs:the_old_library_import_is_a_noop].
+; Open Obligations:
+;   To Do: None
+;   Hacks: None
+;   Future Enhancements: None
+;
 ;Documentation, MeTTa HE's vocabulary. Everything this library defined
 ;is part of the core engine now, so a program reaches all of it with no
 ;import at all; importing this file remains a no-op so existing programs
@@ -11,10 +21,13 @@
 ;
 ;What moved, and what each gained on the way:
 ;
-;  get-doc     resolves against the CURRENT context rather than the
-;              literal &self this library matched, and falls back to the
-;              engine's own doc register, where the prelude documents
-;              its vocabulary; get-doc-space selects any space.
+;  get-doc     with one input resolves the raw document against the CURRENT
+;              context rather than the literal &self this library matched,
+;              and falls back to the engine's own doc register, where the
+;              prelude documents its vocabulary; get-doc-space selects any
+;              space. With a space and an atom, get-doc and its atom,
+;              function, single-atom, and parameter helpers build upstream's
+;              formal documentation shape from that space alone.
 ;  help!       prints every doc the resolver answers, engine vocabulary
 ;              included, and says so when there is none.
 ;  documented  program-scoped on purpose, with documented-space for a
