@@ -9,6 +9,7 @@
 %   process nonce, so remote writes fire this process's hooks
 %   asynchronously and local writes fire them synchronously through the
 %   engine, each write heard exactly once per process.
+%   [tested: test_subscriptions_fire_across_processes; commit=WORKTREE]
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -70,18 +71,34 @@ redis_space_start_subscription(Space, Conn, SubConn, Key, Channel) :-
           ( unlisten(Listener), throw(Error) )).
 
 %A unique second channel is a readiness handshake. redis_subscribe/4 starts
-%its worker asynchronously; waiting for Redis to count this unique channel
-%proves the worker is listening before attach returns or detach may run.
+%its worker asynchronously, so the command connection publishes until the
+%worker broadcasts one message back through SWI's listener. Seeing the
+%message proves redis_listen/2 has registered before unsubscribe or detach.
 redis_space_register_subscription(
         Space, Conn, SubConn, ListenerId, Key, Channel) :-
     uuid(ReadyId),
     atom_concat('petta:subscription-ready:', ReadyId, ReadyChannel),
+    setup_call_cleanup(
+        message_queue_create(ReadyQueue),
+        setup_call_cleanup(
+            listen(redis_space_ready(ReadyId),
+                   redis(SubConn, ReadyChannel, _),
+                   thread_send_message(ReadyQueue, ready)),
+            redis_space_register_ready_subscription(
+                Space, Conn, SubConn, ListenerId, Key, Channel,
+                ReadyChannel, ReadyQueue),
+            unlisten(redis_space_ready(ReadyId))),
+        message_queue_destroy(ReadyQueue)).
+
+redis_space_register_ready_subscription(
+        Space, Conn, SubConn, ListenerId, Key, Channel,
+        ReadyChannel, ReadyQueue) :-
     redis_subscribe(SubConn, [Channel, ReadyChannel], SubId,
                     [ detached(true),
                       at_exit(user:redis_space_subscription_exit(SubConn))
                     ]),
     catch(( redis_space_wait_until_subscribed(
-                Space, Conn, SubId, ReadyChannel),
+                Space, Conn, SubId, ReadyChannel, ReadyQueue),
             redis_unsubscribe(SubId, [ReadyChannel]),
             assertz(redis_space_conn(
                 Space, Conn, SubConn, SubId, ListenerId, Key, Channel)) ),
@@ -90,24 +107,26 @@ redis_space_register_subscription(
                 SubId, [Channel, ReadyChannel]),
             throw(Error) )).
 
-redis_space_wait_until_subscribed(Space, Conn, SubId, ReadyChannel) :-
+redis_space_wait_until_subscribed(
+        Space, Conn, SubId, ReadyChannel, ReadyQueue) :-
     catch(call_with_time_limit(
               10,
               redis_space_wait_for_ready(
-                  Space, Conn, SubId, ReadyChannel)),
+                  Space, Conn, SubId, ReadyChannel, ReadyQueue)),
           time_limit_exceeded,
           throw(error(resource_error(redis_subscription),
                       context(Space,
                               'timed out waiting for Redis subscription')))).
 
-redis_space_wait_for_ready(Space, Conn, SubId, ReadyChannel) :-
+redis_space_wait_for_ready(
+        Space, Conn, SubId, ReadyChannel, ReadyQueue) :-
     repeat,
     ( thread_property(SubId, status(Status))
       -> ( Status == running
-           -> redis(Conn, pubsub(numsub, ReadyChannel), Counts),
-              ( Counts = [ReadyChannel, N], N > 0
+           -> redis(Conn, publish(ReadyChannel, ready), _),
+              ( thread_get_message(ReadyQueue, ready, [timeout(0.01)])
                 -> !
-              ; sleep(0.001), fail )
+              ; fail )
          ; throw(error(redis_subscription_terminated(Status),
                        context(Space,
                                'Redis subscription stopped during attach'))) )
