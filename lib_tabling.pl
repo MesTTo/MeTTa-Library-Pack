@@ -30,7 +30,7 @@
 %   - Reads of a parametric native space resolve to its reserved predicate in
 %     its canonical storage module [tested:
 %     test_two_instances_of_a_parametric_space_answer_independently;
-%     commit=WORKTREE].
+%     commit=3c7bcde6a0670ec5c563584b26977b41cc727580].
 % Fails when:
 %   - the caller depends on the ORDER of a function's answers. Tabling
 %     changes it. An untabled MeTTa function answers in clause order, and a
