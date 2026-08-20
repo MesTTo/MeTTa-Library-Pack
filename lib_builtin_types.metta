@@ -1,4 +1,15 @@
+; Purpose: declare the engine's built-in operation types and type-kind markers.
+; Guarantees:
+;   - DontEvalType marks user-declared parameter types whose arguments stay
+;     unevaluated at the typed dispatch boundary.
+;   [tested: test_a_user_declared_lazy_type_receives_its_argument_unevaluated; commit=WORKTREE]
+
 ; %%%% Type definitions of MeTTa built-in operators. %%%%
+
+;; A type declared with DontEvalType is a user-defined evaluation mask. It
+;; carries no naming convention: the declaration, rather than the type's name,
+;; is the only fact the compiler consults.
+(: DontEvalType Type)
 
 ;; Type definitions of arithmetic operators
 (: + (-> Number Number Number))
