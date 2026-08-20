@@ -23,7 +23,8 @@ Assumes: the engine can reach `lib/lib_import.metta`, which is how the MeTTa
   half registers the Prolog half [tested: tests/prolog/prolog_interface.plt].
 Guarantees:
   - install(m) is idempotent and returns the names it registered
-    [tested 2026-08-16: test_minimal_metta_lib_install_is_idempotent]
+    [tested: test_minimal_lib_install_is_idempotent_after_cross_file_traffic;
+    commit=WORKTREE]
   - the instruction set is available without this module, through
     `!(import! &self (library minimal_metta_lib))`
     [tested: examples/libraries/minimal_metta.metta]
