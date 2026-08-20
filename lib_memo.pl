@@ -22,7 +22,7 @@
 %     graph; transitive caller caches still invalidate under autoload=false
 %     [tested: lib_memo,
 %     support_graph:test_a_derived_fact_is_invalidated_forward_from_what_it_supports;
-%     commit=WORKTREE].
+%     commit=7ade2b90e2631451fd6ffc23d22dd8c2d4a7a7aa].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
