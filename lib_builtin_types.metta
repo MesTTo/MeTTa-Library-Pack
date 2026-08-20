@@ -5,6 +5,8 @@
 ;   [tested: test_a_user_declared_lazy_type_receives_its_argument_unevaluated; commit=WORKTREE]
 ;   - unit-returning surface declarations report `(->)` as their result.
 ;   [tested: test_the_empty_expressions_type_follows_the_arbiters_ruling; commit=WORKTREE]
+;   - typing-rule declarations receive their patterns and outcomes unevaluated.
+;   [tested: test_a_user_typing_rule_participates_like_a_shipped_one; commit=WORKTREE]
 
 ; %%%% Type definitions of MeTTa built-in operators. %%%%
 
@@ -344,6 +346,8 @@
 ;; --- Checked on import: the compiler's own surface ---
 (: add-translator-rule! (-> Symbol Bool))
 (: remove-translator-rule! (-> Symbol Bool))
+(: add-typing-rule! (-> Atom Atom Atom Atom Atom Bool))
+(: remove-typing-rule! (-> Atom Bool))
 
 ;; --- Checked on import: Python and the outside world ---
 (: py-call (-> Expression %Undefined%))
