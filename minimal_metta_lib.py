@@ -24,7 +24,7 @@ Assumes: the engine can reach `lib/lib_import.metta`, which is how the MeTTa
 Guarantees:
   - install(m) is idempotent and returns the names it registered
     [tested: test_minimal_lib_install_is_idempotent_after_cross_file_traffic;
-    commit=WORKTREE]
+    commit=dcfc20be4933c19140ccb5759291401d13058301]
   - the instruction set is available without this module, through
     `!(import! &self (library minimal_metta_lib))`
     [tested: examples/libraries/minimal_metta.metta]

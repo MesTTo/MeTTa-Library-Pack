@@ -9,7 +9,7 @@
 %   process nonce, so remote writes fire this process's hooks
 %   asynchronously and local writes fire them synchronously through the
 %   engine, each write heard exactly once per process.
-%   [tested: test_subscriptions_fire_across_processes; commit=WORKTREE]
+%   [tested: test_subscriptions_fire_across_processes; commit=dcfc20be4933c19140ccb5759291401d13058301]
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
