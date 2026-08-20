@@ -1,3 +1,15 @@
+; Purpose: declare the type surface of PeTTa's shipped builtins for engine
+; reflection and optional live typed dispatch.
+; Guarantees:
+;   - reader-token registration takes a regex string and readable constructor
+;     symbol, while removal takes the same regex string [tested:
+;     test_a_registered_token_class_parses_like_a_shipped_one;
+;     commit=WORKTREE].
+; Open Obligations:
+;   To Do: None
+;   Hacks: None
+;   Future Enhancements: None
+
 ; %%%% Type definitions of MeTTa built-in operators. %%%%
 
 ;; Type definitions of arithmetic operators
@@ -267,6 +279,8 @@
 ;; --- Checked on import: spaces and state ---
 (: get-atoms (-> SpaceType Atom))
 (: bind! (-> Symbol %Undefined% Bool))
+(: register-token! (-> String Symbol Bool))
+(: unregister-token! (-> String Bool))
 (: context-space (-> SpaceType))
 (: import! (-> Atom Atom (->)))
 ;; include pastes a module's source into the space that included it and
