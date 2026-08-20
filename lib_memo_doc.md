@@ -107,7 +107,8 @@ holding the function's clauses. See "Memoization is per space" above.
 - `metta_memo_count/4`, `metta_memo_head/4`, `metta_memo_tail/4`, `metta_memo_q/5` — per-function queue state
 - `metta_memo_total_bytes/1` — global estimated bytes used by cache entries
 - `metta_memo_in_progress/5` — keys currently being computed (variant path)
-- `metta_memo_dep/6` — coarse caller→callee dependency graph (used for dependency-aware invalidation)
+- `supports/2` — the common support graph's indexed `Support`→`Derived`
+  edges; memo nodes use these for dependency-aware invalidation
 - `metta_memo_stat/2` — runtime counters (cache_hit, cache_miss, waited_on_in_progress, etc.)
 Refer to source predicates if you need deeper internal debugging; avoid relying on internal facts for program logic unless you intend to keep compatibility with future changes.
 ## Integration Hooks & Synchronization
