@@ -50,7 +50,8 @@ write_static_import_facts(Out, Module, Facts) :-
 %something else and hoping is how the truncated cache happened. Everything a
 %space can hold is converted, expressions and scalars alike, through the same
 %native_atom_clause/3 an ordinary add-atom uses.
-static_import_fact(Input, Space, parsed(Kind, Text, Term), Fact) :-
+static_import_fact(Input, Space, Parsed, Fact) :-
+    parsed_form_parts(Parsed, Kind, Text, Term),
     (   Kind == runnable
     ->  throw(error(petta_static_import_form(Input, Text),
                     context('static-import!',
