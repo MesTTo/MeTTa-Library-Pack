@@ -63,6 +63,7 @@ conformance_capabilities(Space, Checks) :-
     findall(Check, conformance_capability(Space, Check), Checks).
 
 conformance_capability(Space, Check) :-
+    % policy-inventory-exempt: mechanism-internal; reason=these five names are the fixed foreign-provider protocol hooks checked for every declared capability; evidence=lib/lib_conformance.pl:conformance_capability/2
     member(Capability, [match, enumerate, add, remove, clear]),
     foreign_provides(Space, Capability),
     capability_hook(Capability, Name/Arity),
