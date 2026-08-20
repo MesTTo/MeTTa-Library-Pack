@@ -11,6 +11,11 @@
 % Guarantees:
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
+%   - Memo aggregation values come from the memo-aggregate catalog
+%     vocabulary; spelling aliases for eviction strategies remain only as
+%     documented input collisions [tested:
+%     test_a_planted_closed_policy_list_is_reported_by_the_inventory_lane;
+%     commit=WORKTREE].
 %   - Memoizing a function in one space leaves every other space's answers
 %     unchanged [tested 2026-08-15: memo_space_isolation].
 %   - Dependency invalidation's own use of term_size/2 and library(ugraphs)
@@ -204,8 +209,10 @@ memo_aggregate_mode(none).    % none|min|max|sum|count (ground path)
 metta_memo_total_bytes(0).    % Global bytes tracker
 
 normalize_memo_strategy(In, wtinylfu) :-
+    % policy-inventory-exempt: documented-collision-decision; reason=legacy spellings intentionally normalize to the one wtinylfu strategy; evidence=lib/lib_memo.pl:normalize_memo_strategy/2
     memberchk(In, [wtinylfu, 'WTinyLFU', 'W-TinyLFU', 'wtinylfu', 'w-tinylfu']), !.
 normalize_memo_strategy(In, lru) :-
+    % policy-inventory-exempt: documented-collision-decision; reason=case variants intentionally normalize to the one lru strategy; evidence=lib/lib_memo.pl:normalize_memo_strategy/2
     memberchk(In, [lru, 'LRU']), !.
 normalize_memo_strategy(In, Out) :-
     atom(In),
@@ -234,7 +241,7 @@ apply_memo_option(['answer-limit', N]) :-
     retractall(memo_answer_limit(_)),
     assertz(memo_answer_limit(N)).
 apply_memo_option([aggregate, Mode]) :-
-    memberchk(Mode, [none, min, max, sum, count]), !,
+    petta_vocabulary_value('memo-aggregate', Mode), !,
     retractall(memo_aggregate_mode(_)),
     assertz(memo_aggregate_mode(Mode)).
 apply_memo_option(Opt) :-
