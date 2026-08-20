@@ -1,4 +1,4 @@
-; %%%% Type definitions of MeTTa built-in operators. %%%%
+; Purpose: declare the callable types of MeTTa built-in operators.
 
 ;; Type definitions of arithmetic operators
 (: + (-> Number Number Number))
@@ -337,6 +337,7 @@
 ;; Python callable MeTTa can hold, pass and apply. Atom parameters throughout,
 ;; because a name is a name rather than something to evaluate first.
 (: new-space (-> SpaceType))
+(: new-space (-> SpaceType Atom SpaceType))
 (: py-atom (-> Atom %Undefined%))
 (: py-atom (-> Atom Atom %Undefined%))
 (: py-dot (-> %Undefined% Atom %Undefined%))
