@@ -1,3 +1,10 @@
+% Purpose: acquire unpinned runtime imports and pinned declarative Git
+%   dependencies into isolated local checkout directories.
+% Guarantees:
+%   - git-import! refuses an unbound URL under its own MeTTa name before any
+%     filesystem or process work [tested:
+%     test_the_residual_positions_refuse_by_their_own_names].
+
 :- use_module(library(filesex)).
 :- use_module(library(process)).
 :- use_module(library(random)).
@@ -7,6 +14,10 @@
 
 % Runtime git-import! is a core primitive.  Declarative git-dependency forms use
 % the same acquisition machinery before the file's runnable forms execute.
+'git-import!'(Url, _) :-
+    var(Url),
+    !,
+    refuse_unbound_input('git-import!', 1).
 'git-import!'(Url, []) :-
     'git-import!'(Url, '', './repos', _).
 'git-import!'(Url, Build, []) :-
