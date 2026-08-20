@@ -3,6 +3,8 @@
 ;   - DontEvalType marks user-declared parameter types whose arguments stay
 ;     unevaluated at the typed dispatch boundary.
 ;   [tested: test_a_user_declared_lazy_type_receives_its_argument_unevaluated; commit=WORKTREE]
+;   - unit-returning surface declarations report `(->)` as their result.
+;   [tested: test_the_empty_expressions_type_follows_the_arbiters_ruling; commit=WORKTREE]
 
 ; %%%% Type definitions of MeTTa built-in operators. %%%%
 
@@ -141,6 +143,7 @@
 (: prog1 (-> Atom %Undefined%))
 (: forall (-> Atom Atom Bool))
 (: foldall (-> Atom Atom %Undefined% %Undefined%))
+(: nop (-> (%Rest% %Undefined%) (->)))
 
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
@@ -335,7 +338,7 @@
 (: assertaPredicate (-> %Undefined% Bool))
 (: assertzPredicate (-> %Undefined% Bool))
 (: retractPredicate (-> %Undefined% Bool))
-(: assert (-> Atom Bool))
+(: assert (-> Atom (->)))
 (: import_prolog_function (-> Symbol Bool))
 
 ;; --- Checked on import: the compiler's own surface ---
