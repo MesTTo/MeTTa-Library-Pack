@@ -15,7 +15,7 @@
 %     vocabulary; spelling aliases for eviction strategies remain only as
 %     documented input collisions [tested:
 %     test_a_planted_closed_policy_list_is_reported_by_the_inventory_lane;
-%     commit=WORKTREE].
+%     commit=42b5d28232e75c32b20a1d5bf1f740fec134938d].
 %   - Memoizing a function in one space leaves every other space's answers
 %     unchanged [tested 2026-08-15: memo_space_isolation].
 %   - Dependency invalidation's own use of term_size/2 and library(ugraphs)

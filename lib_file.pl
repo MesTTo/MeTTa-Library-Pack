@@ -18,7 +18,7 @@
 %   - the HE file-mode alphabet is explicitly recorded as a language
 %     mechanism rather than mistaken for an undeclared engine policy [tested:
 %     test_a_planted_closed_policy_list_is_reported_by_the_inventory_lane;
-%     commit=WORKTREE].
+%     commit=42b5d28232e75c32b20a1d5bf1f740fec134938d].
 % Fails when:
 %   - the file is missing and the options do not say to create it. That is an
 %     error, not a failure, so it cannot be mistaken for an empty file.
