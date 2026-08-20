@@ -32,10 +32,10 @@
 
 ;`once` takes the first answer of a generator and stops, which is `(take 1 ...)`
 ;said with a number. The Atom parameter is what keeps the generator unrun
-;until the expansion places it, and %Undefined% is what makes the quoted body
-;translate rather than arrive as the quote itself.
+;until the expansion places it, and %Undefined% is what makes the noeval body
+;translate rather than arrive as noeval itself.
 (: once (-> Atom %Undefined%))
-(= (once $expr) (quote (take 1 $expr)))
+(= (once $expr) (noeval (take 1 $expr)))
 !(add-translator-rule! once)
 
 (@doc once
