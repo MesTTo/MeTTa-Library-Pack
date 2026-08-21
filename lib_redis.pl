@@ -205,6 +205,26 @@ metta_foreign_capability(Space, Capability) :-
     % policy-inventory-exempt: mechanism-internal; reason=a Redis set implements the five fixed foreign-provider protocol hooks rather than choosing an engine policy; evidence=lib/lib_redis.pl:metta_foreign_capability/2
     member(Capability, [add, remove, match, enumerate, clear]).
 
+%What an attached space's change events promise, which is the sixth
+%capability and the one no method could have answered: a Redis set can be
+%written by a process that is not this one, so whether a watcher here hears
+%that write is a fact about the CHANNEL rather than about these five hooks.
+%
+%at-most-once, because Redis pub/sub is fire and forget: a message published
+%while this process's subscriber connection is down is gone, there being no
+%persistence and no acknowledgement [source: redis.io, Pub/Sub, "Redis
+%Pub/Sub is fire and forget"]. Unordered, because a local write fires the
+%hooks synchronously inside the write while a remote one arrives on the
+%listener thread, so two writers' events interleave with no promised order.
+%What the channel does give is no DOUBLE delivery: an event carries the
+%writer's process nonce and the publisher's own echo is dropped, so a local
+%write is heard exactly once and a remote one at most once
+%[tested: test_local_writes_fire_subscriptions_exactly_once,
+%test_subscriptions_fire_across_processes].
+:- multifile metta_context_events/3.
+metta_context_events(Space, 'at-most-once', unordered) :-
+    redis_space_conn(Space, _, _, _, _, _, _).
+
 metta_foreign_add(Space, Atom) :-
     redis_space_conn(Space, Conn, _, _, _, Key, Channel), !,
     swrite(Atom, S),

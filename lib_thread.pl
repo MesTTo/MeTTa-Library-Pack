@@ -13,6 +13,11 @@
 %     and calls each goal once [source 2026-08-15:
 %     /usr/lib/swi-prolog/library/thread.pl, workers/2 and once_in_module/5]
 % Guarantees:
+%   - a blocking take parks until a matching atom arrives, removes exactly
+%     one, and two takers never claim the same atom: eight takers over four
+%     atoms claim four distinct ones and the space is left empty [tested:
+%     lib_thread:test_a_blocking_take_waits_for_a_matching_atom_and_removes_exactly_one,
+%     lib_thread:a_blocking_peek_parks_without_removing; commit=c05f93baf8c6ecd483487efb72d7f8eb92c97809]
 %   - par-map answers one result per element, in the input list's order,
 %     because concurrent_maplist/3 preserves position [tested: lib_thread:par_map_answers_one_result_per_element_in_order]
 %   - a future holds its expression's whole ANSWER SET, because it is a space
@@ -25,9 +30,21 @@
 % Fails when:
 %   - the work per element is small. A parallel map over cheap elements pays
 %     thread creation for nothing; measure before reaching for it.
+%   - many callers park on ONE space. A waiting space_await or space_take
+%     costs the space a metta_on_atom_added/2 clause, so every write into
+%     that space, including writes that match no waiter, runs one guard per
+%     waiter: writes are O(waiters) and one arriving atom wakes all of them
+%     to race for it, the thundering herd a hand-off queue would avoid and
+%     this seam cannot, because an EVENT seam runs every handler by
+%     construction. Exactly-one still holds, and the wasted work is one
+%     failed removal per loser per atom. Tens of waiters are what this is
+%     for; thousands want a channel, which hands each message to one
+%     receiver.
 %   - a branch needs the caller's variable bindings back. Threads copy terms,
 %     so bindings made inside a branch do not escape it.
 % Owns:
+%   - one metta_on_atom_added/2 clause and one message queue per live
+%     space_await/space_take call, both released when the call leaves
 %   - one OS thread per live spawned future until it is awaited or cancelled,
 %     one message queue per live channel until it is closed, and, once any
 %     timer has been used, one timer thread plus one bounded pool for the life
@@ -535,9 +552,26 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
                         schedule(Deadline, timer(Space, Module, Expr, Repeat))).
 
 % ------------------------------------------------ blocking on a space change
+%
+%Linda's two blocking binds, over a MeTTa space. `rd` reads a matching tuple
+%and leaves it; `in` withdraws one. The difference is the whole coordination
+%model: an in-based interaction "implements one-of-n semantics (only one
+%consumer reads a given tuple) whereas read-based interaction can be used to
+%implement one-to-n message delivery (a given tuple can be read by all such
+%consumers)" [source: Eugster, Felber, Guerraoui and Kermarrec, The Many
+%Faces of Publish/Subscribe, ACM Computing Surveys 35(2), 2003, on the shared
+%data-space model]. Gelernter's tuple spaces are the origin (TOPLAS 7(1),
+%1985) and JavaSpaces is the production spelling this follows: "the take
+%requests perform exactly like the corresponding read requests, except that
+%the matching entry is removed", and "two take operations will never return
+%copies of the same entry" [source: JavaSpaces Service Specification,
+%JS.2.5].
+%
+%The non-blocking pair, Linda's rdp and inp, needs nothing here: match/4 is
+%rdp and 'remove-atom'/3 is inp, and both already answer at once.
 
-%Block until an atom unifying with Pattern is added to Space, and answer it
-%with the caller's variables bound.
+%Block until an atom unifying with Pattern is in Space, and answer it with
+%the caller's variables bound, WITHOUT removing it. Linda's rd.
 %
 %Event-driven, not polled: this installs a clause on the engine's own
 %metta_on_atom_added/2 extension point, the same one Python subscriptions use
@@ -546,14 +580,33 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
 %add fast path for as long as the wait lasts, which is what makes per-atom
 %events fire at all [source: engine/spaces.pl, metta_add_hooks_idle/1].
 space_await(Space, Pattern, Out) :-
-    space_await_(Space, Pattern, infinite, Out).
+    space_wait_(Space, Pattern, infinite, peek, Out).
 
 %The same, giving up after Timeout seconds with no answer.
 space_await(Space, Pattern, Timeout, Out) :-
     must_be(number, Timeout),
-    space_await_(Space, Pattern, Timeout, Out).
+    space_wait_(Space, Pattern, Timeout, peek, Out).
 
-space_await_(Space, Pattern, Timeout, Out) :-
+%Block until an atom unifying with Pattern is in Space, then REMOVE exactly
+%one and answer it. Linda's in, and the primitive futures, worker pools and
+%rendezvous are one line of MeTTa over.
+space_take(Space, Pattern, Out) :-
+    space_wait_(Space, Pattern, infinite, take, Out).
+
+space_take(Space, Pattern, Timeout, Out) :-
+    must_be(number, Timeout),
+    space_wait_(Space, Pattern, Timeout, take, Out).
+
+%Waiting is a promise about the CONTEXT, so a context that declares no event
+%delivery is refused here rather than parked on a channel that will never
+%report anything [P12.14]. A native space needs no declaration.
+space_wait_(Space, Pattern, Timeout, Mode, Out) :-
+    petta_require_events(Space, 'be waited on'),
+    (   Timeout == infinite
+    ->  Deadline = infinite
+    ;   get_time(Now),
+        Deadline is Now + Timeout
+    ),
     message_queue_create(Queue),
     %The clause gets its own copy of the pattern, so its variables are fresh
     %on every write and testing a candidate never binds the caller's.
@@ -564,18 +617,46 @@ space_await_(Space, Pattern, Timeout, Out) :-
                     ->  thread_send_message(Queue, Candidate)
                     ;   true
                     )), HookRef),
-        %Check the space only AFTER the hook is live. An atom that is already
-        %there answers at once, which is what "wait until this holds" means,
-        %and doing it in this order means a write landing between the check and
-        %the wait is caught by the hook rather than missed. Checking first and
-        %installing after loses exactly that write, which is what made a
-        %spawned writer race this and win.
-        (   space_already_holds_(Space, Pattern, Out)
-        ->  true
-        ;   await_matching_(Queue, Pattern, Timeout, Out)
-        ),
+        space_claim_(Space, Pattern, Queue, Deadline, Mode, Out),
         ( erase(HookRef),
           catch(message_queue_destroy(Queue), _, true) )).
+
+%ONE hook for the whole wait, retries included, and that is not tidiness: a
+%losing taker that tore its hook down and built a new one would miss any
+%write that landed in between, which is the same lost-write race installing
+%after the check would cause. Measured 2026-08-21 with the hook rebuilt per
+%retry: eight takers over four atoms claimed three and left one behind.
+%
+%The STORE rather than the queue is the truth. Two takers wake on one atom,
+%one 'remove-atom' answers unit and the other answers its not-in-the-space
+%error, and the loser goes round; going round re-checks what the space holds
+%FIRST, so an atom that arrived while this caller was losing a race is found
+%whether it is still queued or not, and a queue entry for an atom somebody
+%else took is discarded by the same claim that fails. The removal is the one
+%atomic step and everything else is a wake-up, which is what makes
+%exactly-one hold with no lock held across the wait.
+%
+%Each attempt probes with a fresh COPY of the pattern, because a match binds
+%and a retry must not inherit the losing attempt's bindings; the caller's own
+%variables are bound once, by the winning candidate.
+space_claim_(Space, Pattern, Queue, Deadline, Mode, Out) :-
+    copy_term(Pattern, Attempt),
+    %Check the space only AFTER the hook is live. An atom that is already
+    %there answers at once, which is what "wait until this holds" means,
+    %and doing it in this order means a write landing between the check and
+    %the wait is caught by the hook rather than missed. Checking first and
+    %installing after loses exactly that write, which is what made a
+    %spawned writer race this and win.
+    (   space_already_holds_(Space, Attempt, Candidate)
+    ->  true
+    ;   await_matching_(Queue, Attempt, Deadline, Candidate)
+    ),
+    (   Mode == peek
+    ->  Pattern = Candidate, Out = Candidate
+    ;   'remove-atom'(Space, Candidate, [])
+    ->  Pattern = Candidate, Out = Candidate
+    ;   space_claim_(Space, Pattern, Queue, Deadline, Mode, Out)
+    ).
 
 space_already_holds_(Space, Pattern, Out) :-
     current_metta_module(Module),
@@ -590,12 +671,11 @@ await_matching_(Queue, Pattern, infinite, Out) :-
       Pattern = Candidate,
       !,
       Out = Candidate.
-%One deadline for the whole call, not one per candidate: thread_get_message/3
-%FAILS when its timeout expires, so a repeat loop around it would restart the
-%clock on every non-matching write and never give up.
-await_matching_(Queue, Pattern, Timeout, Out) :-
-    get_time(Now),
-    Deadline is Now + Timeout,
+%ONE deadline for the whole call, computed once by space_wait_/5 and carried
+%through every claim retry, not one per candidate: thread_get_message/3 FAILS
+%when its timeout expires, so a repeat loop around a per-call timeout would
+%restart the clock on every non-matching write and never give up.
+await_matching_(Queue, Pattern, Deadline, Out) :-
     await_until_(Queue, Pattern, Deadline, Out).
 
 await_until_(Queue, Pattern, Deadline, Out) :-
