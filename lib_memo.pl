@@ -20,7 +20,7 @@
 %     unchanged [tested 2026-08-15: memo_space_isolation].
 %   - The bespoke memo dependency graph has been replaced by the engine support
 %     graph; transitive caller caches still invalidate under autoload=false
-%     [tested: lib_memo,
+%     [tested: memo_support_graph:a_leaf_change_invalidates_transitive_callers_only,
 %     support_graph:test_a_derived_fact_is_invalidated_forward_from_what_it_supports;
 %     commit=7ade2b90e2631451fd6ffc23d22dd8c2d4a7a7aa].
 % Decides: cache state is keyed by the module that holds the function's
