@@ -36,11 +36,18 @@
 ;pooled work and spawned work are interchangeable. (pool-stats $name) and
 ;(pool-destroy $name) round it out.
 ;
-;Two more. (await-atom $space $pattern) blocks until an atom unifying with
-;$pattern is added to $space and answers it with your variables bound; it is
-;event-driven through the engine's write hooks, not a poll, and
-;(await-atom $space $pattern $seconds) gives up after a deadline. This is the
-;blackboard reading of a space: agents wait on the space instead of polling it.
+;Blocking binds, Linda's two. (peek-atom $space $pattern) blocks until an atom
+;unifying with $pattern is in $space and answers it with your variables bound,
+;LEAVING it there, which is Linda's rd; (take-atom $space $pattern) does the
+;same and REMOVES exactly one, which is Linda's in. Under contention two takers
+;never get the same atom: the removal is the atomic step and a loser goes back
+;to waiting. Both are event-driven through the engine's write hooks, not polls,
+;and both take an optional $seconds deadline. (await-atom ...) is the older
+;name for peek-atom and stays as sugar. The non-blocking pair needs nothing new:
+;(match ...) is Linda's rdp and (remove-atom ...) is its inp.
+;
+;This is the blackboard reading of a space: agents wait on the space instead of
+;polling it, and a worker pool is (take-atom &jobs (job $x)) in a loop.
 ;
 ;(with-lock $name $expr) holds a named lock while evaluating $expr and, unlike
 ;the built-in with_mutex, does NOT collapse $expr to its first answer. The
@@ -57,7 +64,7 @@
    channel_size channel_close
    pool_create pool_submit pool_stats pool_destroy
    timer_after timer_every
-   space_await with_lock cpu_count thread_count))
+   space_await space_take with_lock cpu_count thread_count))
 
 ;Anything that defers evaluation has to say so. MeTTa evaluates arguments, so
 ;without these declarations (par-race ((slow 1) (fast 2))) would compute both
@@ -73,6 +80,10 @@
 (: every (-> Number Atom %Undefined%))
 (: await-atom (-> %Undefined% Atom %Undefined%))
 (: await-atom (-> %Undefined% Atom Number %Undefined%))
+(: peek-atom (-> %Undefined% Atom %Undefined%))
+(: peek-atom (-> %Undefined% Atom Number %Undefined%))
+(: take-atom (-> %Undefined% Atom %Undefined%))
+(: take-atom (-> %Undefined% Atom Number %Undefined%))
 
 (= (par-map $f $list) (par_map $f $list))
 (= (par-filter $f $list) (par_filter $f $list))
@@ -102,8 +113,15 @@
 (= (after $seconds $expr) (timer_after $seconds $expr))
 (= (every $seconds $expr) (timer_every $seconds $expr))
 
-(= (await-atom $space $pattern) (space_await $space $pattern))
-(= (await-atom $space $pattern $seconds) (space_await $space $pattern $seconds))
+;Linda's rd, and await-atom as the documented older spelling of it.
+(= (peek-atom $space $pattern) (space_await $space $pattern))
+(= (peek-atom $space $pattern $seconds) (space_await $space $pattern $seconds))
+(= (await-atom $space $pattern) (peek-atom $space $pattern))
+(= (await-atom $space $pattern $seconds) (peek-atom $space $pattern $seconds))
+
+;Linda's in: wait, then remove exactly one.
+(= (take-atom $space $pattern) (space_take $space $pattern))
+(= (take-atom $space $pattern $seconds) (space_take $space $pattern $seconds))
 
 (= (with-lock $name $expr) (with_lock $name $expr))
 
