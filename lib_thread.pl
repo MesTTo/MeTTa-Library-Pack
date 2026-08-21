@@ -17,7 +17,7 @@
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
 %     lib_thread:test_a_blocking_take_waits_for_a_matching_atom_and_removes_exactly_one,
-%     lib_thread:a_blocking_peek_parks_without_removing; commit=WORKTREE]
+%     lib_thread:a_blocking_peek_parks_without_removing; commit=c05f93baf8c6ecd483487efb72d7f8eb92c97809]
 %   - par-map answers one result per element, in the input list's order,
 %     because concurrent_maplist/3 preserves position [tested: lib_thread:par_map_answers_one_result_per_element_in_order]
 %   - a future holds its expression's whole ANSWER SET, because it is a space
