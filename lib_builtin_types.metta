@@ -356,6 +356,9 @@
 
 ;; --- Checked on import: the compiler's own surface ---
 (: add-translator-rule! (-> Symbol Bool))
+;The declarations arrive as syntax, so the Atom parameter, and the list is
+;written rather than computed: ((direction bidirectional)).
+(: add-translator-rule! (-> Symbol Atom Bool))
 (: remove-translator-rule! (-> Symbol Bool))
 (: add-typing-rule! (-> Atom Atom Atom Atom Atom Bool))
 (: remove-typing-rule! (-> Atom Bool))
