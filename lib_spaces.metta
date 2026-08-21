@@ -17,7 +17,13 @@
    (noeval (case (translatePredicate (catch (Predicate $pattern) $_ fail))
                  (($item True)
                   (Empty False)))))
-!(add-translator-rule! succeedsPredicate)
+;The two variables the expansion writes and the head does not are BINDERS of
+;the expansion: `$_` is catch's ball pattern and `$item` is the case branch's
+;pattern. Neither ever takes a value from the term being rewritten, so neither
+;is an extra variable in the sense the termination analysis means, and the
+;rule says so rather than leaving the shipped set NOT ESTABLISHED.
+!(add-translator-rule! succeedsPredicate
+   ((extra-variables-exempt "the catch ball pattern and the case branch pattern are binders of the expansion, so neither takes a value from the term being rewritten")))
 
 ;Remove all atoms of a space:
 (= (remove-all-atoms $space) 
