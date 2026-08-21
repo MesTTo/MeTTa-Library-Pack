@@ -256,6 +256,7 @@ metta_table_statistics(Call, Stats) :-
 %SWI's own spelling on the left, MeTTa's on the right: complete_call reads
 %as complete-call beside every other name a MeTTa program sees.
 reportable_table_statistic(Variant, Reported, Value) :-
+    % policy-inventory-exempt: documented-collision-decision; reason=the pairs pin the documented SWI statistic names to their public MeTTa spellings including complete_call to complete-call; evidence=lib/lib_tabling.pl:reportable_table_statistic/3
     member(Stat-Reported, [tables-tables, answers-answers,
                            complete_call-'complete-call',
                            invalidated-invalidated, reevaluated-reevaluated]),

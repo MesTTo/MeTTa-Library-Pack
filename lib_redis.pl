@@ -202,6 +202,7 @@ metta_foreign_space(Space) :-
 :- multifile metta_foreign_capability/2.
 metta_foreign_capability(Space, Capability) :-
     redis_space_conn(Space, _, _, _, _, _, _),
+    % policy-inventory-exempt: mechanism-internal; reason=a Redis set implements the five fixed foreign-provider protocol hooks rather than choosing an engine policy; evidence=lib/lib_redis.pl:metta_foreign_capability/2
     member(Capability, [add, remove, match, enumerate, clear]).
 
 metta_foreign_add(Space, Atom) :-

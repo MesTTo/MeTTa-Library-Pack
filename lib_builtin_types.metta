@@ -1,16 +1,28 @@
-; Purpose: declare the type surface of PeTTa's shipped builtins for engine
-; reflection and optional live typed dispatch.
+; Purpose: declare the type surface of PeTTa's shipped builtins, its type-kind
+; markers included, for engine reflection and optional live typed dispatch.
 ; Guarantees:
 ;   - reader-token registration takes a regex string and readable constructor
 ;     symbol, while removal takes the same regex string [tested:
 ;     test_a_registered_token_class_parses_like_a_shipped_one;
 ;     commit=2c741dda928a30d0ce1c7e1fcf0b263b4d1bb97b].
+;   - DontEvalType marks user-declared parameter types whose arguments stay
+;     unevaluated at the typed dispatch boundary.
+;   [tested: test_a_user_declared_lazy_type_receives_its_argument_unevaluated; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
+;   - unit-returning surface declarations report `(->)` as their result.
+;   [tested: test_the_empty_expressions_type_follows_the_arbiters_ruling; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
+;   - typing-rule declarations receive their patterns and outcomes unevaluated.
+;   [tested: test_a_user_typing_rule_participates_like_a_shipped_one; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
 ; Open Obligations:
 ;   To Do: None
 ;   Hacks: None
 ;   Future Enhancements: None
 
 ; %%%% Type definitions of MeTTa built-in operators. %%%%
+
+;; A type declared with DontEvalType is a user-defined evaluation mask. It
+;; carries no naming convention: the declaration, rather than the type's name,
+;; is the only fact the compiler consults.
+(: DontEvalType Type)
 
 ;; Type definitions of arithmetic operators
 (: + (-> Number Number Number))
@@ -142,6 +154,7 @@
 (: prog1 (-> Atom %Undefined%))
 (: forall (-> Atom Atom Bool))
 (: foldall (-> Atom Atom %Undefined% %Undefined%))
+(: nop (-> (%Rest% %Undefined%) (->)))
 
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
@@ -338,12 +351,14 @@
 (: assertaPredicate (-> %Undefined% Bool))
 (: assertzPredicate (-> %Undefined% Bool))
 (: retractPredicate (-> %Undefined% Bool))
-(: assert (-> Atom Bool))
+(: assert (-> Atom (->)))
 (: import_prolog_function (-> Symbol Bool))
 
 ;; --- Checked on import: the compiler's own surface ---
 (: add-translator-rule! (-> Symbol Bool))
 (: remove-translator-rule! (-> Symbol Bool))
+(: add-typing-rule! (-> Atom Atom Atom Atom Atom Bool))
+(: remove-typing-rule! (-> Atom Bool))
 
 ;; --- Checked on import: Python and the outside world ---
 (: py-call (-> Expression %Undefined%))

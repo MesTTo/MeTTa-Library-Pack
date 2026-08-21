@@ -15,6 +15,10 @@
 %     naming the handle, rather than failing silently [tested: lib_file:using_a_closed_handle_raises]
 %   - file-open! refuses a contradictory option set loudly, HE's own rule:
 %     'c' demands 'w', so "rc" is an error rather than a silent read [tested: lib_file:create_without_write_is_refused, an_unknown_option_letter_is_refused]
+%   - the HE file-mode alphabet is explicitly recorded as a language
+%     mechanism rather than mistaken for an undeclared engine policy [tested:
+%     test_a_planted_closed_policy_list_is_reported_by_the_inventory_lane;
+%     commit=42b5d28232e75c32b20a1d5bf1f740fec134938d].
 % Fails when:
 %   - the file is missing and the options do not say to create it. That is an
 %     error, not a failure, so it cannot be mistaken for an empty file.
@@ -57,6 +61,7 @@ known_file(Handle, Stream) :-
     metta_text(Path, PathText),
     metta_text(Options, OptionText),
     string_chars(OptionText, Letters),
+    % policy-inventory-exempt: mechanism-internal; reason=r w c a and t are the fixed HE file-mode instruction alphabet; evidence=lib/lib_file.pl:file-open!/3
     (   forall(member(Letter, Letters), memberchk(Letter, [r, w, c, a, t]))
     ->  true
     ;   throw(error(domain_error(file_open_options, Options),

@@ -1,3 +1,9 @@
+; Purpose: provide NARS truth functions, inference rules, and bounded derivation.
+; Guarantees: a term pair that matches no `|-` inference rule fails as a
+;   relation instead of entering the derivation queue as a residual call.
+; [tested: examples/reasoning/nars_tuffy.metta; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
+!(add-atom &petta (dispatch-policy |- NoMatchEnum NoMatchFail))
+
 ;; Truth functions
 (= (Truth_c2w $c)
    (/ $c (- 1 $c)))

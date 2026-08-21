@@ -11,12 +11,18 @@
 % Guarantees:
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
+%   - Memo aggregation values come from the memo-aggregate catalog
+%     vocabulary; spelling aliases for eviction strategies remain only as
+%     documented input collisions [tested:
+%     test_a_planted_closed_policy_list_is_reported_by_the_inventory_lane;
+%     commit=42b5d28232e75c32b20a1d5bf1f740fec134938d].
 %   - Memoizing a function in one space leaves every other space's answers
 %     unchanged [tested 2026-08-15: memo_space_isolation].
-%   - Dependency invalidation's own use of term_size/2 and library(ugraphs)
-%     works under autoload=false, not only the engine's default [measured
-%     2026-08-18: NO_AUTOLOAD=1 sh test.sh, the seven test_memo_*.metta and
-%     memo_spaces.metta examples].
+%   - The bespoke memo dependency graph has been replaced by the engine support
+%     graph; transitive caller caches still invalidate under autoload=false
+%     [tested: memo_support_graph:a_leaf_change_invalidates_transitive_callers_only,
+%     support_graph:test_a_derived_fact_is_invalidated_forward_from_what_it_supports;
+%     commit=7ade2b90e2631451fd6ffc23d22dd8c2d4a7a7aa].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
@@ -36,22 +42,6 @@
 :- use_module(library(lists)).
 :- use_module(library(solution_sequences)).
 :- use_module(library(terms)). %term_size/2, for eviction cost accounting
-:- use_module(library(ugraphs)). %vertices_edges_to_ugraph/3, reachable/3
-%ugraphs.pl declares its own :- autoload(library(lists),[append/3]) but
-%calls the OTHER append/2 (concatenate a list of lists) from top_sort/2's
-%layering step without declaring it, so that call resolves by GLOBAL
-%autoload today. With autoload=false it raises
-%existence_error(procedure,ugraphs:append/2) the first time this file's
-%dependency graph gets topologically sorted, which every memo-invalidating
-%write does [measured 2026-08-18: examples/libraries/memo_spaces.metta and
-%six sibling test_memo_*.metta examples under NO_AUTOLOAD=1]. use_module
-%does not help from here: it would add append/2 to lib_memo's OWN import
-%list, not ugraphs's, and the failing call is inside ugraphs.pl's own
-%clause body. Injecting the import into ugraphs's namespace directly is
-%what SWI's use_module/2 is for; this is the third instance of a shipped
-%library assuming autoload for its own internal reference (metta.pl's
-%Dependencies section has the first, filereader.pl's has the second).
-:- ugraphs:use_module(library(lists), [append/2]).
 
 % State Declarations
 %
@@ -84,9 +74,6 @@
 
 % Tracks keys currently being computed (avoids duplicate recursive probes)
 :- dynamic metta_memo_in_progress/5.
-
-% Coarse function-level dependency graph: Caller -> Callee
-:- dynamic metta_memo_dep/6.
 
 % Lightweight runtime metrics
 :- dynamic metta_memo_stat/2.
@@ -157,20 +144,12 @@ prolog:error_message(permission_error(memoize, volatile_function, Name)) -->
 memo_name_enabled(Fun) :- memo_enabled(Fun, _), !.
 memo_name_enabled(Fun) :- memo_enabled(Fun, _, _).
 
-%The engine's change hook names a function, not a space. Every module
-%holding state for that name is invalidated: over-invalidation costs one
-%recomputation, under-invalidation answers from a stale cache.
-:- multifile metta_on_function_changed/1.
-metta_on_function_changed(Fun) :-
-    memo_state_modules(Fun, Modules),
-    forall(member(Module, Modules), cache_invalidate(Fun, Module)).
-
 %The removal hook fires only once no space defines the name any more
 %[source: engine/spaces.pl, metta_remove_atom/3], so the disable is global.
 :- multifile metta_on_function_removed/1.
 metta_on_function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
-    forall(member(Module, Modules), cache_invalidate(Fun, Module)),
+    forall(member(Module, Modules), forget_memo_supports(Fun, Module)),
     disable_memoization(Fun).
 
 memo_state_modules(Fun, Modules) :-
@@ -179,8 +158,6 @@ memo_state_modules(Fun, Modules) :-
         ; memo_enabled(Fun, M, _)
         ; metta_memo_entry(Fun, M, _, _, _, _)
         ; metta_memo_generation(Fun, M, _, _)
-        ; metta_memo_dep(Fun, M, _, _, _, _)
-        ; metta_memo_dep(_, _, _, Fun, M, _)
         ),
         Raw),
     sort(Raw, Modules).
@@ -204,8 +181,10 @@ memo_aggregate_mode(none).    % none|min|max|sum|count (ground path)
 metta_memo_total_bytes(0).    % Global bytes tracker
 
 normalize_memo_strategy(In, wtinylfu) :-
+    % policy-inventory-exempt: documented-collision-decision; reason=legacy spellings intentionally normalize to the one wtinylfu strategy; evidence=lib/lib_memo.pl:normalize_memo_strategy/2
     memberchk(In, [wtinylfu, 'WTinyLFU', 'W-TinyLFU', 'wtinylfu', 'w-tinylfu']), !.
 normalize_memo_strategy(In, lru) :-
+    % policy-inventory-exempt: documented-collision-decision; reason=case variants intentionally normalize to the one lru strategy; evidence=lib/lib_memo.pl:normalize_memo_strategy/2
     memberchk(In, [lru, 'LRU']), !.
 normalize_memo_strategy(In, Out) :-
     atom(In),
@@ -234,7 +213,7 @@ apply_memo_option(['answer-limit', N]) :-
     retractall(memo_answer_limit(_)),
     assertz(memo_answer_limit(N)).
 apply_memo_option([aggregate, Mode]) :-
-    memberchk(Mode, [none, min, max, sum, count]), !,
+    petta_vocabulary_value('memo-aggregate', Mode), !,
     retractall(memo_aggregate_mode(_)),
     assertz(memo_aggregate_mode(Mode)).
 apply_memo_option(Opt) :-
@@ -277,11 +256,15 @@ memo_stats_snapshot(Stats) :-
 % Lifecycle, Dependencies, and Invalidation
 
 enable_memoization(Fun, Module) :-
-    ( memo_enabled(Fun, Module) -> true ; assertz(memo_enabled(Fun, Module)) ).
+    ( memo_enabled(Fun, Module) -> true ; assertz(memo_enabled(Fun, Module)) ),
+    memo_state_arities(Fun, Module, Arities),
+    forall(member(Arity, Arities), record_memo_source(Fun, Module, Arity)).
 
 enable_memoization(Fun, Module, CallArity) :-
     ( memo_enabled(Fun, Module, CallArity) -> true
-    ; assertz(memo_enabled(Fun, Module, CallArity)) ).
+    ; assertz(memo_enabled(Fun, Module, CallArity)) ),
+    PredArity is CallArity + 1,
+    record_memo_source(Fun, Module, PredArity).
 
 disable_memoization(Fun) :-
     retractall(memo_enabled(Fun, _)),
@@ -296,19 +279,7 @@ bump_metta_memo_generation(Fun, Module, Arity) :-
     retractall(metta_memo_generation(Fun, Module, Arity, _)),
     assertz(metta_memo_generation(Fun, Module, Arity, Next)).
 
-%Which functions an invalidation has to reach: this one, and every caller
-%that reaches it through any chain. The dependency facts are caller to
-%callee, so the graph is built with the edges reversed and reachability
-%answers the closure, seed included and in standard order
-%[source: SWI-Prolog 10.1 Reference Manual A.63, library(ugraphs)].
-impacted_functions(SeedFun, SeedModule, Impacted) :-
-    findall((Callee-CalleeModule)-(Caller-CallerModule),
-            metta_memo_dep(Caller, CallerModule, _, Callee, CalleeModule, _),
-            Edges),
-    vertices_edges_to_ugraph([SeedFun-SeedModule], Edges, Graph),
-    reachable(SeedFun-SeedModule, Graph, Impacted).
-
-cache_invalidate_single(Fun, Module) :-
+memo_state_arities(Fun, Module, Arities) :-
     findall(Arity,
         ( arity(Fun, Arity)
         ; metta_memo_generation(Fun, Module, Arity, _)
@@ -320,29 +291,44 @@ cache_invalidate_single(Fun, Module) :-
         ; current_predicate(Module:Fun/Arity)
         ),
         RawArities),
-    sort(RawArities, Arities),
-    ( Arities == []
-    -> true
-    ; forall(member(Arity, Arities),
-        with_cache_fun_mutex(Fun, Module, Arity,
-            ( bump_metta_memo_generation(Fun, Module, Arity),
-              invalidate_entries_for_fun_arity(Fun, Module, Arity, FreedBytes),
-              update_total_bytes_subtract(FreedBytes),
-              retractall(metta_memo_count(Fun, Module, Arity, _)),
-              retractall(metta_memo_head(Fun, Module, Arity, _)),
-              retractall(metta_memo_tail(Fun, Module, Arity, _)),
-              retractall(metta_memo_q(Fun, Module, Arity, _, _)),
-              retractall(metta_memo_in_progress(Fun, Module, Arity, _, _))
-            )))
-    ),
-    retractall(metta_memo_dep(Fun, Module, _, _, _, _)),
-    retractall(metta_memo_dep(_, _, _, Fun, Module, _)).
+    sort(RawArities, Arities).
+
+record_memo_source(Fun, Module, Arity) :-
+    support_record(memo(Module, Fun, Arity), function(Module, Fun)).
+
+cache_invalidate_node(Fun, Module, Arity) :-
+    with_cache_fun_mutex(Fun, Module, Arity,
+        ( bump_metta_memo_generation(Fun, Module, Arity),
+          invalidate_entries_for_fun_arity(Fun, Module, Arity, FreedBytes),
+          update_total_bytes_subtract(FreedBytes),
+          retractall(metta_memo_count(Fun, Module, Arity, _)),
+          retractall(metta_memo_head(Fun, Module, Arity, _)),
+          retractall(metta_memo_tail(Fun, Module, Arity, _)),
+          retractall(metta_memo_q(Fun, Module, Arity, _, _)),
+          retractall(metta_memo_in_progress(Fun, Module, Arity, _, _))
+        )).
+
+:- multifile support_invalidation_action/1.
+support_invalidation_action(memo(Module, Fun, Arity)) :-
+    cache_invalidate_node(Fun, Module, Arity).
 
 cache_invalidate(Fun, Module) :-
-    impacted_functions(Fun, Module, Impacted),
-    forall(member(F-M, Impacted), cache_invalidate_single(F, M)).
+    memo_state_arities(Fun, Module, Arities),
+    forall(member(Arity, Arities),
+           ( record_memo_source(Fun, Module, Arity),
+             support_invalidate(memo(Module, Fun, Arity)) )).
+
+forget_memo_supports(Fun, Module) :-
+    memo_state_arities(Fun, Module, Arities),
+    forall(member(Arity, Arities),
+           support_forget(memo(Module, Fun, Arity))).
 
 cache_clear :-
+    findall(memo(Module, Fun, Arity),
+            ( supports(_, memo(Module, Fun, Arity))
+            ; supports(memo(Module, Fun, Arity), _) ),
+            MemoNodes0),
+    sort(MemoNodes0, MemoNodes),
     retractall(metta_memo_entry(_, _, _, _, _, _)),
     retractall(metta_memo_generation(_, _, _, _)),
     retractall(metta_memo_count(_, _, _, _)),
@@ -350,10 +336,10 @@ cache_clear :-
     retractall(metta_memo_tail(_, _, _, _)),
     retractall(metta_memo_q(_, _, _, _, _)),
     retractall(metta_memo_in_progress(_, _, _, _, _)),
-    retractall(metta_memo_dep(_, _, _, _, _, _)),
     retractall(metta_memo_total_bytes(_)),
     asserta(metta_memo_total_bytes(0)),
     retractall(metta_memo_stat(_, _)),
+    forall(member(Node, MemoNodes), support_forget(Node)),
     ( catch(nb_current('$petta_memo_cms', _), _, fail) -> nb_delete('$petta_memo_cms') ; true ),
     ( catch(nb_current('$petta_memo_cms_size', _), _, fail) -> nb_delete('$petta_memo_cms_size') ; true ),
     ( catch(nb_current('$petta_memo_accesses', _), _, fail) -> nb_delete('$petta_memo_accesses') ; true ).
@@ -707,13 +693,14 @@ canonicalize_args_key(AVs, KeyAVs) :-
     numbervars(KeyAVs, 0, _).
 
 with_memo_call_context(Fun, Module, Arity, Goal) :-
+    Node = memo(Module, Fun, Arity),
+    record_memo_source(Fun, Module, Arity),
     ( metta_memo_call_ctx(ParentFun, ParentModule, ParentArity)
     -> ( ParentFun == Fun, ParentModule == Module, ParentArity == Arity
        -> true
-       ; ( metta_memo_dep(ParentFun, ParentModule, ParentArity, Fun, Module, Arity)
-         -> true
-         ; asserta(metta_memo_dep(ParentFun, ParentModule, ParentArity, Fun, Module, Arity))
-         ))
+       ; Parent = memo(ParentModule, ParentFun, ParentArity),
+         support_record(Parent, Node)
+       )
     ; true ),
     setup_call_cleanup(
         asserta(metta_memo_call_ctx(Fun, Module, Arity)),
