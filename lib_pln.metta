@@ -302,26 +302,35 @@
                                            (STV $B)
                                            (STV $C) $T1 $T2)) (empty)))
 
-;Usage of inheritance for predicates
+;Usage of inheritance for predicates.
+;PredicateNode rather than Predicate, which is the engine's Prolog-interop
+;builder: (Predicate (foo 1 2)) makes the goal term foo(1,2) for
+;callPredicate and its family, so an evaluated (Predicate $x) here was
+;consumed by that builtin and these three rules answered nothing at all
+;[measured 2026-08-22: !(Predicate likes) answers [], and importing this
+;file printed the engine's head-pattern note about the collision]. The
+;long form is upstream's own name for the atom -- the .scm rules linked
+;throughout this file write PredicateNode, ConceptNode and ListLink -- so
+;this reads against them rather than inventing an abbreviation.
 ;unary arg
-(= (|- ((Evaluation (Predicate $x)
+(= (|- ((Evaluation (PredicateNode $x)
                     (List (Concept $C))) $T1)
        ((Inheritance (Concept $S) (Concept $C)) $T2))
-   ((Evaluation (Predicate $x)
+   ((Evaluation (PredicateNode $x)
                 (List (Concept $S))) (Truth_ModusPonens $T1 $T2)))
 
 ;binary arg1
-(= (|- ((Evaluation (Predicate $x)
+(= (|- ((Evaluation (PredicateNode $x)
                     (List (Concept $C1) (Concept $C2))) $T1)
        ((Inheritance (Concept $S) (Concept $C1)) $T2))
-   ((Evaluation (Predicate $x)
+   ((Evaluation (PredicateNode $x)
                 (List (Concept $S) (Concept $C2))) (Truth_ModusPonens $T1 $T2)))
 
 ;binary arg2
-(= (|- ((Evaluation (Predicate $x)
+(= (|- ((Evaluation (PredicateNode $x)
                     (List (Concept $C1) (Concept $C2))) $T1)
        ((Inheritance (Concept $S) (Concept $C2)) $T2))
-   ((Evaluation (Predicate $x)
+   ((Evaluation (PredicateNode $x)
                 (List (Concept $C1) (Concept $S))) (Truth_ModusPonens $T1 $T2)))
 
 ; negation elimination rule (introduction now handled by Translator), see https://github.com/opencog/pln/blob/master/opencog/pln/rules/wip/not-elimination.scm#L1-L8
