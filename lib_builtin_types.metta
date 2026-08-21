@@ -1,4 +1,16 @@
-; Purpose: declare the callable types of MeTTa built-in operators.
+; Purpose: declare the type surface of PeTTa's shipped builtins for engine
+; reflection and optional live typed dispatch.
+; Guarantees:
+;   - reader-token registration takes a regex string and readable constructor
+;     symbol, while removal takes the same regex string [tested:
+;     test_a_registered_token_class_parses_like_a_shipped_one;
+;     commit=2c741dda928a30d0ce1c7e1fcf0b263b4d1bb97b].
+; Open Obligations:
+;   To Do: None
+;   Hacks: None
+;   Future Enhancements: None
+
+; %%%% Type definitions of MeTTa built-in operators. %%%%
 
 ;; Type definitions of arithmetic operators
 (: + (-> Number Number Number))
@@ -267,6 +279,8 @@
 ;; --- Checked on import: spaces and state ---
 (: get-atoms (-> SpaceType Atom))
 (: bind! (-> Symbol %Undefined% Bool))
+(: register-token! (-> String Symbol Bool))
+(: unregister-token! (-> String Bool))
 (: context-space (-> SpaceType))
 (: import! (-> Atom Atom (->)))
 ;; include pastes a module's source into the space that included it and
