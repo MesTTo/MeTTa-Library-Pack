@@ -49,9 +49,7 @@
         member(Name, Heads)
     ).
 
-special_form_head(Head) :-
-    clause(translate_special_dl(Head, _, _, _, _), _),
-    atom(Head).
+special_form_head(Head) :- metta_special_form_head(Head).
 
 'engine-arity'(Name, Arity) :-
     arity(Name, Arity).
