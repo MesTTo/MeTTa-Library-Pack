@@ -20,9 +20,9 @@
   (clpq clpq-entailed clpb clpb-labeling clpb-taut))
 
 ;Atom on every constraint parameter, so it arrives UNEVALUATED. Without it
-;`(clpq (= (* 2 $x) 1))` runs `(* 2 $x)` as ordinary arithmetic and raises
-;`Arguments are not sufficiently instantiated` before the solver sees it, and
-;a constraint over an unbound variable is the whole point of a constraint.
+;`(clpq (= (* 2 $x) 1))` runs `(* 2 $x)` as ordinary arithmetic, which refuses
+;two unknowns by name before the solver sees it, and a constraint over an
+;unbound variable is the whole point of a constraint.
 (: clpq (-> Atom Bool))
 (: clpq-entailed (-> Atom Bool))
 (: clpb (-> Atom Bool))
