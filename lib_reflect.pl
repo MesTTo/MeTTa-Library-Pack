@@ -115,17 +115,17 @@ special_form_head(Head) :-
 %disables every clause after it; an ownership seam is claimed by the first
 %handler that succeeds, and a cut after a guard proving the request is yours
 %is correct and fast there. Restating that list by hand is what put
-%metta_backend_selftest/0 outside the check that enforces it, so it is data in
-%ext_point_kind/2 now and this reads it rather than keeping a copy
+%seam:backend_selftest/0 outside the check that enforces it, so it is data in
+%seam:kind/2 now and this reads it rather than keeping a copy
 %[tested: lib_reflect:extension_points_are_reported].
 %
 %A SERVICE runs the other way: the engine writes those clauses and an
 %extension calls them, so none of the cut reasoning above applies to one.
 %Both directions are reported, because a tool asking what the contract is
-%wants the whole of it, and ext_point_clauses_from/2 says which way a kind
+%wants the whole of it, and seam:clauses_from/2 says which way a kind
 %runs [tested: lib_reflect:both_directions_of_the_contract_are_reported].
 'engine-extension-point'(Point) :-
-    ext_point_kind(Name/Arity, Kind),
+    seam:kind(Name/Arity, Kind),
     Point = [Name, Arity, Kind].
 
 %How many of each, which is the cheap health check a tool wants first.

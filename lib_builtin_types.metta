@@ -110,7 +110,7 @@
 ;; Divergences from the dump are marked where they occur.
 ;;
 ;; THIS FILE HAS TWO ROLES AND THEY DIFFER. The engine reads it at boot into
-;; `builtin_type_declaration/2`, which `get_type_candidate/2` consults LAST, so
+;; `seam:builtin_type_declaration/2`, which `get_type_candidate/2` consults LAST, so
 ;; the declarations answer `get-type` and change no call site: the engine's own
 ;; type surface, reported without being enforced twice. A program that also
 ;; writes `!(import! &self (library lib_builtin_types))` puts the same

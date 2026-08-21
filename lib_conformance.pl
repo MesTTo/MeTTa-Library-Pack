@@ -9,7 +9,7 @@
 %   The checks are the Python kit's, asked of a SPACE NAME instead of an
 %   object, so a provider written in either language is held to one contract.
 % Assumes:
-%   - the provider is registered and metta_foreign_space/1 answers for it;
+%   - the provider is registered and seam:foreign_space/1 answers for it;
 %     an unregistered name is a refusal rather than a pass
 %     [tested: conformance_refuses_a_space_that_is_not_foreign]
 %   - enumeration is the oracle. A provider that does not enumerate cannot be
@@ -50,7 +50,7 @@ metta_check_space_provider(Space, Checks) :-
     append(CapabilityChecks, [MatchCheck, PushdownCheck, PlanCheck], Checks).
 
 refuse_unforeign_space(Space) :-
-    (   metta_foreign_space(Space)
+    (   seam:foreign_space(Space)
     ->  true
     ;   throw(error(petta_conformance_not_foreign(Space), none))
     ).
@@ -66,32 +66,35 @@ conformance_capability(Space, Check) :-
     % policy-inventory-exempt: mechanism-internal; reason=these five names are the fixed foreign-provider protocol hooks checked for every declared capability; evidence=lib/lib_conformance.pl:conformance_capability/2
     member(Capability, [match, enumerate, add, remove, clear]),
     foreign_provides(Space, Capability),
-    capability_hook(Capability, Name/Arity),
-    (   conformance_hook_defined(Name, Arity)
-    ->  format(string(Check), '~w: declared, ~w/~w has clauses',
-               [Capability, Name, Arity])
-    ;   throw(error(petta_conformance_no_hook(Space, Capability, Name/Arity),
-                    none))
+    capability_hook(Capability, Hook),
+    (   conformance_hook_defined(Hook)
+    ->  format(string(Check), '~w: declared, ~w has clauses', [Capability, Hook])
+    ;   throw(error(petta_conformance_no_hook(Space, Capability, Hook), none))
     ).
 
-capability_hook(match, metta_foreign_match/3).
-capability_hook(enumerate, metta_foreign_atoms/2).
-capability_hook(add, metta_foreign_add/2).
-capability_hook(remove, metta_foreign_remove/3).
-capability_hook(clear, metta_foreign_clear/1).
+capability_hook(match, seam:foreign_match/3).
+capability_hook(enumerate, seam:foreign_atoms/2).
+capability_hook(add, seam:foreign_add/2).
+capability_hook(remove, seam:foreign_remove/3).
+capability_hook(clear, seam:foreign_clear/1).
 
 %number_of_clauses rather than clause/2: the hooks are static multifile
 %predicates, and asking a static predicate for its clauses is a permission
 %error on a system built with protect_static_code.
-conformance_hook_defined(Name, Arity) :-
+%
+%The hook is asked of the module capability_hook/2 names, which is the whole
+%content of that qualification. It used to be asked of the engine's module,
+%which was right only while the seams lived there: with them in `seam` the
+%engine's module has no clause of any of them and every declared capability
+%reported as undeclared.
+conformance_hook_defined(Module:Name/Arity) :-
     functor(Head, Name, Arity),
-    petta_engine_module(Engine),
-    catch(predicate_property(Engine:Head, number_of_clauses(Count)), _, fail),
+    catch(predicate_property(Module:Head, number_of_clauses(Count)), _, fail),
     Count > 0.
 
 conformance_atoms(Space, Atoms) :-
     (   foreign_provides(Space, enumerate)
-    ->  findall(Atom, metta_foreign_atoms(Space, Atom), Atoms)
+    ->  findall(Atom, seam:foreign_atoms(Space, Atom), Atoms)
     ;   Atoms = []
     ).
 
@@ -136,7 +139,7 @@ conformance_claims_exact(Space, Atom) :-
     foreign_pushdown_class(Space, Atom, exact).
 
 conformance_exactly(Space, Atom) :-
-    forall(metta_foreign_match(Space, Candidate, []),
+    forall(seam:foreign_match(Space, Candidate, []),
            conformance_candidate_matches(Space, Atom, Candidate)).
 
 conformance_candidate_matches(Space, Atom, Candidate) :-
@@ -207,7 +210,7 @@ prolog:error_message(petta_conformance_not_foreign(Space)) -->
        check. Register it first.'-[Space] ].
 prolog:error_message(petta_conformance_no_hook(Space, Capability, PI)) -->
     [ '~w declares the ~w capability and ~w has no clauses. Implement the \c
-       hook, or drop the capability from metta_foreign_capability/2.'
+       hook, or drop the capability from seam:foreign_capability/2.'
       -[Space, Capability, PI] ].
 prolog:error_message(petta_conformance_under_approximates(Space, Atom)) -->
     [ '~w holds ~w and matching it answered nothing. A provider may \c

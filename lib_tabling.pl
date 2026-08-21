@@ -169,7 +169,7 @@ metta_tabling_resolve(read(Operation, Space, Pattern), Reads0, Reads) :-
 metta_tabling_read(Operation, Space, Pattern, Reads) :-
     ( petta_space_name(Space) -> true
     ; throw(error(petta_tabling_unresolved_read(Operation, Space), none)) ),
-    ( metta_foreign_space(Space)
+    ( seam:foreign_space(Space)
       -> throw(error(petta_tabling_foreign_space(Operation, Space), none))
     ; true ),
     native_storage_module(Space, Storage),
@@ -275,7 +275,7 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %tables rebuild lazily on the next call, and this is the same funnel that
 %already invalidates the specializer and the memo cache
 %[tested: tabling_equation_change_drops_tables].
-:- multifile metta_on_function_changed/1.
+:- multifile seam:function_changed/1.
 %If-then-else, not a cut. Every caller of this hook enumerates the whole
 %predicate with forall/2, so a cut in one clause's body cuts THAT predicate's
 %clause choice points and no handler ordered after this one runs. Clause order
@@ -284,11 +284,11 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %function abolished the tables and never dropped the stale dual, so
 %(not-provable (pq 2)) answered both False from the recompiled path and True
 %from the dual that was never dropped [tested: duals_survive_tabling].
-metta_on_function_changed(_) :-
+seam:function_changed(_) :-
     ( metta_tabling_declared -> abolish_all_tables ; true ).
 
-:- multifile metta_on_function_removed/1.
-metta_on_function_removed(_) :-
+:- multifile seam:function_removed/1.
+seam:function_removed(_) :-
     ( metta_tabling_declared -> abolish_all_tables ; true ).
 
 %Nothing is tabled in the overwhelming majority of programs, and this hook

@@ -26,12 +26,12 @@
 :- ( redis_space_nonce(_) -> true
    ; uuid(Nonce), assertz(redis_space_nonce(Nonce)) ).
 
-:- multifile metta_foreign_space/1.
-:- multifile metta_foreign_add/2.
-:- multifile metta_foreign_remove/3.
-:- multifile metta_foreign_atoms/2.
-:- multifile metta_foreign_match/3.
-:- multifile metta_foreign_clear/1.
+:- multifile seam:foreign_space/1.
+:- multifile seam:foreign_add/2.
+:- multifile seam:foreign_remove/3.
+:- multifile seam:foreign_atoms/2.
+:- multifile seam:foreign_match/3.
+:- multifile seam:foreign_clear/1.
 
 redis_space_address(Address, Host:Port) :-
     ( atom(Address) -> A = Address ; atom_string(A, Address) ),
@@ -188,21 +188,21 @@ redis_space_event(Space, Payload) :-
     ( atom_string(Own, Nonce)
       -> true
     ; sread(AtomText, Atom),
-      ( Op == "+" -> forall(metta_on_atom_added(Space, Atom), true)
-      ; Op == "-" -> forall(metta_on_atom_removed(Space, Atom), true)
+      ( Op == "+" -> forall(seam:atom_added(Space, Atom), true)
+      ; Op == "-" -> forall(seam:atom_removed(Space, Atom), true)
       ; true ) ).
 
-metta_foreign_space(Space) :-
+seam:foreign_space(Space) :-
     redis_space_conn(Space, _, _, _, _, _, _).
 
 %Everything, declared rather than inferred. A set in Redis can be read, added
 %to, removed from, enumerated and deleted, so this space answers all five.
 %Saying so is what lets the engine refuse an operation a DIFFERENT provider
 %does not answer instead of reading the failure as "there is nothing there".
-:- multifile metta_foreign_capability/2.
-metta_foreign_capability(Space, Capability) :-
+:- multifile seam:foreign_capability/2.
+seam:foreign_capability(Space, Capability) :-
     redis_space_conn(Space, _, _, _, _, _, _),
-    % policy-inventory-exempt: mechanism-internal; reason=a Redis set implements the five fixed foreign-provider protocol hooks rather than choosing an engine policy; evidence=lib/lib_redis.pl:metta_foreign_capability/2
+    % policy-inventory-exempt: mechanism-internal; reason=a Redis set implements the five fixed foreign-provider protocol hooks rather than choosing an engine policy; evidence=lib/lib_redis.pl:foreign_capability/2
     member(Capability, [add, remove, match, enumerate, clear]).
 
 %What an attached space's change events promise, which is the sixth
@@ -221,17 +221,17 @@ metta_foreign_capability(Space, Capability) :-
 %write is heard exactly once and a remote one at most once
 %[tested: test_local_writes_fire_subscriptions_exactly_once,
 %test_subscriptions_fire_across_processes].
-:- multifile metta_context_events/3.
-metta_context_events(Space, 'at-most-once', unordered) :-
+:- multifile seam:context_events/3.
+seam:context_events(Space, 'at-most-once', unordered) :-
     redis_space_conn(Space, _, _, _, _, _, _).
 
-metta_foreign_add(Space, Atom) :-
+seam:foreign_add(Space, Atom) :-
     redis_space_conn(Space, Conn, _, _, _, Key, Channel), !,
     swrite(Atom, S),
     redis(Conn, sadd(Key, S), _),
     redis_space_publish(Conn, Channel, "+", S).
 
-metta_foreign_remove(Space, Atom, Removed) :-
+seam:foreign_remove(Space, Atom, Removed) :-
     redis_space_conn(Space, Conn, _, _, _, Key, Channel), !,
     swrite(Atom, S),
     redis(Conn, srem(Key, S), N),
@@ -240,7 +240,7 @@ metta_foreign_remove(Space, Atom, Removed) :-
          redis_space_publish(Conn, Channel, "-", S)
     ; Removed = false ).
 
-metta_foreign_atoms(Space, Pattern) :-
+seam:foreign_atoms(Space, Pattern) :-
     redis_space_conn(Space, Conn, _, _, _, Key, _), !,
     redis(Conn, smembers(Key), Members),
     member(Text, Members),
@@ -250,7 +250,7 @@ metta_foreign_atoms(Space, Pattern) :-
 %a time; candidates enumerate here and unify in place. The options are ignored:
 %a Redis set has no way to answer fewer members than a SMEMBERS returns, and
 %ignoring a bound is always correct because the engine applies its own.
-metta_foreign_match(Space, Pattern, _Options) :-
+seam:foreign_match(Space, Pattern, _Options) :-
     redis_space_conn(Space, Conn, _, _, _, Key, _), !,
     redis(Conn, smembers(Key), Members),
     member(Text, Members),
@@ -259,6 +259,6 @@ metta_foreign_match(Space, Pattern, _Options) :-
 
 %Clearing deletes the whole set; the facts were shared, so this is a
 %deliberate cross-process act.
-metta_foreign_clear(Space) :-
+seam:foreign_clear(Space) :-
     redis_space_conn(Space, Conn, _, _, _, Key, _), !,
     redis(Conn, del(Key), _).

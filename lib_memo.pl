@@ -120,8 +120,8 @@ memo_equation(Fun, Module, Arities, Term) :-
 
 % Runtime Hook Integration
 
-:- multifile metta_dispatch_call/4.
-metta_dispatch_call(Fun, Args, Out, Goal) :-
+:- multifile seam:dispatch_call/4.
+seam:dispatch_call(Fun, Args, Out, Goal) :-
     memo_name_enabled(Fun),
     current_metta_module(CallModule),
     length(Args, CallArity),
@@ -146,8 +146,8 @@ memo_name_enabled(Fun) :- memo_enabled(Fun, _, _).
 
 %The removal hook fires only once no space defines the name any more
 %[source: engine/spaces.pl, metta_remove_atom/3], so the disable is global.
-:- multifile metta_on_function_removed/1.
-metta_on_function_removed(Fun) :-
+:- multifile seam:function_removed/1.
+seam:function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
     forall(member(Module, Modules), forget_memo_supports(Fun, Module)),
     disable_memoization(Fun).
@@ -308,8 +308,8 @@ cache_invalidate_node(Fun, Module, Arity) :-
           retractall(metta_memo_in_progress(Fun, Module, Arity, _, _))
         )).
 
-:- multifile support_invalidation_action/1.
-support_invalidation_action(memo(Module, Fun, Arity)) :-
+:- multifile support_graph:support_invalidation_action/1.
+support_graph:support_invalidation_action(memo(Module, Fun, Arity)) :-
     cache_invalidate_node(Fun, Module, Arity).
 
 cache_invalidate(Fun, Module) :-
@@ -956,7 +956,7 @@ memo_refuse_uncacheable_arity(Fun, Module, Arity, Context) :-
 prolog:error_message(permission_error(memoize, impure_function, Name)) -->
     [ '~w calls something nothing declares pure, so a cached answer would \c
        hide whatever it does. Declare that operation with \c
-       metta_pure_operation/1 if it only inspects its arguments'-[Name] ].
+       seam:pure_operation/1 if it only inspects its arguments'-[Name] ].
 prolog:error_message(permission_error(memoize, space_reading_function, Name)) -->
     [ '~w reads a space, and memoization invalidates on an equation change \c
        and on nothing else, so the cache would outlive the atoms it was \c

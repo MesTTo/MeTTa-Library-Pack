@@ -31,7 +31,7 @@
 %   - the work per element is small. A parallel map over cheap elements pays
 %     thread creation for nothing; measure before reaching for it.
 %   - many callers park on ONE space. A waiting space_await or space_take
-%     costs the space a metta_on_atom_added/2 clause, so every write into
+%     costs the space a seam:atom_added/2 clause, so every write into
 %     that space, including writes that match no waiter, runs one guard per
 %     waiter: writes are O(waiters) and one arriving atom wakes all of them
 %     to race for it, the thundering herd a hand-off queue would avoid and
@@ -43,7 +43,7 @@
 %   - a branch needs the caller's variable bindings back. Threads copy terms,
 %     so bindings made inside a branch do not escape it.
 % Owns:
-%   - one metta_on_atom_added/2 clause and one message queue per live
+%   - one seam:atom_added/2 clause and one message queue per live
 %     space_await/space_take call, both released when the call leaves
 %   - one OS thread per live spawned future until it is awaited or cancelled,
 %     one message queue per live channel until it is closed, and, once any
@@ -574,7 +574,7 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
 %the caller's variables bound, WITHOUT removing it. Linda's rd.
 %
 %Event-driven, not polled: this installs a clause on the engine's own
-%metta_on_atom_added/2 extension point, the same one Python subscriptions use
+%seam:atom_added/2 extension point, the same one Python subscriptions use
 %[source: engine/ext_points.pl:17-19, bindings/python/petta/shim.pl:1277-1281], so the
 %write itself delivers. Installing the hook also takes the space off the bulk
 %add fast path for as long as the wait lasts, which is what makes per-atom
@@ -612,7 +612,7 @@ space_wait_(Space, Pattern, Timeout, Mode, Out) :-
     %on every write and testing a candidate never binds the caller's.
     copy_term(Pattern, HookPattern),
     setup_call_cleanup(
-        assertz((metta_on_atom_added(Space, Candidate) :-
+        assertz((seam:atom_added(Space, Candidate) :-
                     (   \+ HookPattern \= Candidate
                     ->  thread_send_message(Queue, Candidate)
                     ;   true

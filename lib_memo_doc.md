@@ -113,9 +113,9 @@ holding the function's clauses. See "Memoization is per space" above.
 Refer to source predicates if you need deeper internal debugging; avoid relying on internal facts for program logic unless you intend to keep compatibility with future changes.
 ## Integration Hooks & Synchronization
 The library integrates with the MeTTa runtime via multifile hooks:
-- `metta_dispatch_call/5` — intercepts dispatch to memoized functions, and is told the module the call site lives in
-- `metta_on_function_changed/1` — triggers invalidation when a function implementation changes
-- `metta_on_function_removed/1` — invalidates and disables memoization when a function is removed
+- `seam:dispatch_call/5` — intercepts dispatch to memoized functions, and is told the module the call site lives in
+- `seam:function_changed/1` — triggers invalidation when a function implementation changes
+- `seam:function_removed/1` — invalidates and disables memoization when a function is removed
 Synchronization primitives:
 - `with_cache_fun_mutex/4` — per-(Fun,Module,Arity) mutex to protect queue/state for that function
 - `with_cms_mutex/1` — global mutex used for the Count‑Min Sketch updates
