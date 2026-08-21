@@ -2,11 +2,11 @@
 ; Guarantees:
 ;   - DontEvalType marks user-declared parameter types whose arguments stay
 ;     unevaluated at the typed dispatch boundary.
-;   [tested: test_a_user_declared_lazy_type_receives_its_argument_unevaluated; commit=WORKTREE]
+;   [tested: test_a_user_declared_lazy_type_receives_its_argument_unevaluated; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
 ;   - unit-returning surface declarations report `(->)` as their result.
-;   [tested: test_the_empty_expressions_type_follows_the_arbiters_ruling; commit=WORKTREE]
+;   [tested: test_the_empty_expressions_type_follows_the_arbiters_ruling; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
 ;   - typing-rule declarations receive their patterns and outcomes unevaluated.
-;   [tested: test_a_user_typing_rule_participates_like_a_shipped_one; commit=WORKTREE]
+;   [tested: test_a_user_typing_rule_participates_like_a_shipped_one; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
 
 ; %%%% Type definitions of MeTTa built-in operators. %%%%
 
