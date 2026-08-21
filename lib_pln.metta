@@ -1,19 +1,3 @@
-; Purpose: provide PLN truth functions, inference rules, and bounded derivation.
-; Guarantees: malformed truth-function inputs fail instead of surviving as
-;   residual calls under the P3 dispatch default.
-; [tested: bindings/python/tests/test_translation.py::test_a_prelude_derived_form_matches_its_fused_twin_on_the_corpus; commit=WORKTREE]
-!(add-atom &petta (dispatch-policy Truth_Deduction NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_Induction NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_Abduction NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_ModusPonens NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_SymmetricModusPonens NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_Revision NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_Negation NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_inversion NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_equivalenceToImplication NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_transitiveSimilarity NoMatchEnum NoMatchFail))
-!(add-atom &petta (dispatch-policy Truth_evaluationImplication NoMatchEnum NoMatchFail))
-
 (= (clamp $v $min $max)
    (min $max (max $v $min)))
 
