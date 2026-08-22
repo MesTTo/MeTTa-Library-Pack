@@ -2,6 +2,50 @@
 Thread-safe, policy-driven memoization system with multiple eviction strategies (LRU and WTinyLFU), variant-key support for non-ground calls, and multi-answer caching.
 This document explains the public API, configuration options, internal behavior you should rely on, and practical recommendations for effective usage.
 ## Quick Start
+Pure recursive definitions are considered automatically. A recursive strongly
+connected component is selected when one equation body calls that component at
+least twice; a single recursive call has no repeated subproblem and stays
+uncached. The effect walk remains a hard gate, so a function that writes state,
+prints, or reads a space is never selected automatically.
+
+```metta
+(= (fib-shape $n)
+   (if (< $n 1)
+       1
+       (+ (fib-shape (- $n 1)) (fib-shape (- $n 1)))))
+
+!(import! &self (library lib_memo)) ; expose inspection/configuration forms
+!(is-memoized fib-shape)             ; true
+!(explain (fib-shape 20))
+; includes: (cache automatic (recursive-scc (fib-shape) body-call-count 2))
+```
+
+The automatic dispatcher is resident in the engine. Importing `lib_memo`
+exposes the public inspection and configuration forms; it does not enable the
+decision or reload the cache state.
+
+### Override the automatic decision
+
+Overrides are catalog declarations in `&petta`, not process flags:
+
+```metta
+!(add-atom &petta (cache tail-recursive force))
+!(add-atom &petta (cache branching-search refuse))
+```
+
+`force` bypasses only the repeated-call profitability rule. It cannot make an
+impure function cacheable. `refuse` disables an automatic choice. Remove the
+declaration to return to the automatic rule:
+
+```metta
+!(remove-atom &petta (cache branching-search refuse))
+```
+
+An explicit `lib_tabling` declaration takes precedence while its SWI answer
+trie is live. Automatic bag memoization is withdrawn when `(tabled ...)` lands
+in `&petta` and reconsidered when `(untabled ...)` removes it, so the two cache
+substrates never stack on one function.
+
 ### Enable Memoization
 ```metta
 !(memoize fib)
@@ -94,7 +138,19 @@ Choose `wtinylfu` when you expect a stable hot set; choose `lru` when recency is
 - Ground calls: cache keys are quantized (floats rounded to configured precision) and replay mode returns stored outputs only. Ground aggregation modes (`count|min|max|sum`) apply to the collected answers.
 - Non-ground (variant) calls: the cache stores answer patterns `(Args, Out)` and replays bindings on hit; this preserves tabling-like semantics.
 - Multi-answer support: probing collects up to `answer-limit` answers per key; excess answers are truncated and the `answer_limit_truncated` metric is incremented.
-- In-progress guard: for variant keys, the runtime uses `metta_memo_in_progress/4` to avoid duplicated concurrent recomputation. Callers will briefly wait for in-progress work to finish and then replay results; if waiting fails they fall back to direct execution.
+- In-progress guard: for variant keys, the runtime uses `metta_memo_in_progress/5` to avoid duplicated concurrent recomputation. Callers will briefly wait for in-progress work to finish and then replay results; if waiting fails they fall back to direct execution.
+
+Those configuration semantics describe explicit `memoize`. An automatic cache
+must preserve the program's answer bag, so it uses exact keys, ignores manual
+aggregation, and never truncates at `answer-limit`. When a probe finds more
+answers than the configured limit, that call runs directly and increments
+`automatic_answer_limit_bypass`; duplicate answers remain duplicate.
+
+Bounded search is not admitted automatically. `lib_memo` eagerly collects a
+miss's complete bag; probing recursion beneath `once`, `take`, or `top` could
+continue after the source construct had its answer and then wait on the same
+in-progress variant. `explain` reports `(bounded-search <construct>)` for this
+safety refusal. Explicit `memoize` retains its requested variant behaviour.
 ## Core State (short reference)
 Dynamic predicates exposed in the runtime (for debugging and reasoning):
 Every table below is keyed by `(Fun, Module)`, where the module is the one
@@ -102,6 +158,8 @@ holding the function's clauses. See "Memoization is per space" above.
 
 - `memo_enabled/2` — functions with memoization enabled (`Fun`, Module)
 - `memo_enabled/3` — arity-specific memoization enables (`Fun`, Module, InputArity)
+- `memo_automatic_enabled/2` — functions selected by the automatic policy
+- `memo_automatic_decision/4` — the reported automatic choice and reason
 - `metta_memo_entry/6` — cached results (Fun, Module, Arity, Gen, Args, Results)
 - `metta_memo_generation/4` — generation counter per function (used for invalidation)
 - `metta_memo_count/4`, `metta_memo_head/4`, `metta_memo_tail/4`, `metta_memo_q/5` — per-function queue state
@@ -113,8 +171,10 @@ holding the function's clauses. See "Memoization is per space" above.
 Refer to source predicates if you need deeper internal debugging; avoid relying on internal facts for program logic unless you intend to keep compatibility with future changes.
 ## Integration Hooks & Synchronization
 The library integrates with the MeTTa runtime via multifile hooks:
-- `seam:dispatch_call/5` — intercepts dispatch to memoized functions, and is told the module the call site lives in
-- `seam:function_changed/1` — triggers invalidation when a function implementation changes
+- `seam:dispatch_call/4` — intercepts dispatch to memoized functions, and is told the module the call site lives in
+- `seam:function_call_graph_changed/2` — schedules a new SCC decision only when a source-call edge changes
+- `seam:source_program_compiled/0` — drains one batched decision after a source unit
+- `seam:cache_policy_changed/1` — applies a force/refuse or explicit-tabling mutation
 - `seam:function_removed/1` — invalidates and disables memoization when a function is removed
 Synchronization primitives:
 - `with_cache_fun_mutex/4` — per-(Fun,Module,Arity) mutex to protect queue/state for that function
@@ -144,5 +204,5 @@ Always run a reproducible preset when benchmarking:
 - `float` controls quantization of float arguments for canonical keys. Higher precision reduces quantization collisions but can increase cache fragmentation. Avoid extremely large values (e.g., >18) to prevent numerical issues.
 7. Printing stats
 - `!(get-memoize-stats)` returns counters; call it after running the workload. If your MeTTa host does not echo return values, use `!(println! (get-memoize-stats))` or add a helper `!(print-memoize-stats (println! (get-memoize-stats)))`.
-8. Per-function overrides (optional)
-- If you need per-function configuration without changing globals repeatedly, consider adding a small override layer (library change). A reasonable design is `memo_config_override(Fun, Option, Value)` and a helper `effective_config(Fun, Option, Value)` that prefers the per-function override over the global value. I can prepare a small patch if you want this behavior.
+8. Automatic overrides
+- Use `(cache <function> force)` or `(cache <function> refuse)` in `&petta` for one function. These declarations change admission, not eviction, size, aggregation, or key configuration.

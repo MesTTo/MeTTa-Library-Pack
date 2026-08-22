@@ -23,6 +23,21 @@
 %     [tested: memo_support_graph:a_leaf_change_invalidates_transitive_callers_only,
 %     support_graph:test_a_derived_fact_is_invalidated_forward_from_what_it_supports;
 %     commit=7ade2b90e2631451fd6ffc23d22dd8c2d4a7a7aa].
+%   - A pure recursive SCC is enabled automatically only when one retained RHS
+%     calls that SCC at least twice; force/refuse catalog declarations override
+%     profitability without weakening purity [tested:
+%     test_a_doubly_branching_recursion_is_tabled_automatically_and_a_tail_recursion_is_not,
+%     test_an_impure_function_is_never_cached_automatically,
+%     test_automatic_cache_force_and_refuse_overrides; commit=WORKTREE].
+%   - Automatic caching preserves answer bags beyond memo_answer_limit/1,
+%     ignores manual aggregation and keys floats exactly; bounded search is a
+%     hard safety refusal because eager bag collection would change its
+%     left-recursive control; an explicit SWI table takes precedence rather
+%     than stacking both cache substrates [tested:
+%     test_automatic_caching_preserves_multiplicity_and_answer_limit,
+%     test_bounded_left_recursive_search_is_not_cached_automatically,
+%     test_explicit_tabling_takes_precedence_over_automatic_memoization;
+%     commit=WORKTREE].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
@@ -40,6 +55,7 @@
 %   Future Enhancements: None
 
 :- use_module(library(lists)).
+:- use_module(library(ordsets)).
 :- use_module(library(solution_sequences)).
 :- use_module(library(terms)). %term_size/2, for eviction cost accounting
 
@@ -55,6 +71,9 @@
 % memo_enabled/3 means only a specific call arity (input-argument count).
 :- dynamic memo_enabled/2.
 :- dynamic memo_enabled/3.
+:- dynamic memo_automatic_enabled/2.
+:- dynamic memo_automatic_decision/4.
+:- dynamic memo_automatic_dirty/1.
 :- dynamic arity/2.
 
 % Cached results: metta_memo_entry(Fun, Module, Arity, Gen, AVs, Results)
@@ -121,7 +140,10 @@ memo_equation(Fun, Module, Arities, Term) :-
 % Runtime Hook Integration
 
 :- multifile seam:dispatch_call/4.
-seam:dispatch_call(Fun, Args, Out, Goal) :-
+:- dynamic seam:dispatch_call/4.
+:- dynamic memo_dispatch_installed/1.
+
+memo_dispatch_call(Fun, Args, Out, Goal) :-
     memo_name_enabled(Fun),
     current_metta_module(CallModule),
     length(Args, CallArity),
@@ -129,6 +151,14 @@ seam:dispatch_call(Fun, Args, Out, Goal) :-
     memo_owner_module(Fun, CallModule, PredArity, Module),
     memoization_enabled_for_call(Fun, Module, CallArity),
     Goal = cache_call(Fun, CallModule, Args, Out).
+
+%Tell the shared effect walk which source call this transparent dispatcher
+%executes. Reconciliation can then re-check a function after it has been
+%compiled through the cache without mistaking cache_call/4 for a user effect.
+:- multifile seam:effect_operation_name/3.
+seam:effect_operation_name(cache_call(Fun, _, Args, _), Fun, Arity) :-
+    length(Args, InputArity),
+    Arity is InputArity + 1.
 
 :- multifile prolog:error_message//1.
 prolog:error_message(permission_error(memoize, volatile_function, Name)) -->
@@ -142,25 +172,303 @@ prolog:error_message(permission_error(memoize, volatile_function, Name)) -->
 %memoized at all. memo_enabled/2 indexes on the name it is given
 %[measured 2026-08-15: argument 1, 47x over sixty functions, jiti_list/1].
 memo_name_enabled(Fun) :- memo_enabled(Fun, _), !.
-memo_name_enabled(Fun) :- memo_enabled(Fun, _, _).
+memo_name_enabled(Fun) :- memo_enabled(Fun, _, _), !.
+memo_name_enabled(Fun) :- memo_automatic_enabled(Fun, _), !.
+
+memo_enabled_name(Fun) :- memo_enabled(Fun, _).
+memo_enabled_name(Fun) :- memo_enabled(Fun, _, _).
+memo_enabled_name(Fun) :- memo_automatic_enabled(Fun, _).
+
+%The dispatch seam is a compile-path hook, so merely having a resident clause
+%prices every ordinary call site. Install it only while at least one manual or
+%automatic cache is live, matching the extension seam's zero-cost-until-used
+%contract. Ground handler heads let SWI's first-argument index skip every
+%unrelated function even while another function is cached.
+memo_refresh_dispatch_handler :-
+    findall(Fun, memo_enabled_name(Fun), Needed0),
+    sort(Needed0, Needed),
+    findall(Fun, memo_dispatch_installed(Fun), Installed0),
+    sort(Installed0, Installed),
+    ord_subtract(Needed, Installed, Add),
+    ord_subtract(Installed, Needed, Remove),
+    maplist(memo_install_dispatch_handler, Add),
+    maplist(memo_remove_dispatch_handler, Remove).
+
+memo_install_dispatch_handler(Fun) :- memo_dispatch_installed(Fun), !.
+memo_install_dispatch_handler(Fun) :-
+    assertz(seam:(dispatch_call(Fun, Args, Out, Goal) :-
+                      lib_memo:memo_dispatch_call(Fun, Args, Out, Goal))),
+    assertz(memo_dispatch_installed(Fun)).
+
+memo_remove_dispatch_handler(Fun) :-
+    retractall(seam:(dispatch_call(Fun, Args, Out, Goal) :-
+                         lib_memo:memo_dispatch_call(Fun, Args, Out, Goal))),
+    retractall(memo_dispatch_installed(Fun)).
+
+%Only a changed source-call graph can move an SCC decision. The support graph
+%filters unrelated equations before announcing this event; source batches run
+%Tarjan once at their boundary, while an isolated mutation drains immediately.
+:- multifile seam:function_call_graph_changed/2.
+seam:function_call_graph_changed(_, Module) :-
+    memo_automatic_mark_dirty(Module),
+    ( active_source_program(_) -> true ; memo_automatic_reconcile_dirty ).
+
+:- multifile seam:source_program_compiled/0.
+seam:source_program_compiled :-
+    memo_automatic_reconcile_dirty.
+
+:- multifile seam:cache_policy_changed/1.
+seam:cache_policy_changed(Fun) :-
+    memo_automatic_mark_policy_changed(Fun),
+    memo_automatic_reconcile_dirty.
+
+:- multifile seam:automatic_cache_explanation/3.
+seam:automatic_cache_explanation(Fun, Choice, Reason) :-
+    memo_scope_module(Fun, Module),
+    (   memo_manual_enabled(Fun, Module)
+    ->  Choice = manual,
+        Reason = declaration
+    ;   memo_automatic_decision(Fun, Module, Choice, Reason)
+    ->  true
+    ;   once(memo_equation(Fun, Module, any, _)),
+        Choice = declined,
+        Reason = 'not-recursive'
+    ).
 
 %The removal hook fires only once no space defines the name any more
 %[source: engine/spaces.pl, metta_remove_atom/3], so the disable is global.
 :- multifile seam:function_removed/1.
-seam:function_removed(Fun) :-
+:- dynamic seam:function_removed/1.
+:- dynamic memo_function_removed_installed/1.
+
+memo_function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
     forall(member(Module, Modules), forget_memo_supports(Fun, Module)),
-    disable_memoization(Fun).
+    disable_memoization(Fun),
+    retractall(memo_automatic_enabled(Fun, _)),
+    retractall(memo_automatic_decision(Fun, _, _, _)),
+    memo_refresh_dispatch_handler,
+    memo_refresh_function_removed_handler.
+
+memo_refresh_function_removed_handler :-
+    findall(Fun, memo_lifecycle_state(Fun), Needed0),
+    sort(Needed0, Needed),
+    findall(Fun, memo_function_removed_installed(Fun), Installed0),
+    sort(Installed0, Installed),
+    ord_subtract(Needed, Installed, Add),
+    ord_subtract(Installed, Needed, Remove),
+    maplist(memo_install_function_removed_handler, Add),
+    maplist(memo_remove_function_removed_handler, Remove).
+
+memo_lifecycle_state(Fun) :- memo_enabled(Fun, _).
+memo_lifecycle_state(Fun) :- memo_enabled(Fun, _, _).
+memo_lifecycle_state(Fun) :- memo_automatic_enabled(Fun, _).
+memo_lifecycle_state(Fun) :- memo_automatic_decision(Fun, _, _, _).
+
+memo_install_function_removed_handler(Fun) :-
+    memo_function_removed_installed(Fun),
+    !.
+memo_install_function_removed_handler(Fun) :-
+    assertz(seam:(function_removed(Fun) :-
+                      lib_memo:memo_function_removed(Fun))),
+    assertz(memo_function_removed_installed(Fun)).
+
+memo_remove_function_removed_handler(Fun) :-
+    retractall(seam:(function_removed(Fun) :-
+                         lib_memo:memo_function_removed(Fun))),
+    retractall(memo_function_removed_installed(Fun)).
 
 memo_state_modules(Fun, Modules) :-
     findall(M,
         ( memo_enabled(Fun, M)
         ; memo_enabled(Fun, M, _)
+        ; memo_automatic_enabled(Fun, M)
+        ; memo_automatic_decision(Fun, M, _, _)
         ; metta_memo_entry(Fun, M, _, _, _, _)
         ; metta_memo_generation(Fun, M, _, _)
         ),
         Raw),
     sort(Raw, Modules).
+
+:- thread_local memo_automatic_reconciling/0.
+
+%A policy write is rare and may force a non-recursive function, so it takes
+%the wider function-view lookup. Equation changes stay on the candidate index
+%above, keeping unrelated source definitions off the decision path.
+memo_automatic_mark_policy_changed(Fun) :-
+    findall(Module,
+            ( support_view_module(Fun, Module)
+            ; memo_automatic_enabled(Fun, Module)
+            ; memo_automatic_decision(Fun, Module, _, _) ),
+            Modules0),
+    sort(Modules0, Modules),
+    forall(member(Module, Modules), memo_automatic_mark_dirty(Module)).
+
+memo_automatic_mark_dirty(Module) :-
+    ( memo_automatic_dirty(Module) -> true
+    ; assertz(memo_automatic_dirty(Module)) ).
+
+memo_automatic_reconcile_dirty :- memo_automatic_reconciling, !.
+memo_automatic_reconcile_dirty :-
+    findall(Module, retract(memo_automatic_dirty(Module)), Modules0),
+    sort(Modules0, Modules),
+    (   Modules == []
+    ->  true
+    ;   setup_call_cleanup(
+            asserta(memo_automatic_reconciling, Ref),
+            memo_automatic_reconcile_modules(Modules),
+            erase(Ref))
+    ).
+
+%Compute every dirty module before changing any dispatch. Then publish the
+%whole new state before recompiling a name, so mutually recursive members see
+%one another enabled whichever component order Tarjan returned.
+memo_automatic_reconcile_modules(Modules) :-
+    maplist(memo_automatic_module_plan, Modules, Plans),
+    maplist(memo_automatic_apply_plan, Plans, ChangedLists),
+    append(ChangedLists, Changed0),
+    sort(Changed0, Changed),
+    memo_refresh_dispatch_handler,
+    memo_refresh_function_removed_handler,
+    forall(member(Fun, Changed),
+           ( recompile_function_impl(Fun),
+             forall(support_memo_take_change(_, Fun), true) )).
+
+memo_automatic_module_plan(Module, plan(Module, Decisions)) :-
+    support_memo_sccs(Module, Components),
+    findall(Fun,
+            ( member(memo_scc(Members, _, _), Components),
+              member(Fun, Members) ),
+            RecursiveFuns0),
+    sort(RecursiveFuns0, RecursiveFuns),
+    findall(Fun,
+            ( memo_equation(Fun, Module, any, _),
+              memo_cache_override(Fun, _),
+              \+ memberchk(Fun, RecursiveFuns) ),
+            OverrideFuns0),
+    sort(OverrideFuns0, OverrideFuns),
+    findall(Decision,
+            ( member(Component, Components),
+              Component = memo_scc(Members, _, _),
+              member(Fun, Members),
+              memo_automatic_function_decision(Module, Fun, Component,
+                                                Decision) ),
+            RecursiveDecisions),
+    findall(Decision,
+            ( member(Fun, OverrideFuns),
+              memo_automatic_function_decision(
+                  Module, Fun, memo_scc([Fun], false, 0), Decision) ),
+            OverrideDecisions),
+    append(RecursiveDecisions, OverrideDecisions, Decisions).
+
+memo_automatic_function_decision(_, Fun, _,
+                                 decision(Fun, false, refused, declaration)) :-
+    memo_cache_override(Fun, refuse),
+    !.
+memo_automatic_function_decision(Module, Fun, Component,
+                                 decision(Fun, false, declined, Reason)) :-
+    memo_automatic_candidate(Fun, Component),
+    memo_automatic_unsafe_reason(Fun, Module, Reason),
+    !.
+memo_automatic_function_decision(_, Fun, _,
+                                 decision(Fun, true, forced, declaration)) :-
+    memo_cache_override(Fun, force),
+    !.
+memo_automatic_function_decision(_, Fun,
+                                 memo_scc(Members, true, MaxCalls),
+                                 decision(Fun, true, automatic,
+                                          ['recursive-scc', Members,
+                                           'body-call-count', MaxCalls])) :-
+    MaxCalls >= 2,
+    !.
+memo_automatic_function_decision(_, Fun, memo_scc(_, true, _),
+                                 decision(Fun, false, declined,
+                                          'single-recursive-call')) :- !.
+memo_automatic_function_decision(_, Fun, _,
+                                 decision(Fun, false, declined,
+                                          'not-recursive')).
+
+%Purity is the expensive half of admission and is needed only when the
+%profitability rule or a force declaration could enable the function. Ordinary
+%non-recursive definitions pay the one batched graph walk, not one effect walk
+%per definition.
+memo_automatic_candidate(Fun, _) :- memo_cache_override(Fun, force), !.
+memo_automatic_candidate(_, memo_scc(_, true, MaxCalls)) :- MaxCalls >= 2.
+
+memo_cache_override(Fun, Mode) :-
+    petta_contract_fact([cache, Fun, Mode]).
+
+memo_automatic_unsafe_reason(Fun, _, [volatile, Fun]) :-
+    \+ metta_function_cacheable(Fun),
+    !.
+memo_automatic_unsafe_reason(Fun, Module, 'explicit-tabling') :-
+    current_predicate(Module:Fun/Arity),
+    functor(Head, Fun, Arity),
+    predicate_property(Module:Head, tabled),
+    !.
+memo_automatic_unsafe_reason(Fun, Module, ['bounded-search', Control]) :-
+    memo_equation(Fun, Module, any, [=, _, Body]),
+    sub_term(Form, Body),
+    nonvar(Form),
+    Form = [Control|_],
+    atom(Control),
+    % policy-inventory-exempt: mechanism-internal; reason=once take and top are the fixed bounded-search controls whose branch pruning conflicts with eager answer-bag collection; evidence=lib/lib_memo.pl:memo_automatic_unsafe_reason/3
+    memberchk(Control, [once, take, top]),
+    !.
+memo_automatic_unsafe_reason(Fun, Module, Reason) :-
+    findall(Arity,
+            ( memo_equation(Fun, Module, any, [=, [_|Args], _]),
+              length(Args, InputArity),
+              Arity is InputArity + 1 ),
+            Arities0),
+    sort(Arities0, Arities),
+    member(Arity, Arities),
+    memo_automatic_arity_unsafe(Fun, Module, Arity, Reason),
+    !.
+
+memo_automatic_arity_unsafe(Fun, Module, Arity, Reason) :-
+    catch(( metta_effect_walk(Module, [Fun/Arity], Reads),
+            Result = reads(Reads) ),
+          Error,
+          Result = error(Error)),
+    (   Result = error(error(metta_impure_goal(Goal), _))
+    ->  Reason = [impure, Goal]
+    ;   Result = error(Error)
+    ->  Reason = [impure, Error]
+    ;   Result = reads(Reads),
+        Reads \== [],
+        Reason = ['space-read', Reads]
+    ).
+
+memo_automatic_apply_plan(plan(Module, Decisions), Changed) :-
+    findall(Fun, memo_automatic_enabled(Fun, Module), OldEnabled0),
+    sort(OldEnabled0, OldEnabled),
+    findall(Fun, member(decision(Fun, true, _, _), Decisions), NewEnabled0),
+    sort(NewEnabled0, NewEnabled),
+    ord_symdiff(OldEnabled, NewEnabled, Changed),
+    transaction(
+        ( retractall(memo_automatic_enabled(_, Module)),
+          retractall(memo_automatic_decision(_, Module, _, _)),
+          forall(member(decision(Fun, Enabled, Choice, Reason), Decisions),
+                 ( assertz(memo_automatic_decision(Fun, Module,
+                                                   Choice, Reason)),
+                   ( Enabled == true
+                   -> assertz(memo_automatic_enabled(Fun, Module))
+                   ;  true ) )) )),
+    forall(member(Fun, NewEnabled),
+           memo_automatic_record_sources(Fun, Module)),
+    forall(( member(Fun, Changed),
+             \+ memberchk(Fun, NewEnabled),
+             \+ memo_manual_enabled(Fun, Module) ),
+           ( cache_invalidate(Fun, Module),
+             forget_memo_supports(Fun, Module) )).
+
+memo_automatic_record_sources(Fun, Module) :-
+    memo_state_arities(Fun, Module, Arities),
+    forall(member(Arity, Arities), record_memo_source(Fun, Module, Arity)).
+
+memo_manual_enabled(Fun, Module) :- memo_enabled(Fun, Module), !.
+memo_manual_enabled(Fun, Module) :- memo_enabled(Fun, Module, _).
 
 % Configuration API
 
@@ -257,12 +565,16 @@ memo_stats_snapshot(Stats) :-
 
 enable_memoization(Fun, Module) :-
     ( memo_enabled(Fun, Module) -> true ; assertz(memo_enabled(Fun, Module)) ),
+    memo_install_dispatch_handler(Fun),
+    memo_install_function_removed_handler(Fun),
     memo_state_arities(Fun, Module, Arities),
     forall(member(Arity, Arities), record_memo_source(Fun, Module, Arity)).
 
 enable_memoization(Fun, Module, CallArity) :-
     ( memo_enabled(Fun, Module, CallArity) -> true
     ; assertz(memo_enabled(Fun, Module, CallArity)) ),
+    memo_install_dispatch_handler(Fun),
+    memo_install_function_removed_handler(Fun),
     PredArity is CallArity + 1,
     record_memo_source(Fun, Module, PredArity).
 
@@ -357,6 +669,7 @@ cache_clear :-
     memo_scope_module(Fun, Module),
     ( memo_enabled(Fun, Module)
     ; memo_enabled(Fun, Module, _)
+    ; memo_automatic_enabled(Fun, Module)
     ), !.
 'is-memoized'(_, false).
 
@@ -364,6 +677,7 @@ cache_clear :-
     memo_scope_module(Fun, Module),
     ( memo_enabled(Fun, Module)
     ; memo_enabled(Fun, Module, CallArity)
+    ; memo_automatic_enabled(Fun, Module)
     ), !.
 'is-memoized'(_, _, false).
 
@@ -645,9 +959,25 @@ store_if_current_generation(Fun, Module, Arity, ExpectedGen, AVs, CachedResults)
 
 % Key Canonicalization and Replay
 
+memoization_enabled_for_call(Fun, Module, _) :-
+    memo_enabled(Fun, Module), !.
 memoization_enabled_for_call(Fun, Module, CallArity) :-
-    memo_enabled(Fun, Module)
-    ; memo_enabled(Fun, Module, CallArity).
+    memo_enabled(Fun, Module, CallArity), !.
+memoization_enabled_for_call(Fun, Module, _) :-
+    memo_automatic_enabled(Fun, Module), !.
+
+memo_manual_enabled_for_call(Fun, Module, _) :-
+    memo_enabled(Fun, Module), !.
+memo_manual_enabled_for_call(Fun, Module, CallArity) :-
+    memo_enabled(Fun, Module, CallArity), !.
+
+memo_automatic_only_for_call(Fun, Module, CallArity) :-
+    once(memo_automatic_enabled(Fun, Module)),
+    \+ memo_manual_enabled_for_call(Fun, Module, CallArity).
+
+memo_automatic_only_for_predicate(Fun, Module, PredArity) :-
+    CallArity is PredArity - 1,
+    memo_automatic_only_for_call(Fun, Module, CallArity).
 
 memoization_enabled_for_predicate_arity(Fun, Module, PredArity) :-
     integer(PredArity),
@@ -686,8 +1016,15 @@ args_too_complex(AVs) :-
 args_worth_caching(AVs) :-
     \+ args_too_complex(AVs).
 
-% Canonical cache key: quantize floats, then normalize variable identities.
-canonicalize_args_key(AVs, KeyAVs) :-
+%Automatic keys are exact. Float quantization remains the explicit manual
+%API's configured behaviour, but applying it silently would merge distinct
+%program calls merely because the compiler selected their function.
+canonicalize_args_key(Fun, Module, Arity, AVs, KeyAVs) :-
+    memo_automatic_only_for_predicate(Fun, Module, Arity),
+    !,
+    copy_term(AVs, KeyAVs),
+    numbervars(KeyAVs, 0, _).
+canonicalize_args_key(_, _, _, AVs, KeyAVs) :-
     quantize_term(AVs, Quantized),
     copy_term(Quantized, KeyAVs),
     numbervars(KeyAVs, 0, _).
@@ -768,27 +1105,33 @@ truncate_answers(Answers, Answers).
 
 % Runtime Dispatch
 
-memo_probe_results(Fun, Module, AVs, ProbeResults) :-
-    memo_answer_limit(Limit),
+memo_probe_limit(Fun, Module, Arity, Limit) :-
+    memo_answer_limit(Configured),
+    ( memo_automatic_only_for_predicate(Fun, Module, Arity)
+    -> Limit is Configured + 1
+    ;  Limit = Configured ).
+
+memo_probe_results(Fun, Module, Arity, AVs, ProbeResults) :-
+    memo_probe_limit(Fun, Module, Arity, Limit),
     append(AVs, [Result], RawArgs),
     RawGoal =.. [Fun | RawArgs],
-    findnsols(Limit, answer(SolvedAVs, SolvedResult),
+    once(findnsols(Limit, answer(SolvedAVs, SolvedResult),
         ( call(Module:RawGoal),
           copy_term((AVs, Result), (SolvedAVs, SolvedResult))
         ),
-        ProbeResults).
+        ProbeResults)).
 
 % Ground calls should not re-unify raw input args on replay, because
 % float quantization intentionally maps slightly different inputs to one key.
-memo_probe_ground_results(Fun, Module, AVs, ProbeResults) :-
-    memo_answer_limit(Limit),
+memo_probe_ground_results(Fun, Module, Arity, AVs, ProbeResults) :-
+    memo_probe_limit(Fun, Module, Arity, Limit),
     append(AVs, [Result], RawArgs),
     RawGoal =.. [Fun | RawArgs],
-    findnsols(Limit, answer(SolvedResult),
+    once(findnsols(Limit, answer(SolvedResult),
         ( call(Module:RawGoal),
           copy_term(Result, SolvedResult)
         ),
-        ProbeResults).
+        ProbeResults)).
 
 cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults) :-
     metta_memo_entry(Fun, Module, Arity, CurGen, KeyAVs, CachedResults).
@@ -811,32 +1154,52 @@ cache_store(Fun, Module, Arity, CurGen, KeyAVs, ProbeResults) :-
     store_if_current_generation(Fun, Module, Arity, CurGen, KeyAVs, LimitedResults),
     record_miss(Fun, Module, Arity, KeyAVs).
 
-cache_probe_and_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
+cache_probe_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, ProbeResults) :-
     setup_call_cleanup(
         true,
-        memo_probe_results(Fun, Module, AVs, ProbeResults),
-        finish_in_progress(Fun, Module, Arity, CurGen, KeyAVs)),
-    cache_store(Fun, Module, Arity, CurGen, KeyAVs, ProbeResults).
+        memo_probe_results(Fun, Module, Arity, AVs, ProbeResults),
+        finish_in_progress(Fun, Module, Arity, CurGen, KeyAVs)).
+
+memo_automatic_probe_overflow(Fun, Module, Arity, ProbeResults) :-
+    memo_automatic_only_for_predicate(Fun, Module, Arity),
+    memo_answer_limit(Limit),
+    length(ProbeResults, Count),
+    Count > Limit.
+
+memo_ground_final_results(Fun, Module, Arity, ProbeResults, ProbeResults) :-
+    memo_automatic_only_for_predicate(Fun, Module, Arity),
+    !.
+memo_ground_final_results(_, _, _, ProbeResults, FinalResults) :-
+    apply_aggregate_mode(ProbeResults, FinalResults).
 
 cache_call_store_ground(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
-    _ = Goal,
     % For ground+quantized keys, collisions are intentional. Guarding "in-progress"
     % entries here can cause large duplicate recomputation in recursive workloads
     % Keep the ground path as direct probe/store.
-    memo_probe_ground_results(Fun, Module, AVs, ProbeResults),
-    apply_aggregate_mode(ProbeResults, FinalResults),
-    cache_store(Fun, Module, Arity, CurGen, KeyAVs, FinalResults),
-    memo_stat_inc(cache_miss),
-    member(Answer, FinalResults),
-    replay_ground_answer(Out, Answer).
+    memo_probe_ground_results(Fun, Module, Arity, AVs, ProbeResults),
+    (   memo_automatic_probe_overflow(Fun, Module, Arity, ProbeResults)
+    ->  memo_stat_inc(automatic_answer_limit_bypass),
+        call(Module:Goal)
+    ;   memo_ground_final_results(Fun, Module, Arity,
+                                  ProbeResults, FinalResults),
+        cache_store(Fun, Module, Arity, CurGen, KeyAVs, FinalResults),
+        memo_stat_inc(cache_miss),
+        member(Answer, FinalResults),
+        replay_ground_answer(Out, Answer)
+    ).
 
 cache_call_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
     start_in_progress(Fun, Module, Arity, CurGen, KeyAVs, Started),
     ( Started == true
-    -> cache_probe_and_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, ProbeResults),
-       memo_stat_inc(cache_miss),
-       member(Answer, ProbeResults),
-       replay_variant_answer(AVs, Out, Answer)
+    -> cache_probe_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, ProbeResults),
+       (   memo_automatic_probe_overflow(Fun, Module, Arity, ProbeResults)
+       ->  memo_stat_inc(automatic_answer_limit_bypass),
+           call(Module:Goal)
+       ;   cache_store(Fun, Module, Arity, CurGen, KeyAVs, ProbeResults),
+           memo_stat_inc(cache_miss),
+           member(Answer, ProbeResults),
+           replay_variant_answer(AVs, Out, Answer)
+       )
     ; ( wait_for_cached_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Out)
       -> memo_stat_inc(waited_on_in_progress)
       ; memo_stat_inc(in_progress_fallback),
@@ -857,7 +1220,7 @@ cache_call(Fun, CallModule, AVs, Out) :-
     with_memo_call_context(Fun, Module, Arity,
     ( args_worth_caching(AVs),
       memoizable_fun(Fun, Module, Arity)
-    -> canonicalize_args_key(AVs, KeyAVs),
+    -> canonicalize_args_key(Fun, Module, Arity, AVs, KeyAVs),
         memo_current_generation(Fun, Module, Arity, CurGen),
         ( ground(AVs)
         -> ( cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults)
