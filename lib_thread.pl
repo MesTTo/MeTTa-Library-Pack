@@ -87,7 +87,7 @@
 %`(dict-space ((a 1) (b 2)))` in a second space answered a size of four,
 %because it had added its two entries on top of the first dict's two in
 %`&json-1` [tested: test_a_dict_is_a_space_a_comprehension_can_build;
-%commit=WORKTREE]. A flag lives outside the source, so re-loading cannot
+%commit=657ae9672c07b628f8a20c7fe39aa43e58b0014f]. A flag lives outside the source, so re-loading cannot
 %reset it, and its update is atomic, which is the whole of what the mutex was
 %for [source: SWI-Prolog 10.1 Reference Manual, flag/3, "The update is
 %atomic. This predicate can be used to create a shared global counter"].
