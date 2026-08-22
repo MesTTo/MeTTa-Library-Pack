@@ -141,6 +141,10 @@
 ;; Compiled by the translator. Nothing here reaches typed dispatch.
 (: if (-> Bool Atom Atom $t))
 (: case (-> Atom Expression %Undefined%))
+;; switch evaluates its key where case holds it, which is upstream's own
+;; split: (: switch (-> %Undefined% Expression %Undefined%)) against
+;; (: case (-> Atom Expression %Undefined%)).
+(: switch (-> %Undefined% Expression %Undefined%))
 (: let (-> Atom %Undefined% Atom %Undefined%))
 (: chain (-> Atom Variable Atom %Undefined%))
 (: quote (-> Atom Atom))
@@ -221,6 +225,9 @@
 ;; --- Runtime-guarded: the rest ---
 (: exp-math (-> Number Number))
 (: implies (-> Bool Bool Bool))
+;; with-seed holds its body: the scope is the body's dynamic extent, and the
+;; body is compiled in place rather than evaluated as a term.
+(: with-seed (-> Number Atom %Undefined%))
 (: random-int (-> Number Number Number))
 (: random-float (-> Number Number Number))
 
@@ -301,12 +308,16 @@
 ;; import!'s is unit [source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean,
 ;; the include corelib block].
 (: include (-> Atom %Undefined%))
-;; DIVERGENCE from the dump, which types these over `(StateMonad $t)`.
-;; PeTTa's state is a named global: change-state! is nb_setval/2 and get-state
-;; is nb_getval/2, so the first argument is the NAME and there is no monadic
-;; cell to type over [source: engine/metta.pl, 'change-state!'/3, 'get-state'/2].
-(: change-state! (-> Symbol %Undefined% Bool))
-(: get-state (-> Symbol %Undefined%))
+;; The cell is a VALUE and its type is parametric in what it holds, which is
+;; the upstream signature [source: LeaTTa
+;; tests/semantics/grounded/25-state-rendering.metta]. A cell is a handle atom
+;; here, so a plain symbol still names one and the older named spelling keeps
+;; working; what changed is that (new-state V) answers a cell rather than only
+;; being readable inside bind!, and change-state! answers the cell it wrote
+;; rather than True.
+(: new-state (-> $t (StateMonad $t)))
+(: change-state! (-> (StateMonad $t) $t (StateMonad $t)))
+(: get-state (-> (StateMonad $t) $t))
 
 ;; --- Checked on import: text and printing ---
 (: repr (-> Atom String))

@@ -74,20 +74,26 @@
 :- use_module(library(aggregate)).
 :- use_module(library(heaps)).
 
-:- dynamic petta_handle_counter/1.
 :- dynamic petta_future/3.          % Space, ThreadId, DoneQueue
 :- dynamic petta_future_result/2.   % Space, done | cancelled | error(Error)
 :- dynamic petta_channel/2.         % Id, Queue
 
-petta_handle_counter(0).
-
 %Handles are small integers rather than blobs so they print, compare and
 %cross the Python boundary as ordinary MeTTa values.
+%The counter is a FLAG rather than a dynamic fact, and the difference is a
+%WRONG ANSWER rather than a style. A fact is source, and importing this
+%library into a SECOND space consults the file again, which put the counter
+%back to zero and made the next mint hand out a name that was already in use:
+%`(dict-space ((a 1) (b 2)))` in a second space answered a size of four,
+%because it had added its two entries on top of the first dict's two in
+%`&json-1` [tested: test_a_dict_is_a_space_a_comprehension_can_build;
+%commit=WORKTREE]. A flag lives outside the source, so re-loading cannot
+%reset it, and its update is atomic, which is the whole of what the mutex was
+%for [source: SWI-Prolog 10.1 Reference Manual, flag/3, "The update is
+%atomic. This predicate can be used to create a shared global counter"].
 next_petta_handle(Id) :-
-    with_mutex('$petta_thread_ids',
-               ( retract(petta_handle_counter(N)),
-                 Id is N + 1,
-                 assertz(petta_handle_counter(Id)) )).
+    flag('$petta_thread_handle', Previous, Previous + 1),
+    Id is Previous + 1.
 
 % ------------------------------------------------------- parallel over data
 
