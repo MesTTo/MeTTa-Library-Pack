@@ -28,7 +28,7 @@
 %     profitability without weakening purity [tested:
 %     test_a_doubly_branching_recursion_is_tabled_automatically_and_a_tail_recursion_is_not,
 %     test_an_impure_function_is_never_cached_automatically,
-%     test_automatic_cache_force_and_refuse_overrides; commit=WORKTREE].
+%     test_automatic_cache_force_and_refuse_overrides; commit=9e7d5dc2cad810940e5386d52636ac6946df279d].
 %   - Automatic caching preserves answer bags beyond memo_answer_limit/1,
 %     ignores manual aggregation and keys floats exactly; bounded search is a
 %     hard safety refusal because eager bag collection would change its
@@ -37,7 +37,7 @@
 %     test_automatic_caching_preserves_multiplicity_and_answer_limit,
 %     test_bounded_left_recursive_search_is_not_cached_automatically,
 %     test_explicit_tabling_takes_precedence_over_automatic_memoization;
-%     commit=WORKTREE].
+%     commit=9e7d5dc2cad810940e5386d52636ac6946df279d].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on

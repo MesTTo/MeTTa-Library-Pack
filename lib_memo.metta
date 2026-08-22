@@ -4,7 +4,7 @@
 ;   reconsulting lib_memo.pl and erasing its live automatic-cache decisions
 ;   [tested:
 ;   test_a_doubly_branching_recursion_is_tabled_automatically_and_a_tail_recursion_is_not;
-;   commit=WORKTREE].
+;   commit=9e7d5dc2cad810940e5386d52636ac6946df279d].
 ;
 ; lib_import owns import_prolog_functions_from_file. This library used to carry
 ; its own copy of the definition, so a program importing both got TWO equations
