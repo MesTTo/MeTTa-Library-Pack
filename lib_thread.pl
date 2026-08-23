@@ -618,9 +618,21 @@ space_wait_(Space, Pattern, Timeout, Mode, Out) :-
     %on every write and testing a candidate never binds the caller's.
     copy_term(Pattern, HookPattern),
     setup_call_cleanup(
+        %The send tolerates a DEAD queue, and that is a correctness clause
+        %rather than defensiveness: erase/1 does not stop an execution already
+        %inside this hook (SWI's logical update view lets a running goal finish
+        %on the clause it entered with), so a writer can be mid-hook when a
+        %timed-out waiter erases it and destroys the queue, and the writer's
+        %in-flight send then raised existence_error IN THE WRITER's add-atom.
+        %A wake-up is a hint and the STORE is the truth (the comment below), so
+        %a hint to a departed waiter is dropped, never an error. Only the
+        %dead-queue error is caught; anything else still surfaces
+        %[tested: lib_thread:a_wakeup_to_a_departed_waiter_is_dropped].
         assertz((seam:atom_added(Space, Candidate) :-
                     (   \+ HookPattern \= Candidate
-                    ->  thread_send_message(Queue, Candidate)
+                    ->  catch(thread_send_message(Queue, Candidate),
+                              error(existence_error(message_queue, _), _),
+                              true)
                     ;   true
                     )), HookRef),
         space_claim_(Space, Pattern, Queue, Deadline, Mode, Out),
