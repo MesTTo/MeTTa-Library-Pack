@@ -1,6 +1,6 @@
 ;Prove a foreign space provider before its users find out.
 ;
-;`petta.testing.check_space_provider` takes a Python OBJECT, and a Prolog
+;`metta.testing.check_space_provider` takes a Python OBJECT, and a Prolog
 ;provider is a set of multifile clauses with no object to pass. So the
 ;conformance kit covered the seam's convenient tier and not the one
 ;EXTENDING.md recommends for speed, which is the tier whose authors are, by
