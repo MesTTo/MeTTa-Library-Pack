@@ -130,10 +130,40 @@ memo_scope_module(Fun, Module) :-
 %asked for and every arity for `any`. The clause's module is the test:
 %translated_from/2 is engine-wide, and the same equation imported into two
 %spaces has one entry per module.
+%
+%The SHAPE is built before the store is asked, because every caller binds Fun
+%and the head sits inside the second argument. Asking translated_from/2 for an
+%unbound term first and destructuring after walked every equation in the
+%engine on each lookup; the pattern gives SWI's deep index at 2/2/1 a position
+%to discriminate on and the walk becomes one probe. A fixed arity narrows the
+%pattern further, which is why length/2 also moves ahead of the store
+%[measured 2026-08-23: 20,000 lookups against a module of M equations cost
+%0.140s at M=200, 0.515 at 800, 2.037 at 3,200 and 8.628 at 12,800, exactly
+%4.0x per 4x module, and cost 0.0086, 0.0088, 0.0090 and 0.0155; tested:
+%memo_equation_lookup:one_head_is_found_without_walking_the_other_equations].
+%
+%That walk was invisible to the inference counter, which is why it stood.
+%Failing a clause head sends the VM to shallow_backtrack, whose CHP_CLAUSE
+%branch asks nextClause/4 for the next candidate and resumes at
+%NEXT_INSTRUCTION; the counter is only ever raised on the call and depart path
+%[source: SWI-Prolog src/pl-vmi.c, VMH(shallow_backtrack) against
+%VMH(depart_or_retry_continue), which holds the one
+%LD->statistics.inferences++ of the two; V10.1.13, upstream commit
+%fc7ef84b949378b729052c3ade79c90ce5416abb, the version this engine runs on].
+%So a candidate rejected by head unification costs instructions and no
+%inference, and statistics/2 reports THREE for this lookup whether the walk
+%crosses 20 clauses or 20,000 [measured 2026-08-23 at 20, 200, 2,000 and
+%20,000]. The tracer does see it, because the same branch keeps a CHP_DEBUG
+%choice point while the debugger is on: at 20 clauses it reports one call of
+%translated_from/2, 19 redos and 20 exits in the old order against one call,
+%no redo and one exit in this one [measured 2026-08-23 through
+%prolog_trace_interception/4]. plunit meta-calls its test bodies and cannot
+%trace them, so the test that pins this is TIMED, the only one in the tree
+%that has to be.
 memo_equation(Fun, Module, Arities, Term) :-
-    translated_from(Ref, Term),
     Term = [=, [Fun|Args], _],
     ( Arities == any -> true ; length(Args, Arities) ),
+    translated_from(Ref, Term),
     clause_property(Ref, module(Module)).
 
 
@@ -341,10 +371,22 @@ memo_automatic_module_plan(Module, plan(Module, Decisions)) :-
               member(Fun, Members) ),
             RecursiveFuns0),
     sort(RecursiveFuns0, RecursiveFuns),
+    %The declarations drive, not the equations. Asking every equation in the
+    %module whether its name carried a cache declaration made this reconciliation
+    %linear in the module, and it runs once per source whose call graph changed,
+    %so a program built by loading K sources paid it K times over a module that
+    %grew each time [measured 2026-08-23: compiling a two-form source with one
+    %source call into a space already holding M equations cost 4,831 inferences
+    %at M=200 and 37,831 at M=3,200, exactly 11.0 an equation; it is 2,615 at
+    %both now and unchanged at M=25,600; tested:
+    %memo_cache_override:reconciling_a_source_costs_nothing_that_grows_with_the_module].
+    %(cache F ...) rows are a first-argument lookup in the catalog and there are
+    %normally none, so the probe that confirms F has an equation HERE runs at
+    %most once a declaration.
     findall(Fun,
-            ( memo_equation(Fun, Module, any, _),
-              memo_cache_override(Fun, _),
-              \+ memberchk(Fun, RecursiveFuns) ),
+            ( memo_cache_override(Fun, _),
+              \+ memberchk(Fun, RecursiveFuns),
+              once(memo_equation(Fun, Module, any, _)) ),
             OverrideFuns0),
     sort(OverrideFuns0, OverrideFuns),
     findall(Decision,
