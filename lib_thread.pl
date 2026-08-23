@@ -581,7 +581,7 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
 %
 %Event-driven, not polled: this installs a clause on the engine's own
 %seam:atom_added/2 extension point, the same one Python subscriptions use
-%[source: engine/ext_points.pl:17-19, bindings/python/petta/shim.pl:1277-1281], so the
+%[source: engine/ext_points.pl:17-19, bindings/python/metta/shim.pl:1277-1281], so the
 %write itself delivers. Installing the hook also takes the space off the bulk
 %add fast path for as long as the wait lasts, which is what makes per-atom
 %events fire at all [source: engine/spaces.pl, metta_add_hooks_idle/1].

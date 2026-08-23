@@ -258,7 +258,7 @@ right choice when the fan-out is a MeTTa expression.
 `MeTTa.pool()` in the Python library splits work **across engines**, one per
 worker thread. That is the right choice when the fan-out is a Python loop.
 
-`AsyncMeTTa` in `petta.aio` gives you a live event loop rather than
+`AsyncMeTTa` in `metta.aio` gives you a live event loop rather than
 parallelism; it serialises onto one engine on purpose.
 
 They compose. A pool worker may evaluate a `par-map`, and a `par-map` branch

@@ -55,7 +55,7 @@ NAMES = (
 def install(m, *, load_metta: bool = True) -> tuple[str, ...]:
     """Load the instruction set on `m` and return the operation names.
 
-        from petta import MeTTa
+        from metta import MeTTa
         import minimal_metta_lib
         m = MeTTa()
         minimal_metta_lib.install(m)
