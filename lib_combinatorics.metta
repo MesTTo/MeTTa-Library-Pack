@@ -15,9 +15,12 @@
 ; choose exactly k elements, unordered
 (= (chooseKl $L 0) (let $temp (cut) (())))
 (= (chooseKl () $k) (let $temp (cut) ()))
+;map-atom's list parameter is Expression and holds its operand as written, so
+;the smaller choice set is NAMED before the map reads it.
 (= (chooseKl (cons $h $t) $k)
-   (append (map-atom (chooseKl $t (- $k 1)) (|-> ($c) (cons $h $c)))
-           (chooseKl $t $k)))
+   (let $smaller (chooseKl $t (- $k 1))
+     (append (map-atom $smaller (|-> ($c) (cons $h $c)))
+             (chooseKl $t $k))))
 (= (chooseK $L $k)
    (let $options (chooseKl $L $k) (superpose $options)))
 

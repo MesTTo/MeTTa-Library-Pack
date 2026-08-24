@@ -17,7 +17,8 @@
 
 (= (random-normal-vector $N $L)
    (if (> $N 0)
-       (random-normal-vector (- $N 1) (cons (random-float 0.0 1.0) $L))
+       (let $sample (random-float 0.0 1.0)
+         (random-normal-vector (- $N 1) (cons $sample $L)))
        (let $norm (norm $L)
             (collapse (let $x (superpose $L) (/ $x $norm))))))
 

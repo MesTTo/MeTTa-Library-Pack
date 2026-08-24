@@ -4,19 +4,31 @@
 
 ;Higher order functions
 (= (map-flat $f ()) ())
-(= (map-flat $f (cons $x $xs)) (cons ($f $x) (map-flat $f $xs)))
+;The recursive tail is SEQUENCED before the cons. `cons` is `cons-atom`'s
+;un-suffixed spelling and its tail parameter is declared `Expression`, so the
+;operation receives that operand AS WRITTEN; a `let` names the mapped tail
+;first and hands the value over, which is how the reference's own stdlib
+;writes every list rebuild [source: LeaTTa MettaHyperonFull/Minimal/
+;Stdlib.lean:2701-2709, `map-atom`, whose recursive call is bound by a `chain`
+;before `cons-atom` sees it].
+(= (map-flat $f (cons $x $xs))
+   (let $head ($f $x)
+     (let $rest (map-flat $f $xs) (cons $head $rest))))
 
 (= (map-nested $f ()) ())
 (= (map-nested $f (cons $x $xs))
      (if (is-expr $x)
-         (cons (map-nested $f $x) (map-nested $f $xs))
-         (cons ($f $x) (map-nested $f $xs))))
+         (let $head (map-nested $f $x)
+           (let $rest (map-nested $f $xs) (cons $head $rest)))
+         (let $head ($f $x)
+           (let $rest (map-nested $f $xs) (cons $head $rest)))))
 
 (= (fold-flat $f $init ()) $init)
 (= (fold-flat $f $init (cons $x $xs)) (fold-flat $f ($f $init $x) $xs))
 
 (= (foldr-flat $f $init ()) $init)
-(= (foldr-flat $f $init (cons $x $xs)) ($f $x (foldr-flat $f $init $xs)))
+(= (foldr-flat $f $init (cons $x $xs))
+   (let $rest (foldr-flat $f $init $xs) ($f $x $rest)))
 
 (= (fold-nested $f $init ()) $init)
 (= (fold-nested $f $init (cons $x $xs))
@@ -30,7 +42,7 @@
 (= (/?\ $pred () $b) ())
 (= (/?\ $pred (cons $a $as) $bs)
       (if (fold-flat or False (map-flat ($pred $a) $bs))
-         (cons $a (/?\ $pred $as $bs))
+         (let $head $a (let $rest (/?\ $pred $as $bs) (cons $head $rest)))
          (/?\ $pred $as $bs)))
 
 (= (/=\ $a $b) (/?\ = $a $b))
@@ -42,7 +54,7 @@
 (= (\? $pred (cons $a $as) $bs)
   (if (fold-flat or False (map-flat ($pred $a) $bs))
     (\? $pred $as $bs)
-    (cons $a (\? $pred $as $bs))))
+    (let $head $a (let $rest (\? $pred $as $bs) (cons $head $rest)))))
 
 (= (\= $a $b) (\? = $a $b))
 (= (\== $a $b) (\? == $a $b))
@@ -53,7 +65,7 @@
 (= (\?/ $pred (cons $a $as) $bs)
   (if (fold-flat or False (map-flat ($pred $a) $bs))
     (\?/ $pred $as $bs)
-    (cons $a (\?/ $pred $as $bs))))
+    (let $head $a (let $rest (\?/ $pred $as $bs) (cons $head $rest)))))
 
 (= (\=/ $a $b) (\?/ = $a $b))
 (= (\==/ $a $b) (\?/ == $a $b))

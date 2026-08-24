@@ -17,9 +17,12 @@
 ;the probabilistic choice, argmax is the zero-temperature limit, and top-k
 ;is beam search's keep rule. One representation, every reading.
 
-;The mass of a weighted superposition:
+;The mass of a weighted superposition. foldl-atom's list parameter is
+;Expression, so it holds its operand as written; the mapped weights are NAMED
+;and the name handed over.
 (= (ws-total $ps)
-   (foldl-atom (map-atom $ps (|-> ($p) (index-atom $p 0))) 0.0 +))
+   (let $weights (map-atom $ps (|-> ($p) (index-atom $p 0)))
+     (foldl-atom $weights 0.0 +)))
 
 ;Scale every weight so the mass is one; a distribution:
 (= (ws-normalize $ps)
@@ -44,7 +47,10 @@
 ;The pair with more weight, then the best value; the temperature-zero limit:
 (= (ws-pickmax $a $b) (if (>= (index-atom $a 0) (index-atom $b 0)) $a $b))
 (= (ws-best $ps)
-   (index-atom (foldl-atom (cdr-atom $ps) (car-atom $ps) ws-pickmax) 1))
+   (let $rest (cdr-atom $ps)
+     (let $first (car-atom $ps)
+       (let $best (foldl-atom $rest $first ws-pickmax)
+         (index-atom $best 1)))))
 
 ;Pairs sorted best-first, and the first k of them, beam search's keep rule:
 (= (ws-ranked $ps) (reverse (sort-atom $ps)))
@@ -52,7 +58,8 @@
    (if (or (== $ps ()) (<= $k 0))
        ()
        (let ($h $t) (decons-atom $ps)
-            (cons-atom $h (ws-take $t (- $k 1))))))
+            (let $rest (ws-take $t (- $k 1))
+              (cons-atom $h $rest)))))
 (= (ws-top $ps $k) (ws-take (ws-ranked $ps) $k))
 
 ;Draw one value with probability proportional to its weight: the annotated
@@ -72,16 +79,17 @@
        ($p)
        (let ($h $t) (decons-atom $acc)
             (if (== (index-atom $h 1) (index-atom $p 1))
-                (cons-atom ((+ (index-atom $h 0) (index-atom $p 0))
-                            (index-atom $h 1))
-                           $t)
-                (cons-atom $h (ws-merge-into $t $p))))))
+                (let $summed (+ (index-atom $h 0) (index-atom $p 0))
+                  (let $value (index-atom $h 1)
+                    (cons-atom ($summed $value) $t)))
+                (let $rest (ws-merge-into $t $p)
+                  (cons-atom $h $rest))))))
 (= (ws-collapse $ps) (foldl-atom $ps () ws-merge-into))
 
 ;The expected value of a numeric weighted superposition:
 (= (ws-expect $ps)
-   (foldl-atom (map-atom $ps (|-> ($p) (* (index-atom $p 0) (index-atom $p 1))))
-               0.0 +))
+   (let $terms (map-atom $ps (|-> ($p) (* (index-atom $p 0) (index-atom $p 1))))
+     (foldl-atom $terms 0.0 +)))
 
 ;Nondeterministic reading: each pair is one alternative, measure as data:
 (= (ws-choose $ps) (superpose $ps))

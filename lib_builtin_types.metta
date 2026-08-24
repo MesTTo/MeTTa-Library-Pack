@@ -191,9 +191,22 @@
 (: match (-> SpaceType Atom Atom %Undefined%))
 
 ;; --- Special forms: collections ---
+;; Each has TWO arrows, the binder spelling and the closure spelling, and both
+;; are the arbiter's own rows byte for byte
+;; [source: LeaTTa MettaHyperonFull/Minimal/Stdlib.lean, the (: map-atom ...),
+;; (: filter-atom ...) and (: foldl-atom ...) lines of preludeSrc; measured
+;; 2026-08-24 on LeaTTa 9ea9f9d, !(get-type map-atom) answers both].
+;; The list is Expression and so arrives AS WRITTEN in either spelling:
+;; !(map-atom (cdr-atom (a b)) $y (q $y)) is ((q cdr-atom) (q (a b))) there,
+;; mapping over the two parts of the unrun call. foldl-atom's seed is Atom and
+;; is held too: !(foldl-atom (1) (+ 1 2) $a $b (size-atom $a)) is 3, the size
+;; of the held (+ 1 2), where an evaluated seed would refuse a Number.
 (: map-atom (-> Expression Variable Atom Expression))
+(: map-atom (-> Expression Expression Expression))
 (: filter-atom (-> Expression Variable Atom Expression))
+(: filter-atom (-> Expression Expression Expression))
 (: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
+(: foldl-atom (-> Expression Atom Expression %Undefined%))
 
 ;; --- Special forms: transactions and threads ---
 (: transaction (-> Atom %Undefined%))
@@ -240,11 +253,23 @@
 (: decons-atom (-> Expression Atom))
 (: size-atom (-> Expression Number))
 (: index-atom (-> Expression Number Atom))
+;; atom-subst replaces one variable inside a template, all three operands
+;; as written and the result as produced.
+(: atom-subst (-> Atom Variable Atom Atom))
 ;; PeTTa's own, no dump entry. cons/decons are the un-suffixed spellings and
 ;; first/second-from-pair read a two-element expression.
-(: cons (-> Atom Expression Expression))
-(: decons (-> Expression Expression))
-(: first (-> Expression Atom))
+;;
+;; Their RESULT is `Atom`, matching the suffixed rows two lines up, and the
+;; result type is not decoration: `Atom` says the answer is final while every
+;; other result re-enters evaluation
+;; [source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean:3786-3799,
+;; `returnsAtom`]. Written `Expression` here, each cons re-walked the list it
+;; had just built and a million-element `range` went from linear to quadratic
+;; [measured 2026-08-24: 20,000 elements, 0.30s to 7.01s, and the shipped
+;; million-element holbenchmark kernel stopped finishing at all].
+(: cons (-> Atom Expression Atom))
+(: decons (-> Expression Atom))
+(: first (-> %Undefined% Atom))
 ;; first-from-pair is UNDECLARED, with empty, nop, pragma!, type-cast,
 ;; match-types and match-type-or: each official corelib block reads
 ;; `Type %Undefined%`, which is the gradual default rather than a type, so
@@ -254,7 +279,7 @@
 ;; measured 2026-08-15; tests/semantics/types-basic/
 ;; 61-undeclared-type-helpers-surface.metta and eval-core/
 ;; empty-argument-arity.metta].
-(: second-from-pair (-> Expression Atom))
+(: second-from-pair (-> %Undefined% Atom))
 
 ;; --- Checked on import: set and list operations ---
 (: union-atom (-> Expression Expression Atom))
@@ -262,7 +287,7 @@
 (: subtraction-atom (-> Expression Expression Atom))
 (: unique-atom (-> Expression Atom))
 (: alpha-unique-atom (-> Expression Atom))
-(: sort-atom (-> Expression Expression))
+(: sort-atom (-> %Undefined% Expression))
 ;; The corelib's own two, whose blocks read `(-> String Expression String)` and
 ;; `(-> Expression Expression)`. Both are load-bearing: they are what turns
 ;; `(format-args n ())` into `(BadArgType 1 String Number)` and
@@ -272,16 +297,16 @@
 ;; tests/semantics/grounded/07-partial-core.metta].
 (: format-args (-> String Expression String))
 (: sort-strings (-> Expression Expression))
-(: exclude-item (-> Atom Expression Expression))
-(: is-member (-> Atom Expression Bool))
-(: is-alpha-member (-> Atom Expression Bool))
+(: exclude-item (-> %Undefined% %Undefined% Expression))
+(: is-member (-> %Undefined% %Undefined% Bool))
+(: is-alpha-member (-> %Undefined% %Undefined% Bool))
 
 ;; --- Checked on import: the metatype predicates ---
 ;; Each takes anything and answers a Bool, which is the whole point of them.
 (: is-var (-> Atom Bool))
 (: is-ground (-> Atom Bool))
 (: is-expr (-> Atom Bool))
-(: is-space (-> Atom Bool))
+(: is-space (-> %Undefined% Bool))
 (: get-metatype (-> Atom Atom))
 ;; An error term carries the expression that caused it, so both arguments are
 ;; masked: (Error (+ 1 2) (+ 1 +)) has to hold the malformed term rather than
@@ -320,8 +345,8 @@
 (: get-state (-> (StateMonad $t) $t))
 
 ;; --- Checked on import: text and printing ---
-(: repr (-> Atom String))
-(: repra (-> Atom Symbol))
+(: repr (-> %Undefined% String))
+(: repra (-> %Undefined% Symbol))
 (: parse (-> String Atom))
 (: sread (-> String Atom))
 (: println! (-> %Undefined% Bool))
@@ -339,20 +364,33 @@
 ;; Their modes are Prolog's, so most parameters are genuinely unconstrained:
 ;; append/3 runs in every direction and maplist/3 takes a closure. The arrow
 ;; is here for the arity and the result, which is what a reader needs.
+;;
+;; NONE OF THEM MASKS, and the parameter type is what says so. A declaration
+;; here describes the value the PREDICATE receives, and every one of these
+;; predicates receives a value: length/2 counts a list rather than the
+;; expression that computes one, maplist/3 calls a goal the call site built,
+;; and copy_term/2 copies what its argument evaluated to. Writing `Expression`
+;; or `Atom` in those positions describes the caller's text instead, and once
+;; the evaluation mask reached written calls those declarations stopped the
+;; evaluation the predicate needs [source: LeaTTa
+;; MettaHyperonFull/Minimal/Stdlib.lean:4156-4183, which records the same
+;; correction for `first-from-pair`: "The earlier (-> Expression Atom) invented
+;; an Expression first parameter ... which is exactly the instruction not to
+;; evaluate the pair"].
 (: append (-> %Undefined% %Undefined% %Undefined%))
-(: length (-> Expression Number))
-(: reverse (-> Expression Expression))
-(: msort (-> Expression Expression))
-(: sort (-> Expression Expression))
-(: last (-> Expression Atom))
-(: member (-> Atom Expression Bool))
-(: list_to_set (-> Expression Expression))
-(: maplist (-> Atom %Undefined% %Undefined%))
-(: foldl (-> Atom %Undefined% %Undefined% %Undefined%))
-(: copy_term (-> Atom Atom))
+(: length (-> %Undefined% Number))
+(: reverse (-> %Undefined% Expression))
+(: msort (-> %Undefined% Expression))
+(: sort (-> %Undefined% Expression))
+(: last (-> %Undefined% Atom))
+(: member (-> %Undefined% %Undefined% Bool))
+(: list_to_set (-> %Undefined% Expression))
+(: maplist (-> %Undefined% %Undefined% %Undefined%))
+(: foldl (-> %Undefined% %Undefined% %Undefined% %Undefined%))
+(: copy_term (-> %Undefined% %Undefined%))
 (: atom_chars (-> %Undefined% %Undefined%))
 (: atom_concat (-> %Undefined% %Undefined% %Undefined%))
-(: term_hash (-> Atom Number))
+(: term_hash (-> %Undefined% Number))
 
 ;; --- Checked on import: the Prolog interface ---
 ;; Predicate builds a goal from its parts; the four *Predicate operations take
@@ -375,7 +413,7 @@
 (: remove-typing-rule! (-> Atom Bool))
 
 ;; --- Checked on import: Python and the outside world ---
-(: py-call (-> Expression %Undefined%))
+(: py-call (-> %Undefined% %Undefined%))
 ;; py-atom RESOLVES where py-call applies, so what comes back is a value: a
 ;; Python callable MeTTa can hold, pass and apply. Atom parameters throughout,
 ;; because a name is a name rather than something to evaluate first.
@@ -388,9 +426,9 @@
 (: py-atom (-> Atom %Undefined%))
 (: py-atom (-> Atom Atom %Undefined%))
 (: py-dot (-> %Undefined% Atom %Undefined%))
-(: py-list (-> Atom %Undefined%))
-(: py-tuple (-> Atom %Undefined%))
-(: py-dict (-> Atom %Undefined%))
+(: py-list (-> %Undefined% %Undefined%))
+(: py-tuple (-> %Undefined% %Undefined%))
+(: py-dict (-> %Undefined% %Undefined%))
 (: py-iter (-> %Undefined% %Undefined%))
 ;; Kwargs takes its pairs UNEVALUATED, because the name half of a pair is a
 ;; name: without the mask `(Kwargs (reverse true))` was read as a call to the

@@ -25,10 +25,13 @@
 (= (sym-sim $a $b)
    (if (== $a $b)
        1.0
-       (max-atom (cons-atom 0.0
-         (union-atom
-           (collapse (match (context-space) (similar $a $b $d) $d))
-           (collapse (match (context-space) (similar $b $a $d) $d)))))))
+       ;The three family operations below read their operands AS WRITTEN, so
+       ;each collapsed answer set is NAMED before the one above it consumes it.
+       (let $forward (collapse (match (context-space) (similar $a $b $d) $d))
+         (let $backward (collapse (match (context-space) (similar $b $a $d) $d))
+           (let $both (union-atom $forward $backward)
+             (let $with-floor (cons-atom 0.0 $both)
+               (max-atom $with-floor)))))))
 
 ;The degree a pattern weakly unifies with a term, binding the pattern's
 ;variables as it goes. Metatypes drive the cases: a variable binds anything

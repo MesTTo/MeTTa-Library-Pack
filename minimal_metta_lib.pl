@@ -53,9 +53,20 @@ metta_function_loop(_Body, Current, _Fuel, Out) :-
     Out = Value.
 metta_function_loop(Body, _Current, 0, Out) :- !,
     Out = ['Error', Body, 'NoReturn'].
+%A BODY THAT ANSWERED NOTHING IS NOT A BODY THAT FAILED TO RETURN. The two
+%were one case while eval/2 could not answer nothing: now that a nested
+%evaluation prunes an `Empty` branch, a body whose branch died has no result,
+%and a function over it has none either, where a body that reached a normal
+%form without a return still earns the specification's NoReturn.
+%
+%Reporting the dead branch as NoReturn turns a pruned traversal into an error
+%atom: `!(collapse (stratego-all some-only-a (h a b)))` is `()` on the arbiter,
+%because a child the strategy declines removes the branch, and it was the whole
+%`(Error (chain ...) NoReturn)` term here [measured 2026-08-24 against LeaTTa
+%9ea9f9d, running the reference's own strategy basis].
 metta_function_loop(Body, Current, Fuel, Out) :-
-    (   once(eval(Current, Next)),
-        Next \== Current
+    once(eval(Current, Next)),
+    (   Next \== Current
     ->  Next1 is Fuel - 1,
         metta_function_loop(Body, Next, Next1, Out)
     ;   Out = ['Error', Body, 'NoReturn']
