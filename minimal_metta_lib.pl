@@ -66,7 +66,7 @@ metta_function_loop(_Body, Current, _Fuel, Out) :-
 %call makes petta_function_eval/3 report `not-reducible` below and earns
 %NoReturn [source: MettaHyperonFull/Minimal/Interpreter.lean:3673-3674 and
 %7533-7564; tested: conformance2:a_function_distinguishes_a_marker_result_from_an_irreducible_body;
-%commit=WORKTREE].
+%commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87].
 metta_function_loop(_, 'NotReducible', _, 'NotReducible') :- !.
 metta_function_loop(Body, _Current, 0, Out) :- !,
     Out = ['Error', [function, Body], 'NoReturn'].
@@ -86,7 +86,7 @@ metta_function_loop(Body, _Current, 0, Out) :- !,
 %first step erased equation multiplicity: two identical `(= (mt-dup) mt-red)`
 %rules produced two evalc answers but only one result through `metta-call`.
 %[source: MettaHyperonFull/Minimal/Interpreter.lean:419-448,
-%`evalResult` maps every queried equation result; commit=WORKTREE]
+%`evalResult` maps every queried equation result; commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87]
 metta_function_loop(Body, Current, Fuel, Out) :-
     petta_function_eval(Current, Next, Status),
     (   Status == 'not-reducible'
@@ -164,7 +164,7 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %[source: MettaHyperonFull/Minimal/Stdlib.lean:915;
 %tested: examples/libraries/minimal_metta.metta and
 %builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name;
-%commit=WORKTREE].
+%commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87].
 'superpose-bind'(Rows, _) :- var(Rows), !,
                             refuse_unbound_input('superpose-bind', 1).
 'superpose-bind'(Rows, Out) :-

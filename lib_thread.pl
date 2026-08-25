@@ -23,7 +23,7 @@
 %   - par-race releases every worker from one start barrier and ignores Empty
 %     answers, so source order cannot buy a branch thread-creation time and a
 %     pruned branch cannot win [tested: lib_thread:race_survives_a_failing_branch;
-%     commit=WORKTREE]
+%     commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87]
 %   - a future holds its expression's whole ANSWER SET, because it is a space
 %     the evaluating thread adds every answer to; awaiting twice answers the
 %     same set without blocking a second time [tested: lib_thread:a_future_holds_the_whole_answer_set]
