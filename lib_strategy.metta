@@ -10,7 +10,7 @@
 ; Guarantees: id, fail, seq, choice, try, repeat, all, one, topdown, bottomup,
 ;   innermost, stratego-all, and stratego-one are reified atom families. Applying
 ;   one through strategy-apply lowers to strategy-eval; it never installs a host
-;   callback [tested: sh test.sh examples/libraries/strategy.metta; commit=WORKTREE]
+;   callback [tested: sh test.sh examples/libraries/strategy.metta; commit=0d37dd6b24fe916e44cdbfb4efc6a1d5ffaf74aa]
 ; Fails when: a strategy used under repeat keeps succeeding forever, including an
 ;   identity success. Stratego's repeat has the same progress obligation.
 ; Decides: choice is left-biased over result bags. stratego-one follows LeaTTa by
