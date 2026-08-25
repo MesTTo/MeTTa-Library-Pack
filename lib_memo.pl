@@ -1378,9 +1378,10 @@ memo_refuse_uncacheable_arity(Fun, Module, Arity, Context) :-
 
 :- multifile prolog:error_message//1.
 prolog:error_message(permission_error(memoize, impure_function, Name)) -->
-    [ '~w calls something nothing declares pure, so a cached answer would \c
-       hide whatever it does. Declare that operation with \c
-       seam:pure_operation/1 if it only inspects its arguments'-[Name] ].
+    [ '~w calls an operation that is not classified pureStructural, so a \c
+       cached answer would hide its effect. Declare that operation with \c
+       (effect <operation> pureStructural) only when it inspects its \c
+       arguments without observing mutable state'-[Name] ].
 prolog:error_message(permission_error(memoize, space_reading_function, Name)) -->
     [ '~w reads a space, and memoization invalidates on an equation change \c
        and on nothing else, so the cache would outlive the atoms it was \c
