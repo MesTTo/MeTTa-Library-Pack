@@ -88,6 +88,10 @@ metta_tabling_target(Call0, Module, Name, CompiledArity) :-
 %wins, and none defining it is a loud refusal: declare after defining,
 %because tabling a name that does not exist yet tables nothing.
 metta_tabling_module(Name, CompiledArity, Module) :-
+    %A definition that has arrived but not been translated has no predicate to
+    %find yet, and asking current_predicate/1 is not a call, so the engine's
+    %undefined-predicate net does not fire for it.
+    metta_ensure_compiled(Name),
     findall(Candidate, metta_tabling_candidate(Candidate), Candidates),
     ( member(Module, Candidates),
       current_predicate(Module:Name/CompiledArity)

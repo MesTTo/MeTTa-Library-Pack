@@ -254,6 +254,12 @@ seam:cache_policy_changed(Fun) :-
 
 :- multifile seam:automatic_cache_explanation/3.
 seam:automatic_cache_explanation(Fun, Choice, Reason) :-
+    %An explanation is an inspection: a deferred definition has no memo rules
+    %and no equations to read yet, and nothing here CALLS Fun, so the
+    %undefined-procedure net cannot force it. Without the force the explain
+    %report simply carried no cache row for a function that was defined and
+    %never called [measured 2026-08-24: tests/test_automatic_tabling.py].
+    metta_ensure_compiled(Fun),
     memo_scope_module(Fun, Module),
     (   memo_manual_enabled(Fun, Module)
     ->  Choice = manual,
@@ -707,7 +713,13 @@ cache_clear :-
     memo_scope_module(Fun, Module),
     cache_invalidate(Fun, Module).
 
+%The force ahead of every read, because the automatic decision is DERIVED
+%from the compiled call graph: an equation that arrived and was not needed
+%yet has no graph, so asking is-memoized before the first call answered
+%False for a function the reconciliation memoizes the moment it compiles.
+%Nothing here calls Fun, so the undefined-procedure net never fires.
 'is-memoized'(Fun, true) :-
+    metta_ensure_compiled(Fun),
     memo_scope_module(Fun, Module),
     ( memo_enabled(Fun, Module)
     ; memo_enabled(Fun, Module, _)
@@ -716,6 +728,7 @@ cache_clear :-
 'is-memoized'(_, false).
 
 'is-memoized'(Fun, CallArity, true) :-
+    metta_ensure_compiled(Fun),
     memo_scope_module(Fun, Module),
     ( memo_enabled(Fun, Module)
     ; memo_enabled(Fun, Module, CallArity)
@@ -1300,6 +1313,12 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
     -> true
     ; throw(error(domain_error(function_symbol, Fun), Context))
     ),
+    %Every declaration door resolves its target here, and each of them reads
+    %the COMPILED state: the purity walk that refuses an impure body walks
+    %compiled clauses, so a deferred definition read as pure and (memoize f)
+    %accepted a function it must refuse
+    %[measured 2026-08-24: tests/test_contract.py, an unchecked declaration].
+    metta_ensure_compiled(Fun),
     %A library may declare that its function must not be cached, with
     %(volatility name volatile) in its export block. Caching a function whose
     %answers are not reproducible skips its effect on the second call, and
