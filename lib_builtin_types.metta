@@ -352,7 +352,7 @@
 (: println! (-> %Undefined% Bool))
 (: readln! (-> String))
 (: read-form! (-> Atom))
-(: sread-command (-> String Atom))
+(: parse-command (-> String Atom))
 
 ;; --- Checked on import: time, files, process ---
 (: current-time (-> Number))
