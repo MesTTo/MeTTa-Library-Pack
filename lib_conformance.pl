@@ -15,8 +15,17 @@
 %   - enumeration is the oracle. A provider that does not enumerate cannot be
 %     checked this way and says so, which is the same limit the Python kit has
 % Guarantees:
-%   - a provider that under-approximates its match is refused, naming the atom
-%     [tested: conformance_catches_an_under_approximating_matcher]
+%   - a provider that under-approximates its match is refused, naming the atom,
+%     over the whole pattern family: itself, each position opened to a fresh
+%     variable, and repeated-variable folds
+%     [tested: conformance_catches_an_under_approximating_matcher,
+%     conformance_catches_a_ground_only_matcher]
+%   - a repeated or peek source whose second enumeration disagrees is refused,
+%     and a linear source is never asked twice
+%     [tested: conformance_catches_a_source_that_drains]
+%   - a writable provider round-trips a canary through its own add, enumerate
+%     and remove, and is left as found
+%     [tested: conformance_round_trips_a_canary]
 %   - a capability declared with no hook clause behind it is refused, which is
 %     a registration-time mistake that otherwise surfaces inside a callback
 %     [tested: conformance_catches_a_capability_with_no_hook]
@@ -38,16 +47,24 @@
 
 %The whole kit. Answers the checks it ran, one STRING per check, so a caller
 %sees what was covered rather than a bare true, and a MeTTa caller gets the
-%type a message has.
+%type a message has. The source discipline is READ, not supplied: the
+%engine already holds each context's declared class through petta_source/2
+%((source Ctx Kind), repeated when undeclared), so the checker asks the
+%declaration the enforcement reads rather than trusting a caller's claim.
 metta_check_space_provider(Space, Checks) :-
     must_be(atom, Space),
     refuse_unforeign_space(Space),
     conformance_capabilities(Space, CapabilityChecks),
     conformance_atoms(Space, Atoms),
     conformance_match(Space, Atoms, MatchCheck),
+    conformance_source(Space, Atoms, SourceCheck),
+    conformance_round_trip(Space, RoundTripCheck),
     conformance_pushdown(Space, Atoms, PushdownCheck),
     conformance_plan(Space, Atoms, PlanCheck),
-    append(CapabilityChecks, [MatchCheck, PushdownCheck, PlanCheck], Checks).
+    append(CapabilityChecks,
+           [MatchCheck, SourceCheck, RoundTripCheck, PushdownCheck,
+            PlanCheck],
+           Checks).
 
 refuse_unforeign_space(Space) :-
     (   seam:foreign_space(Space)
@@ -109,14 +126,122 @@ conformance_match(Space, [], Check) :- !,
       ;  Check = "match: the space does not enumerate, so there is no oracle" ).
 conformance_match(Space, Atoms, Check) :-
     forall(member(Atom, Atoms), conformance_answers_itself(Space, Atom)),
+    forall(( member(Atom, Atoms),
+             conformance_family_pattern(Atom, Pattern) ),
+           conformance_family_covered(Space, Atoms, Pattern)),
     length(Atoms, Count),
-    format(string(Check), 'match: over-approximation holds over ~w atoms',
+    format(string(Check),
+           'match: over-approximation holds over ~w atoms and their pattern families',
            [Count]).
 
 conformance_answers_itself(Space, Atom) :-
     (   \+ \+ match_foreign(Space, Atom, answered, answered)
     ->  true
     ;   throw(error(petta_conformance_under_approximates(Space, Atom), none))
+    ).
+
+%The pattern FAMILY, the Python kit's own construction asked through the
+%seam: every stored atom vouches for itself, for each argument position
+%opened to a fresh variable, and for the repeated-variable fold wherever
+%two ground arguments coincide. A provider that only handles ground
+%patterns, or that filters a repeated variable's occurrences
+%independently, fails here naming the pattern instead of answering
+%wrongly in production.
+conformance_family_pattern([Head|Args], [Head|Opened]) :-
+    Args \== [],
+    nth1(Position, Args, _),
+    conformance_open_argument(Args, Position, Opened).
+conformance_family_pattern([Head|Args], [Head|Folded]) :-
+    nth1(I, Args, A), nth1(J, Args, B),
+    I < J, A == B, ground(A),
+    conformance_fold_arguments(Args, I, J, Folded).
+
+conformance_open_argument(Args, Position, Opened) :-
+    length(Args, N), length(Opened, N),
+    forall(( nth1(K, Args, Arg), K \== Position ),
+           nth1(K, Opened, Arg)).
+
+conformance_fold_arguments(Args, I, J, Folded) :-
+    length(Args, N), length(Folded, N),
+    nth1(I, Folded, Shared), nth1(J, Folded, Shared),
+    forall(( nth1(K, Args, Arg), K \== I, K \== J ),
+           nth1(K, Folded, Arg)).
+
+%Every stored atom unifying the pattern must be COVERED by some yielded
+%candidate: a candidate covers a stored atom when the atom unifies with
+%it, which licenses over-approximation (a more general candidate covers)
+%and forbids omission. Multiset discipline: each stored occurrence
+%consumes its own candidate, because multiplicity is observable and a
+%provider deduplicating two equal stored atoms would answer one row
+%where the space holds two.
+conformance_family_covered(Space, Atoms, Pattern) :-
+    findall(Stored, ( member(Stored, Atoms), \+ \+ Stored = Pattern ),
+            Expected),
+    %Asked through the engine's router rather than the raw hook, because a
+    %provider that does not declare match is served by the enumeration
+    %fallback, and holding it to a hook it never claimed would refuse the
+    %seam's own routing: the shipped C example provider declares only
+    %enumerate and the four writes, and the raw read refused it here.
+    findall(Candidate,
+            ( copy_term(Pattern, Candidate),
+              match_foreign(Space, Candidate, answered, answered) ),
+            Candidates),
+    (   conformance_covers(Candidates, Expected)
+    ->  true
+    ;   throw(error(petta_conformance_family_missed(Space, Pattern,
+                                                    Expected, Candidates),
+                    none))
+    ).
+
+conformance_covers(_, []).
+conformance_covers(Candidates, [Stored|Rest]) :-
+    select(Candidate, Candidates, Remaining),
+    \+ \+ Stored = Candidate,
+    !,
+    conformance_covers(Remaining, Rest).
+
+%The source discipline, read from the declaration the engine enforces:
+%a repeated or peek context re-enumerates identically, so the second
+%enumeration is compared with the first as a multiset; a linear context
+%is one-shot, so asking twice would itself violate the discipline and
+%the check says so instead.
+conformance_source(Space, _, Check) :-
+    \+ foreign_provides(Space, enumerate), !,
+    Check = "source: the space does not enumerate, so there is nothing to re-enumerate".
+conformance_source(Space, _, Check) :-
+    petta_source(Space, linear), !,
+    Check = "source: linear, so the second enumeration is not asked".
+conformance_source(Space, First, Check) :-
+    petta_source(Space, Kind),
+    findall(Atom, seam:foreign_atoms(Space, Atom), Second),
+    msort(First, SortedFirst),
+    msort(Second, SortedSecond),
+    (   SortedFirst =@= SortedSecond
+    ->  format(string(Check), 'source: ~w, two enumerations agree', [Kind])
+    ;   throw(error(petta_conformance_source_disagrees(Space, Kind), none))
+    ).
+
+%The lens literature's GetPut law through the seam: add then enumerate
+%answers the stored atom back, and the canary leaves again through the
+%provider's own remove, so the space is left as found. Only asked of a
+%provider declaring BOTH writes; a read-only provider has no door to
+%check and says so.
+conformance_round_trip(Space, Check) :-
+    (   foreign_provides(Space, add),
+        foreign_provides(Space, remove),
+        foreign_provides(Space, enumerate)
+    ->  gensym('petta-conformance-canary-', Marker),
+        Canary = ['petta-conformance-canary', Marker],
+        setup_call_cleanup(
+            seam:foreign_add(Space, Canary),
+            (   \+ \+ ( seam:foreign_atoms(Space, Held),
+                        Held =@= Canary )
+            ->  Check = "round trip: add then enumerate answers the atom, and remove takes it back"
+            ;   throw(error(petta_conformance_round_trip(Space, Canary),
+                            none))
+            ),
+            seam:foreign_remove(Space, Canary, _))
+    ;   Check = "round trip: not asked, the provider does not declare add, remove and enumerate together"
     ).
 
 %The one claim in the seam that can cost answers. exact licenses truncating at
@@ -217,6 +342,24 @@ prolog:error_message(petta_conformance_under_approximates(Space, Atom)) -->
        over-approximate and may never under-approximate: yielding every atom \c
        is always correct, yielding fewer than match is never allowed to be.'
       -[Space, Atom] ].
+prolog:error_message(petta_conformance_family_missed(Space, Pattern,
+                                                     Expected, Candidates)) -->
+    [ '~w misses part of the pattern family for ~w: the stored atoms \c
+       unifying it are ~w and the yielded candidates ~w do not cover them. \c
+       Every stored atom vouches for itself, for each position opened to a \c
+       variable, and for repeated-variable folds; a provider handling only \c
+       ground patterns answers wrongly in production.'
+      -[Space, Pattern, Expected, Candidates] ].
+prolog:error_message(petta_conformance_source_disagrees(Space, Kind)) -->
+    [ '~w declares a ~w source and its second enumeration disagrees with \c
+       the first: a ~w source re-enumerates identically, so this provider \c
+       is linear and should say so with (source ~w linear), where a second \c
+       consumption is a loud error instead of a silently different answer.'
+      -[Space, Kind, Kind, Space] ].
+prolog:error_message(petta_conformance_round_trip(Space, Canary)) -->
+    [ '~w stored ~w through its own add and its enumeration does not \c
+       answer it back: add then enumerate is identity on the stored atom, \c
+       because stored data keeps its literal atoms.'-[Space, Canary] ].
 prolog:error_message(petta_conformance_false_exact(Space, Atom, Candidate)) -->
     [ '~w claims exact filtering for ~w and yielded ~w, which does not match \c
        it. exact means every candidate you yield for this pattern unifies \c
