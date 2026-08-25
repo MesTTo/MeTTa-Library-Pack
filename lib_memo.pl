@@ -38,6 +38,10 @@
 %     test_bounded_left_recursive_search_is_not_cached_automatically,
 %     test_explicit_tabling_takes_precedence_over_automatic_memoization;
 %     commit=9e7d5dc2cad810940e5386d52636ac6946df279d].
+%   - get-memoize-stats/2 reports one function's live entry and answer counts,
+%     preserving duplicate answer occurrences in the latter [tested:
+%     lib_memo_stats:a_function_report_counts_answer_occurrences;
+%     commit=WORKTREE].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
@@ -606,6 +610,15 @@ memo_stats_snapshot(Stats) :-
 'get-memoize-stats'(Stats) :-
     memo_stats_snapshot(Stats).
 
+'get-memoize-stats'(Fun, [[entries, EntryCount], [answers, AnswerCount]]) :-
+    memo_scope_module(Fun, Module),
+    findall(Results,
+            metta_memo_entry(Fun, Module, _, _, _, Results),
+            Bags),
+    length(Bags, EntryCount),
+    maplist(length, Bags, AnswerCounts),
+    sum_list(AnswerCounts, AnswerCount).
+
 'clear-memoize-stats'(true) :-
     retractall(metta_memo_stat(_, _)).
 
@@ -625,6 +638,14 @@ enable_memoization(Fun, Module, CallArity) :-
     memo_install_function_removed_handler(Fun),
     PredArity is CallArity + 1,
     record_memo_source(Fun, Module, PredArity).
+
+enable_exact_memoization(Fun, Module) :-
+    ( memo_enabled(Fun, Module, exact) -> true
+    ; assertz(memo_enabled(Fun, Module, exact)) ),
+    memo_install_dispatch_handler(Fun),
+    memo_install_function_removed_handler(Fun),
+    memo_state_arities(Fun, Module, Arities),
+    forall(member(Arity, Arities), record_memo_source(Fun, Module, Arity)).
 
 disable_memoization(Fun) :-
     retractall(memo_enabled(Fun, _)),
@@ -732,6 +753,7 @@ cache_clear :-
     memo_scope_module(Fun, Module),
     ( memo_enabled(Fun, Module)
     ; memo_enabled(Fun, Module, CallArity)
+    ; memo_enabled(Fun, Module, exact)
     ; memo_automatic_enabled(Fun, Module)
     ), !.
 'is-memoized'(_, _, false).
@@ -1017,14 +1039,21 @@ store_if_current_generation(Fun, Module, Arity, ExpectedGen, AVs, CachedResults)
 memoization_enabled_for_call(Fun, Module, _) :-
     memo_enabled(Fun, Module), !.
 memoization_enabled_for_call(Fun, Module, CallArity) :-
-    memo_enabled(Fun, Module, CallArity), !.
+    memo_enabled(Fun, Module, Mode),
+    ( Mode == CallArity ; Mode == exact ),
+    !.
 memoization_enabled_for_call(Fun, Module, _) :-
     memo_automatic_enabled(Fun, Module), !.
 
 memo_manual_enabled_for_call(Fun, Module, _) :-
     memo_enabled(Fun, Module), !.
 memo_manual_enabled_for_call(Fun, Module, CallArity) :-
-    memo_enabled(Fun, Module, CallArity), !.
+    memo_enabled(Fun, Module, Mode),
+    ( Mode == CallArity ; Mode == exact ),
+    !.
+
+memo_exact_for_predicate(Fun, Module, _) :-
+    memo_enabled(Fun, Module, exact).
 
 memo_automatic_only_for_call(Fun, Module, CallArity) :-
     once(memo_automatic_enabled(Fun, Module)),
@@ -1076,6 +1105,11 @@ args_worth_caching(AVs) :-
 %program calls merely because the compiler selected their function.
 canonicalize_args_key(Fun, Module, Arity, AVs, KeyAVs) :-
     memo_automatic_only_for_predicate(Fun, Module, Arity),
+    !,
+    copy_term(AVs, KeyAVs),
+    numbervars(KeyAVs, 0, _).
+canonicalize_args_key(Fun, Module, Arity, AVs, KeyAVs) :-
+    memo_exact_for_predicate(Fun, Module, Arity),
     !,
     copy_term(AVs, KeyAVs),
     numbervars(KeyAVs, 0, _).
@@ -1167,26 +1201,38 @@ memo_probe_limit(Fun, Module, Arity, Limit) :-
     ;  Limit = Configured ).
 
 memo_probe_results(Fun, Module, Arity, AVs, ProbeResults) :-
-    memo_probe_limit(Fun, Module, Arity, Limit),
     append(AVs, [Result], RawArgs),
     RawGoal =.. [Fun | RawArgs],
-    once(findnsols(Limit, answer(SolvedAVs, SolvedResult),
-        ( call(Module:RawGoal),
-          copy_term((AVs, Result), (SolvedAVs, SolvedResult))
-        ),
-        ProbeResults)).
+    (   memo_exact_for_predicate(Fun, Module, Arity)
+    ->  findall(answer(SolvedAVs, SolvedResult),
+                ( call(Module:RawGoal),
+                  copy_term((AVs, Result), (SolvedAVs, SolvedResult)) ),
+                ProbeResults)
+    ;   memo_probe_limit(Fun, Module, Arity, Limit),
+        once(findnsols(Limit, answer(SolvedAVs, SolvedResult),
+            ( call(Module:RawGoal),
+              copy_term((AVs, Result), (SolvedAVs, SolvedResult))
+            ),
+            ProbeResults))
+    ).
 
 % Ground calls should not re-unify raw input args on replay, because
 % float quantization intentionally maps slightly different inputs to one key.
 memo_probe_ground_results(Fun, Module, Arity, AVs, ProbeResults) :-
-    memo_probe_limit(Fun, Module, Arity, Limit),
     append(AVs, [Result], RawArgs),
     RawGoal =.. [Fun | RawArgs],
-    once(findnsols(Limit, answer(SolvedResult),
-        ( call(Module:RawGoal),
-          copy_term(Result, SolvedResult)
-        ),
-        ProbeResults)).
+    (   memo_exact_for_predicate(Fun, Module, Arity)
+    ->  findall(answer(SolvedResult),
+                ( call(Module:RawGoal),
+                  copy_term(Result, SolvedResult) ),
+                ProbeResults)
+    ;   memo_probe_limit(Fun, Module, Arity, Limit),
+        once(findnsols(Limit, answer(SolvedResult),
+            ( call(Module:RawGoal),
+              copy_term(Result, SolvedResult)
+            ),
+            ProbeResults))
+    ).
 
 cache_lookup(Fun, Module, Arity, CurGen, KeyAVs, CachedResults) :-
     metta_memo_entry(Fun, Module, Arity, CurGen, KeyAVs, CachedResults).
@@ -1204,7 +1250,9 @@ cache_replay_hit_variant(Fun, Module, Arity, KeyAVs, CachedResults, AVs, Out) :-
     replay_variant_answer(AVs, Out, Answer).
 
 cache_store(Fun, Module, Arity, CurGen, KeyAVs, ProbeResults) :-
-    truncate_answers(ProbeResults, LimitedResults),
+    ( memo_exact_for_predicate(Fun, Module, Arity)
+    -> LimitedResults = ProbeResults
+    ; truncate_answers(ProbeResults, LimitedResults) ),
     ( LimitedResults == ProbeResults -> true ; memo_stat_inc(answer_limit_truncated) ),
     store_if_current_generation(Fun, Module, Arity, CurGen, KeyAVs, LimitedResults),
     record_miss(Fun, Module, Arity, KeyAVs).
@@ -1223,6 +1271,9 @@ memo_automatic_probe_overflow(Fun, Module, Arity, ProbeResults) :-
 
 memo_ground_final_results(Fun, Module, Arity, ProbeResults, ProbeResults) :-
     memo_automatic_only_for_predicate(Fun, Module, Arity),
+    !.
+memo_ground_final_results(Fun, Module, Arity, ProbeResults, ProbeResults) :-
+    memo_exact_for_predicate(Fun, Module, Arity),
     !.
 memo_ground_final_results(_, _, _, ProbeResults, FinalResults) :-
     apply_aggregate_mode(ProbeResults, FinalResults).
@@ -1304,6 +1355,14 @@ cache_call(Fun, CallModule, AVs, Out) :-
     ),
     memo_target(Fun, CallArity, 'memoize!/3', Space, Module, Terms),
     memo_recompile(Space, Terms, enable_memoization(Fun, Module, CallArity)).
+
+%The Python @cache contract is an exact answer bag. This is an internal bridge
+%service rather than another MeTTa declaration spelling: unlike configurable
+%manual memoize, it never quantizes keys, aggregates answers or applies
+%answer-limit, because those policies would change the decorated function.
+memoize_exact(Fun) :-
+    memo_target(Fun, any, 'memoize-exact!/2', Space, Module, Terms),
+    memo_recompile(Space, Terms, enable_exact_memoization(Fun, Module)).
 
 %The space that asks owns the equations, unless it only inherits them from
 %&self. Recompiling in the wrong space is how memoizing in one space used
