@@ -20,6 +20,10 @@
 %     lib_thread:a_blocking_peek_parks_without_removing; commit=c05f93baf8c6ecd483487efb72d7f8eb92c97809]
 %   - par-map answers one result per element, in the input list's order,
 %     because concurrent_maplist/3 preserves position [tested: lib_thread:par_map_answers_one_result_per_element_in_order]
+%   - par-race releases every worker from one start barrier and ignores Empty
+%     answers, so source order cannot buy a branch thread-creation time and a
+%     pruned branch cannot win [tested: lib_thread:race_survives_a_failing_branch;
+%     commit=WORKTREE]
 %   - a future holds its expression's whole ANSWER SET, because it is a space
 %     the evaluating thread adds every answer to; awaiting twice answers the
 %     same set without blocking a second time [tested: lib_thread:a_future_holds_the_whole_answer_set]
@@ -167,20 +171,35 @@ par_race(Exprs, Out) :-
     Exprs \== [],
     current_metta_module(Module),
     length(Exprs, Count),
-    message_queue_create(Queue),
     setup_call_cleanup(
-        race_start_(Module, Exprs, Queue, Threads),
-        race_collect_(Queue, Count, Out),
-        race_stop_(Threads, Queue)).
+        race_queues_create(Start, Results),
+        setup_call_cleanup(
+            race_start_(Module, Exprs, Start, Results, Threads),
+            ( race_release_(Threads, Start),
+              race_collect_(Results, Count, Out) ),
+            race_stop_(Threads)),
+        race_queues_destroy(Start, Results)).
 
-race_start_(Module, Exprs, Queue, Threads) :-
+race_queues_create(Start, Results) :-
+    message_queue_create(Start),
+    catch(message_queue_create(Results),
+          Error,
+          ( message_queue_destroy(Start), throw(Error) )).
+
+race_start_(Module, Exprs, Start, Results, Threads) :-
     findall(Thread,
             ( member(Expr, Exprs),
-              thread_create(race_body_(Module, Expr, Queue), Thread, []) ),
+              thread_create(race_body_(Module, Expr, Start, Results),
+                            Thread, []) ),
             Threads).
 
-race_body_(Module, Expr, Queue) :-
-    (   catch((   eval_metta_in_module(Module, Expr, Value)
+race_release_(Threads, Start) :-
+    forall(member(_, Threads), thread_send_message(Start, go)).
+
+race_body_(Module, Expr, Start, Results) :-
+    thread_get_message(Start, go),
+    (   catch((   eval_metta_in_module(Module, Expr, Value),
+                  Value \== 'Empty'
               ->  Message = ok(Value)
               ;   Message = lost
               ),
@@ -189,7 +208,7 @@ race_body_(Module, Expr, Queue) :-
     ->  true
     ;   Message = lost
     ),
-    thread_send_message(Queue, Message).
+    thread_send_message(Results, Message).
 
 race_collect_(Queue, Remaining, Out) :-
     Remaining > 0,
@@ -202,12 +221,15 @@ race_collect_(Queue, Remaining, Out) :-
         race_collect_(Queue, Next, Out)
     ).
 
-race_stop_(Threads, Queue) :-
+race_stop_(Threads) :-
     forall(member(Thread, Threads),
            catch(thread_signal(Thread, abort), _, true)),
     forall(member(Thread, Threads),
-           catch(thread_join(Thread, _), _, true)),
-    catch(message_queue_destroy(Queue), _, true).
+           catch(thread_join(Thread, _), _, true)).
+
+race_queues_destroy(Start, Results) :-
+    catch(message_queue_destroy(Start), _, true),
+    catch(message_queue_destroy(Results), _, true).
 
 % ------------------------------------------------------------------ futures
 

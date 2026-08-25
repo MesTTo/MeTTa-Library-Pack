@@ -72,14 +72,11 @@ def install(m, *, load_metta: bool = True) -> tuple[str, ...]:
     if load_metta:
         m.load(os.path.join(here, "minimal_metta_lib.metta"))
     else:
+        # The engine prelude owns function and the two binding carriers.  Only
+        # unify-mod remains library-local, so a registration-only install must
+        # not try to replace the three resident builtins.
         m.register_prolog(
-            path=os.path.join(here, "minimal_metta_lib.pl"), names=NAMES
+            path=os.path.join(here, "minimal_metta_lib.pl"), names=("unify-mod",)
         )
-        # Atom on a parameter is what makes an argument arrive unevaluated,
-        # which every instruction here needs. superpose-bind is deliberately
-        # left undeclared: its argument is a collapse-bind result and must
-        # arrive evaluated.
-        m.run("(: function (-> Atom %Undefined%))")
         m.run("(: unify-mod (-> Atom Atom Atom Atom %Undefined%))")
-        m.run("(: collapse-bind (-> Atom %Undefined%))")
     return NAMES

@@ -10,9 +10,10 @@
 ; that loop. `minimal_metta_lib.py` is now a thin loader kept for callers that
 ; already import it.
 ;
-; Assumes: `function`, `collapse-bind`, `superpose-bind` and `unify-mod` are
-;   registered from minimal_metta_lib.pl, and `return` deliberately is NOT, so
-;   that (return x) survives evaluation as data.
+; Assumes: the engine prelude registers `function`, `collapse-bind` and
+;   `superpose-bind`; this file registers `unify-mod` from
+;   minimal_metta_lib.pl. `return` deliberately is NOT registered, so that
+;   (return x) survives evaluation as data.
 ; Guarantees: the specification's own example programs run unchanged, except
 ;   for the renames the Open Obligations below record.
 ; Decides: the `mm-` prefix, and it is a collision decision rather than a
@@ -34,19 +35,17 @@
 
 !(import! &self (library lib_import))
 !(import_prolog_functions_from_file (library minimal_metta_lib.pl)
-  (function collapse-bind superpose-bind unify-mod))
+  (unify-mod))
 
 ; Atom on a parameter means it reaches the operation UNEVALUATED, which is what
 ; every instruction here needs: `function` walks its body, and unify-mod
 ; matches a pattern and chooses a branch without either being reduced first.
 ;
-; superpose-bind is the exception and has no declaration. Its argument is the
-; result of a collapse-bind call and must arrive evaluated; declaring it Atom
-; hands over the literal expression (collapse-bind ...) and the loop yields its
-; head symbols.
-(: function (-> Atom %Undefined%))
+; superpose-bind is the exception and has an Expression parameter in the
+; prelude. Its argument is the result of a collapse-bind call and must arrive
+; evaluated; declaring it Atom hands over the literal expression
+; (collapse-bind ...) and the loop yields its head symbols.
 (: unify-mod (-> Atom Atom Atom Atom %Undefined%))
-(: collapse-bind (-> Atom %Undefined%))
 
 ; ---------------------------------------------------------------------------
 ; Partial functions.  The specification: "Each instruction in a minimal

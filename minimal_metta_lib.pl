@@ -42,8 +42,17 @@ metta_function_limit(1000).
 
 %The specification: "It evaluates the <atom> until it becomes (return <atom>).
 %Then (function (return <atom>)) expression returns the <atom>." A branch that
-%ends without a return is (Error <atom> NoReturn), also the specification's,
-%and it carries the ORIGINAL body rather than whatever the walk reached.
+%ends without a return is (Error (function <body>) NoReturn), also the
+%specification's, and it carries the ORIGINAL frame rather than wherever the
+%walk stopped.
+'function'(Body, Out) :-
+    \+ is_list(Body),
+    !,
+    swrite([function, Body], Written),
+    format(string(Message),
+           "expected: (function (: <body> Expression)), found: ~w",
+           [Written]),
+    Out = ['Error', [function, Body], Message].
 'function'(Body, Out) :-
     metta_function_limit(Limit),
     metta_function_loop(Body, Body, Limit, Out).
@@ -51,8 +60,16 @@ metta_function_limit(1000).
 metta_function_loop(_Body, Current, _Fuel, Out) :-
     metta_return_value(Current, Value), !,
     Out = Value.
+%Only a marker PRODUCED by a completed equation is the protocol result.  The
+%initial body is required to be an expression above, so reaching this atomic
+%state proves an evaluation step returned it.  By contrast, an irreducible
+%call makes petta_function_eval/3 report `not-reducible` below and earns
+%NoReturn [source: MettaHyperonFull/Minimal/Interpreter.lean:3673-3674 and
+%7533-7564; tested: conformance2:a_function_distinguishes_a_marker_result_from_an_irreducible_body;
+%commit=WORKTREE].
+metta_function_loop(_, 'NotReducible', _, 'NotReducible') :- !.
 metta_function_loop(Body, _Current, 0, Out) :- !,
-    Out = ['Error', Body, 'NoReturn'].
+    Out = ['Error', [function, Body], 'NoReturn'].
 %A BODY THAT ANSWERED NOTHING IS NOT A BODY THAT FAILED TO RETURN. The two
 %were one case while eval/2 could not answer nothing: now that a nested
 %evaluation prunes an `Empty` branch, a body whose branch died has no result,
@@ -64,12 +81,20 @@ metta_function_loop(Body, _Current, 0, Out) :- !,
 %because a child the strategy declines removes the branch, and it was the whole
 %`(Error (chain ...) NoReturn)` term here [measured 2026-08-24 against LeaTTa
 %9ea9f9d, running the reference's own strategy basis].
+%
+%Every evaluation answer is a separate function branch.  Committing to the
+%first step erased equation multiplicity: two identical `(= (mt-dup) mt-red)`
+%rules produced two evalc answers but only one result through `metta-call`.
+%[source: MettaHyperonFull/Minimal/Interpreter.lean:419-448,
+%`evalResult` maps every queried equation result; commit=WORKTREE]
 metta_function_loop(Body, Current, Fuel, Out) :-
-    once(eval(Current, Next)),
-    (   Next \== Current
+    petta_function_eval(Current, Next, Status),
+    (   Status == 'not-reducible'
+    ->  Out = ['Error', [function, Body], 'NoReturn']
+    ;   Next \== Current
     ->  Next1 is Fuel - 1,
         metta_function_loop(Body, Next, Next1, Out)
-    ;   Out = ['Error', Body, 'NoReturn']
+    ;   Out = ['Error', [function, Body], 'NoReturn']
     ).
 
 %(return X) with exactly one argument. The arity gate matters: (return a b) is
@@ -127,15 +152,21 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 
 %Put a collapse-bind result back into the plan, one answer per row, RESTORING
 %that row's bindings into the caller's context as it goes. Its argument is the
-%result of a collapse-bind call and must arrive EVALUATED, which is why it is
-%the one operation here with no Atom declaration: annotating it hands over the
-%literal expression (collapse-bind ...) and the loop yields its head symbols.
+%result of a collapse-bind call and must arrive EVALUATED, which is why its
+%parameter is declared Expression rather than Atom: an Atom declaration hands
+%over the literal expression (collapse-bind ...) and the loop yields its head
+%symbols.
 %
 %Restoring is one unification per entry, undone by backtracking into member/2,
 %which is what lets the next row bind the same variable to its own value. The
 %row's own value is answered whether or not it carries bindings, so a list
 %that did not come from collapse-bind still superposes
-%[tested: examples/libraries/minimal_metta.metta].
+%[source: MettaHyperonFull/Minimal/Stdlib.lean:915;
+%tested: examples/libraries/minimal_metta.metta and
+%builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name;
+%commit=WORKTREE].
+'superpose-bind'(Rows, _) :- var(Rows), !,
+                            refuse_unbound_input('superpose-bind', 1).
 'superpose-bind'(Rows, Out) :-
     is_list(Rows),
     member(Row, Rows),

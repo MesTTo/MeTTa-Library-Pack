@@ -85,6 +85,23 @@
 (: take-atom (-> %Undefined% Atom %Undefined%))
 (: take-atom (-> %Undefined% Atom Number %Undefined%))
 
+;The public equations delegate to imported Prolog operations.  Their own
+;declarations must carry the same held positions because that delegation is a
+;second application boundary: without these rows `(par-race $exprs)` receives
+;$exprs as written and then `par_race` evaluates the whole branch list before
+;there is anything left to race.  The same rule preserves deferred futures,
+;timer bodies, lock bodies, and Linda patterns.
+(: par_race (-> Atom %Undefined%))
+(: thread_spawn (-> Atom %Undefined%))
+(: pool_submit (-> %Undefined% Atom %Undefined%))
+(: with_lock (-> %Undefined% Atom %Undefined%))
+(: timer_after (-> Number Atom %Undefined%))
+(: timer_every (-> Number Atom %Undefined%))
+(: space_await (-> %Undefined% Atom %Undefined%))
+(: space_await (-> %Undefined% Atom Number %Undefined%))
+(: space_take (-> %Undefined% Atom %Undefined%))
+(: space_take (-> %Undefined% Atom Number %Undefined%))
+
 (= (par-map $f $list) (par_map $f $list))
 (= (par-filter $f $list) (par_filter $f $list))
 (= (par-forall $f $list) (par_forall $f $list))
