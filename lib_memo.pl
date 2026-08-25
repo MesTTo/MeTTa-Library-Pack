@@ -41,11 +41,12 @@
 %   - get-memoize-stats/2 reports one function's live entry and answer counts,
 %     preserving duplicate answer occurrences in the latter [tested:
 %     lib_memo_stats:a_function_report_counts_answer_occurrences;
-%     commit=WORKTREE].
+%     commit=04b794b718563ebb114800abebfc6f1200d7b835].
 %   - Exact memoization stores each distinct solved answer in SWI's C answer
 %     trie with a summed occurrence count, then expands that count on replay;
 %     equal answers therefore remain equal bag occurrences [tested:
-%     test_exact_cache_matches_uncached_answer_bags; commit=WORKTREE].
+%     test_exact_cache_matches_uncached_answer_bags;
+%     commit=04b794b718563ebb114800abebfc6f1200d7b835].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
