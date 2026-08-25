@@ -1,5 +1,5 @@
-% Purpose: memoize MeTTa function calls with bounded LRU or WTinyLFU
-%   eviction and dependency-based invalidation.
+% Purpose: memoize MeTTa function calls with C-trie exact bags or bounded
+%   LRU/WTinyLFU storage and dependency-based invalidation.
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -42,6 +42,10 @@
 %     preserving duplicate answer occurrences in the latter [tested:
 %     lib_memo_stats:a_function_report_counts_answer_occurrences;
 %     commit=WORKTREE].
+%   - Exact memoization stores each distinct solved answer in SWI's C answer
+%     trie with a summed occurrence count, then expands that count on replay;
+%     equal answers therefore remain equal bag occurrences [tested:
+%     test_exact_cache_matches_uncached_answer_bags; commit=WORKTREE].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
@@ -53,6 +57,10 @@
 %   canonicalized key, deep-indexing into it at 19.8x over 1,200 entries
 %   [measured 2026-08-15 with library(prolog_jiti), jiti_list/1]
 %   [source: SWI-Prolog 10.1 Reference Manual 2.17, index selection].
+% Owns resources: exact_memo_specialization/5 owns one generated replay
+%   predicate, mode-directed table predicate and its answer tries per cached
+%   function arity. Invalidation abolishes its answers; function removal
+%   untables and abolishes both generated predicates.
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -61,6 +69,7 @@
 :- use_module(library(lists)).
 :- use_module(library(ordsets)).
 :- use_module(library(solution_sequences)).
+:- use_module(library(tables)).
 :- use_module(library(terms)). %term_size/2, for eviction cost accounting
 
 % State Declarations
@@ -80,8 +89,11 @@
 :- dynamic memo_automatic_dirty/1.
 :- dynamic arity/2.
 
-% Cached results: metta_memo_entry(Fun, Module, Arity, Gen, AVs, Results)
+% Cached results: metta_memo_entry(Fun, Module, Arity, Gen, AVs, Results).
+% Exact decorator tables: exact_memo_specialization(ReplayName, TableName,
+% Fun, Module, Arity).
 :- dynamic metta_memo_entry/6.
+:- dynamic exact_memo_specialization/5.
 
 % Generation counter per (Fun, Module, Arity) for invalidation
 :- dynamic metta_memo_generation/4.
@@ -184,7 +196,14 @@ memo_dispatch_call(Fun, Args, Out, Goal) :-
     PredArity is CallArity + 1,
     memo_owner_module(Fun, CallModule, PredArity, Module),
     memoization_enabled_for_call(Fun, Module, CallArity),
-    Goal = cache_call(Fun, CallModule, Args, Out).
+    ( memo_exact_for_predicate(Fun, Module, PredArity),
+      exact_memo_specialization(ReplayName, _TableName,
+                                Fun, Module, PredArity)
+    -> append(Args, [Out], ReplayArgs),
+       ReplayGoal =.. [ReplayName | ReplayArgs],
+       Goal = Module:ReplayGoal
+    ;  Goal = cache_call(Fun, CallModule, Args, Out)
+    ).
 
 %Tell the shared effect walk which source call this transparent dispatcher
 %executes. Reconciliation can then re-check a function after it has been
@@ -193,6 +212,16 @@ memo_dispatch_call(Fun, Args, Out, Goal) :-
 seam:effect_operation_name(cache_call(Fun, _, Args, _), Fun, Arity) :-
     length(Args, InputArity),
     Arity is InputArity + 1.
+seam:effect_operation_name(Module:Goal, Fun, Arity) :-
+    callable(Goal),
+    functor(Goal, ReplayName, Arity),
+    exact_memo_specialization(ReplayName, _TableName,
+                              Fun, Module, Arity).
+seam:effect_operation_name(Goal, Fun, Arity) :-
+    callable(Goal),
+    functor(Goal, ReplayName, Arity),
+    exact_memo_specialization(ReplayName, _TableName,
+                              Fun, _Module, Arity).
 
 :- multifile prolog:error_message//1.
 prolog:error_message(permission_error(memoize, volatile_function, Name)) -->
@@ -283,7 +312,9 @@ seam:automatic_cache_explanation(Fun, Choice, Reason) :-
 
 memo_function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
-    forall(member(Module, Modules), forget_memo_supports(Fun, Module)),
+    forall(member(Module, Modules),
+           ( forget_memo_supports(Fun, Module),
+             remove_exact_memo_specializations(Fun, Module) )),
     disable_memoization(Fun),
     retractall(memo_automatic_enabled(Fun, _)),
     retractall(memo_automatic_decision(Fun, _, _, _)),
@@ -326,6 +357,7 @@ memo_state_modules(Fun, Modules) :-
         ; memo_automatic_decision(Fun, M, _, _)
         ; metta_memo_entry(Fun, M, _, _, _, _)
         ; metta_memo_generation(Fun, M, _, _)
+        ; exact_memo_specialization(_, _, Fun, M, _)
         ),
         Raw),
     sort(Raw, Modules).
@@ -615,9 +647,35 @@ memo_stats_snapshot(Stats) :-
     findall(Results,
             metta_memo_entry(Fun, Module, _, _, _, Results),
             Bags),
-    length(Bags, EntryCount),
+    length(Bags, PrologEntryCount),
     maplist(length, Bags, AnswerCounts),
-    sum_list(AnswerCounts, AnswerCount).
+    sum_list(AnswerCounts, PrologAnswerCount),
+    exact_memo_table_stats(Fun, Module, TrieEntryCount, TrieAnswerCount),
+    EntryCount is PrologEntryCount + TrieEntryCount,
+    AnswerCount is PrologAnswerCount + TrieAnswerCount.
+
+exact_memo_table_stats(Fun, Module, EntryCount, AnswerCount) :-
+    findall(Trie,
+            current_exact_memo_table(Fun, Module, Trie),
+            Tries),
+    length(Tries, EntryCount),
+    findall(Multiplicity,
+            ( member(Trie, Tries),
+              get_returns(Trie, Return),
+              exact_memo_return_multiplicity(Return, Multiplicity) ),
+            Multiplicities),
+    sum_list(Multiplicities, AnswerCount).
+
+current_exact_memo_table(Fun, Module, Trie) :-
+    exact_memo_specialization(_ReplayName, TableName,
+                              Fun, Module, Arity),
+    TableArity is Arity + 1,
+    functor(TableGoal, TableName, TableArity),
+    get_calls(Module:TableGoal, Trie, _Return).
+
+exact_memo_return_multiplicity(Return, Multiplicity) :-
+    compound_name_arguments(Return, ret, ReturnArgs),
+    last(ReturnArgs, Multiplicity).
 
 'clear-memoize-stats'(true) :-
     retractall(metta_memo_stat(_, _)).
@@ -639,15 +697,64 @@ enable_memoization(Fun, Module, CallArity) :-
     PredArity is CallArity + 1,
     record_memo_source(Fun, Module, PredArity).
 
-enable_exact_memoization(Fun, Module) :-
+enable_exact_memoization(Fun, Module, Arities) :-
     ( memo_enabled(Fun, Module, exact) -> true
     ; assertz(memo_enabled(Fun, Module, exact)) ),
     memo_install_dispatch_handler(Fun),
     memo_install_function_removed_handler(Fun),
-    memo_state_arities(Fun, Module, Arities),
-    forall(member(Arity, Arities), record_memo_source(Fun, Module, Arity)).
+    forall(member(Arity, Arities),
+           ( ensure_exact_memo_specialization(Fun, Module, Arity),
+             record_memo_source(Fun, Module, Arity) )).
+
+ensure_exact_memo_specialization(Fun, Module, Arity) :-
+    exact_memo_specialization(_, _, Fun, Module, Arity),
+    !.
+ensure_exact_memo_specialization(Fun, Module, Arity) :-
+    atomic_list_concat(['$petta_exact_replay$', Fun, '$', Arity], ReplayName),
+    atomic_list_concat(['$petta_exact_table$', Fun, '$', Arity], TableName),
+    length(RawArgs, Arity),
+    ReplayHead =.. [ReplayName | RawArgs],
+    append(RawArgs, [Multiplicity], TableArgs),
+    TableHead =.. [TableName | TableArgs],
+    append(RawArgs, [1], ProducerArgs),
+    ProducerHead =.. [TableName | ProducerArgs],
+    RawGoal =.. [Fun | RawArgs],
+    SameContextBody =
+        ( lib_memo:metta_memo_call_ctx(Fun, Module, Arity),
+          !,
+          TableHead,
+          between(1, Multiplicity, _Occurrence) ),
+    RootBody = lib_memo:exact_specialized_root(
+                   Fun, Module, Arity, Module:TableHead, Multiplicity),
+    assertz(Module:(ProducerHead :- RawGoal)),
+    declare_exact_memo_table(Module, TableName, Arity),
+    assertz(Module:(ReplayHead :- SameContextBody)),
+    assertz(Module:(ReplayHead :- RootBody)),
+    assertz(exact_memo_specialization(ReplayName, TableName,
+                                      Fun, Module, Arity)).
+
+% A normal argument is answer identity; sum is its coefficient. Every raw
+% proof contributes one in ProducerHead above, so equal solved answers occupy
+% one C-trie answer whose coefficient is their exact multiplicity. SWI uses
+% this mode to count tabled proof alternatives in test_wfs.pl.
+% Source: SWI-Prolog/swipl-devel f49d28558b5f1ade8348f254b5583117e773b2bb,
+% boot/tabling.pl and tests/tabling/test_wfs.pl.
+exact_memo_mode_head(TableName, Arity, ModeHead) :-
+    TableArity is Arity + 1,
+    functor(ModeHead, TableName, TableArity),
+    arg(TableArity, ModeHead, sum).
+
+declare_exact_memo_table(Module, TableName, Arity) :-
+    exact_memo_mode_head(TableName, Arity, ModeHead),
+    table(Module:ModeHead).
 
 disable_memoization(Fun) :-
+    findall(Module,
+            exact_memo_specialization(_, _, Fun, Module, _),
+            ExactModules0),
+    sort(ExactModules0, ExactModules),
+    forall(member(Module, ExactModules),
+           remove_exact_memo_specializations(Fun, Module)),
     retractall(memo_enabled(Fun, _)),
     retractall(memo_enabled(Fun, _, _)).
 
@@ -669,6 +776,7 @@ memo_state_arities(Fun, Module, Arities) :-
         ; metta_memo_head(Fun, Module, Arity, _)
         ; metta_memo_tail(Fun, Module, Arity, _)
         ; metta_memo_q(Fun, Module, Arity, _, _)
+        ; exact_memo_specialization(_, _, Fun, Module, Arity)
         ; current_predicate(Module:Fun/Arity)
         ),
         RawArities),
@@ -680,6 +788,7 @@ record_memo_source(Fun, Module, Arity) :-
 cache_invalidate_node(Fun, Module, Arity) :-
     with_cache_fun_mutex(Fun, Module, Arity,
         ( bump_metta_memo_generation(Fun, Module, Arity),
+          abolish_exact_memo_tables(Fun, Module, Arity),
           invalidate_entries_for_fun_arity(Fun, Module, Arity, FreedBytes),
           update_total_bytes_subtract(FreedBytes),
           retractall(metta_memo_count(Fun, Module, Arity, _)),
@@ -704,12 +813,46 @@ forget_memo_supports(Fun, Module) :-
     forall(member(Arity, Arities),
            support_forget(memo(Module, Fun, Arity))).
 
+% abolish_table_subgoals/1 does not translate a mode-directed wrapper to its
+% generated table head. get_calls/3 in SWI's library(tables) performs this
+% same two-hook translation before inspecting answers. Using the derived head
+% clears only this cache and keeps unrelated application tables alive.
+% Source: SWI-Prolog/swipl-devel f49d28558b5f1ade8348f254b5583117e773b2bb,
+% library/tables.pl:get_calls/3.
+reset_exact_memo_table(Module, TableName, Arity) :-
+    TableArity is Arity + 1,
+    functor(ModeGoal, TableName, TableArity),
+    '$tbl_implementation'(Module:ModeGoal,
+                          TableModule:Implementation),
+    TableModule:'$table_mode'(Implementation, TableGoal, _Moded),
+    abolish_table_subgoals(TableModule:TableGoal).
+
+abolish_exact_memo_tables(Fun, Module, Arity) :-
+    forall(exact_memo_specialization(_ReplayName, TableName,
+                                     Fun, Module, Arity),
+           reset_exact_memo_table(Module, TableName, Arity)).
+
+remove_exact_memo_specializations(Fun, Module) :-
+    findall(specialization(ReplayName, TableName, Arity),
+            exact_memo_specialization(ReplayName, TableName,
+                                      Fun, Module, Arity),
+            Specializations),
+    forall(member(specialization(ReplayName, TableName, Arity),
+                  Specializations),
+           ( TableArity is Arity + 1,
+             reset_exact_memo_table(Module, TableName, Arity),
+             untable(Module:TableName/TableArity),
+             abolish(Module:ReplayName/Arity),
+             abolish(Module:TableName/TableArity) )),
+    retractall(exact_memo_specialization(_, _, Fun, Module, _)).
+
 cache_clear :-
     findall(memo(Module, Fun, Arity),
             ( supports(_, memo(Module, Fun, Arity))
             ; supports(memo(Module, Fun, Arity), _) ),
             MemoNodes0),
     sort(MemoNodes0, MemoNodes),
+    abolish_exact_memo_tables(_Fun, _Module, _Arity),
     retractall(metta_memo_entry(_, _, _, _, _, _)),
     retractall(metta_memo_generation(_, _, _, _)),
     retractall(metta_memo_count(_, _, _, _)),
@@ -1313,6 +1456,15 @@ cache_call_store_variant(Fun, Module, Arity, CurGen, KeyAVs, AVs, Goal, Out) :-
       )
     ).
 
+exact_specialized_root(Fun, Module, Arity, TableGoal, Multiplicity) :-
+    with_memo_call_context(Fun, Module, Arity,
+    ( ( get_call(TableGoal, _Trie, _Return)
+      -> memo_stat_inc(cache_hit)
+      ;  memo_stat_inc(cache_miss) ),
+      call(TableGoal),
+      between(1, Multiplicity, _Occurrence)
+    )).
+
 %CallModule is the module the compiled call site lives in, fixed when the
 %clause was translated; the module that owns the clauses is resolved here,
 %on every call, so a space defining the function after the caller was
@@ -1362,7 +1514,14 @@ cache_call(Fun, CallModule, AVs, Out) :-
 %answer-limit, because those policies would change the decorated function.
 memoize_exact(Fun) :-
     memo_target(Fun, any, 'memoize-exact!/2', Space, Module, Terms),
-    memo_recompile(Space, Terms, enable_exact_memoization(Fun, Module)).
+    findall(Arity,
+            ( member([=, [Fun | Args], _Body], Terms),
+              length(Args, InputArity),
+              Arity is InputArity + 1 ),
+            RawArities),
+    sort(RawArities, Arities),
+    memo_recompile(Space, Terms,
+                   enable_exact_memoization(Fun, Module, Arities)).
 
 %The space that asks owns the equations, unless it only inherits them from
 %&self. Recompiling in the wrong space is how memoizing in one space used
