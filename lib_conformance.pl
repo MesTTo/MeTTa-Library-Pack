@@ -84,7 +84,7 @@ conformance_capability(Space, Check) :-
     member(Capability, [match, enumerate, add, remove, clear]),
     foreign_provides(Space, Capability),
     capability_hook(Capability, Hook),
-    (   conformance_hook_defined(Hook)
+    (   conformance_hook_defined(Hook, Space)
     ->  format(string(Check), '~w: declared, ~w has clauses', [Capability, Hook])
     ;   throw(error(petta_conformance_no_hook(Space, Capability, Hook), none))
     ).
@@ -104,10 +104,54 @@ capability_hook(clear, seam:foreign_clear/1).
 %which was right only while the seams lived there: with them in `seam` the
 %engine's module has no clause of any of them and every declared capability
 %reported as undeclared.
-conformance_hook_defined(Module:Name/Arity) :-
-    functor(Head, Name, Arity),
-    catch(predicate_property(Module:Head, number_of_clauses(Count)), _, fail),
-    Count > 0.
+%Asked PER SPACE, because the predicate having clauses is a receipt and a
+%clause that serves THIS space is the payload: the day MORK gained its own
+%clear hook, every other provider's undeclared clear satisfied a
+%whole-predicate count and this check stopped catching the thing it exists
+%for [measured 2026-08-26 under `-- backends`, where the hookless probe
+%passed while MORK's clause supplied the count]. The seam's ownership-guard
+%protocol (engine/ext_points.pl) is what makes the per-space question
+%decidable without performing the operation: a hook clause's leading body
+%goal is the pure ownership test, so admitting a space costs a lookup.
+conformance_hook_defined(Module:Name/Arity, Space) :-
+    functor(Probe, Name, Arity),
+    (   conformance_clause_access(Module:Probe, denied)
+    ->  %A system built with protect_static_code refuses clause/2 on static
+        %code, so the whole-predicate count is the only answer available
+        %there. It is the weaker claim, and it is made only where the
+        %stronger one cannot be.
+        catch(predicate_property(Module:Probe, number_of_clauses(Count)), _, fail),
+        Count > 0
+    ;   conformance_hook_admits(Module:Name/Arity, Space)
+    ),
+    !.
+
+conformance_clause_access(Module:Probe, Access) :-
+    catch(( clause(Module:Probe, _) -> Access = present ; Access = absent ),
+          error(permission_error(_, _, _), _),
+          Access = denied).
+
+%Two clause shapes serve one protocol. A clause that BINDS the space in its
+%head has already said which space it serves, so head unification decides
+%and nothing runs. A clause that leaves it a variable decides ownership in
+%its body, and the protocol fixes the leading goal as that pure test, so
+%admitting a space costs one lookup and never performs the operation.
+conformance_hook_admits(Module:Name/Arity, Space) :-
+    functor(Probe, Name, Arity),
+    clause(Module:Probe, Body),
+    arg(1, Probe, Owner),
+    (   var(Owner)
+    ->  Owner = Space,
+        conformance_guard_admits(Body)
+    ;   Owner == Space
+    ),
+    !.
+
+%Only the LEADING goal runs. A fact applies unconditionally; a guard that
+%throws is not an admission.
+conformance_guard_admits(true) :- !.
+conformance_guard_admits((Guard, _)) :- !, catch(Guard, _, fail).
+conformance_guard_admits(Guard) :- catch(Guard, _, fail).
 
 conformance_atoms(Space, Atoms) :-
     (   foreign_provides(Space, enumerate)
