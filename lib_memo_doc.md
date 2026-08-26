@@ -80,7 +80,7 @@ substrates never stack on one function.
 
 ### Clear Memoization
 ```metta
-!(clear-memoize)            ; Clears every space's cached entries and resets generation/queue state
+!(clear-memoize)            ; Clears every space's cached entries and queue state
 !(invalidate-memoize my-fun) ; Invalidate one function in this space, and its dependents
 !(clear-memoize-stats)      ; Reset runtime counters
 ```
@@ -146,6 +146,23 @@ aggregation, and never truncates at `answer-limit`. When a probe finds more
 answers than the configured limit, that call runs directly and increments
 `automatic_answer_limit_bypass`; duplicate answers remain duplicate.
 
+Python `@space.cache` takes a separate exact path. The compiler emits a direct
+call to a generated table for each function arity. A raw answer contributes
+the coefficient `1`; SWI's mode-directed `sum` combines coefficients for equal
+solved answers in its C trie, and replay emits that answer the recorded number
+of times. Exact decorator keys do not use manual float quantization,
+aggregation, or `answer-limit`. `cache_info()` counts tabled call variants as
+entries and sums their coefficients as answer occurrences.
+
+SWI answer tables are private to each Prolog engine unless declared shared.
+The exact path therefore carries `metta_memo_generation/4` as a hidden first
+table argument. Invalidation advances that process-wide generation before it
+reclaims the caller engine's old tries, so a carrier that already cached the
+same function selects a fresh variant instead of replaying its private stale
+table. Generations stay monotonic across `clear-memoize` and disable/re-enable
+cycles for the same reason; only live-generation tries contribute to
+`cache_info()`.
+
 Bounded search is not admitted automatically. `lib_memo` eagerly collects a
 miss's complete bag; probing recursion beneath `once`, `take`, or `top` could
 continue after the source construct had its answer and then wait on the same
@@ -160,6 +177,7 @@ holding the function's clauses. See "Memoization is per space" above.
 - `memo_enabled/3` — arity-specific memoization enables (`Fun`, Module, InputArity)
 - `memo_automatic_enabled/2` — functions selected by the automatic policy
 - `memo_automatic_decision/4` — the reported automatic choice and reason
+- `exact_memo_specialization/5` — generated replay and table names with their owning function arity
 - `metta_memo_entry/6` — cached results (Fun, Module, Arity, Gen, Args, Results)
 - `metta_memo_generation/4` — generation counter per function (used for invalidation)
 - `metta_memo_count/4`, `metta_memo_head/4`, `metta_memo_tail/4`, `metta_memo_q/5` — per-function queue state

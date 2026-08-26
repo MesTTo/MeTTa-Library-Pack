@@ -1,8 +1,10 @@
 # lib_thread: concurrency for MeTTa
 
 This library gives you parallel evaluation, futures, channels, worker pools,
-and a way to block until a space changes. Everything sits on SWI-Prolog's own
-concurrency primitives, so there is no scheduler of our own to go wrong.
+and a way to block until a space changes. `spawn` computations are suspended
+SWI engines multiplexed over at most four long-lived carrier threads. A space
+write, future completion or channel state change wakes a parked engine without
+parking one of those carriers.
 
 Load it the usual way:
 
@@ -86,7 +88,7 @@ This is the part worth understanding, because it is what makes futures fit
 MeTTa rather than fit Java.
 
 A MeTTa expression does not have a value, it has an **answer set**. So a future
-does too. `spawn` answers a space, the evaluating thread adds every answer to
+does too. `spawn` answers a space, the evaluating engine adds every answer to
 it as it finds them, and `await` yields them all:
 
 ```metta
@@ -113,7 +115,17 @@ That also gives you streaming for free. `await` waits for the end, but
 
 Awaiting the same handle twice answers the same set without waiting again, so
 a handle can be shared. `(settled? $f)` asks whether it has finished without
-blocking, and `(cancel $f)` stops one that has not.
+blocking, and `(cancel $f)` stops one that has not. An `await` inside another
+spawned computation suspends that engine. It does not occupy a carrier while
+the child is unfinished, so four parents awaiting four children cannot
+deadlock the four-carrier scheduler.
+
+Registered `oracleIO` operations may block in Python or other foreign code.
+Before entering one, the engine detaches from its carrier and continues on a
+transient offload thread, following Go's blocking-syscall handoff. A blocked
+call owns that temporary thread, while the bounded carrier pool keeps running
+other engines. Cancelling such a call reports `False` until the foreign body
+returns because the engine has not actually stopped yet.
 
 ## Timers
 
@@ -142,11 +154,15 @@ There is no `clearTimeout`, because there is nothing new to clear:
    (await-atom $ticker (reading $v)))   ; blocks until the next reading
 ```
 
-**Timers cost no threads.** One timer thread and one bounded pool serve every
-timer in the process, however many there are. The timer thread holds a heap
-keyed by deadline and waits with a timed receive, which measured a constant
-0.06 ms drift from 1 ms out to 500 ms, and 20,000 timers went into the heap in
-29 ms.
+One repeating timer never overlaps its own invocation. If its body is still
+running at the next period, that tick is coalesced instead of queuing another
+copy. One timer thread and one bounded pool serve every timer in the process,
+so timers cost no per-timer thread. A saturated body pool does not block the
+timer thread; one-shot work retries after 10 ms and repeating work retries at
+its next period, leaving channel and space deadlines responsive. The timer
+thread holds a heap keyed by deadline and waits with a timed receive, which
+measured a constant 0.06 ms drift from 1 ms out to 500 ms, and 20,000 timers
+went into the heap in 29 ms.
 
 The obvious implementation, SWI's own `alarm/4`, is not what this uses: an
 alarm's goal runs as a **signal on whichever thread scheduled it**, so a firing
@@ -166,7 +182,9 @@ A channel is a mailbox any thread can use.
 
 `(recv $c)` blocks, `(recv $c 0.5)` gives up after half a second with no
 answer, and `(try-recv $c)` never blocks. `(channel $n)` bounds the channel so
-senders block when it is full, which is how you apply backpressure.
+senders block when it is full, which is how you apply backpressure. Inside a
+spawned computation, an empty receive or full send suspends the engine and a
+mailbox change wakes it; neither condition consumes a carrier.
 
 One thing to know: a sent term is **copied**. The receiver gets its own copy,
 so bindings made on one side do not appear on the other. That is what makes a

@@ -1,5 +1,11 @@
-;Concurrency for MeTTa, over the engine's own SWI primitives. Four kinds of
-;thing live here and they compose.
+; Purpose: publish parallel data operations, M:N engine futures, timers,
+;   channels, pools, Linda waits and locks over SWI-Prolog primitives.
+; Guarantees:
+;   - spawn computations multiplex as suspended engines over a bounded carrier
+;     pool; await and channel backpressure wake engines instead of parking
+;     carriers [tested: tests/prolog/lib_thread.plt; commit=WORKTREE]
+;
+;Four kinds of thing live here and they compose.
 ;
 ;Parallel evaluation over a list. (par-map $f $list) evaluates ($f $element)
 ;for every element at once and answers one result per element, in the input
@@ -16,20 +22,25 @@
 ;expression has an answer set and so does its future. Because the handle is an
 ;ordinary space you can also (match $f ...) it, (get-atoms $f) it, or
 ;(await-atom $f $pattern) to take answers as they land instead of waiting for
-;the end. (settled? $f) asks without waiting, (cancel $f) stops one running.
+;the end. A scheduled await suspends its engine until completion, so it leaves
+;the small carrier pool free. (settled? $f) asks without waiting, (cancel $f)
+;stops one running.
 ;
 ;Timers, which are futures that start later. (after $seconds $expr) is
 ;setTimeout and (every $seconds $expr) is setInterval; both answer a space the
 ;answers will appear in, and both are stopped with the same (cancel $f) that
 ;stops a spawn, so there is no separate clearTimeout. Consume a repeating timer
-;with await-atom rather than await, since it never finishes. Timers cost no
-;threads: one timer thread and one bounded pool serve every timer.
+;with await-atom rather than await, since it never finishes. A slow repeating
+;body coalesces later ticks rather than overlapping itself. Timers cost no
+;per-timer threads: one timer thread and one bounded pool serve every timer,
+;and a saturated body pool does not delay scheduler deadline wakeups.
 ;
 ;Channels, which are mailboxes any thread may use. (channel) answers a handle,
 ;(channel $max-size) one that blocks its senders when full. (send $ch $term),
 ;(recv $ch) blocking, (recv $ch $seconds) with a deadline, (try-recv $ch)
 ;never blocking, (channel-size $ch), (channel-close $ch). A sent term is
 ;COPIED, so the receiver gets its own copy and no variable binding crosses.
+;Inside a spawned engine, an empty receive or full send suspends the engine.
 ;
 ;Pools, for when the fan-out is bigger than the machine. (pool $name $size)
 ;creates one, (submit $name $expr) answers the same handle await takes, so
