@@ -720,11 +720,20 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
     append(RawArgs, [1], ProducerArgs),
     ProducerHead =.. [TableName | ProducerArgs],
     RawGoal =.. [Fun | RawArgs],
+    %system:between, qualified, because this body is ASSERTED into the
+    %space's own module: an unqualified call would RESOLVE between/3 there
+    %on first use, current_predicate(Module:between/3) would answer true
+    %from then on, and the host registration probe would refuse any later
+    %MeTTa operation named `between` in that module for the process's life.
+    %The module-tier cache asserts into the base tier every space inherits,
+    %which is how one cached fib consumed the name for the whole suite
+    %[measured 2026-08-26: test_a_cached_definition_memoizes_its_complete_answer_bag
+    %then registering between at MeTTa arity 2 threw petta_op_name_taken].
     SameContextBody =
         ( lib_memo:metta_memo_call_ctx(Fun, Module, Arity),
           !,
           TableHead,
-          between(1, Multiplicity, _Occurrence) ),
+          system:between(1, Multiplicity, _Occurrence) ),
     RootBody = lib_memo:exact_specialized_root(
                    Fun, Module, Arity, Module:TableHead, Multiplicity),
     assertz(Module:(ProducerHead :- RawGoal)),
