@@ -5,7 +5,9 @@
 %   declarations are cumulative and idempotent, and every operation
 %   verifies its effect and throws loudly when the engine disagrees.
 %   Live declarations reflect into &petta as (tabled space name arity)
-%   facts, input arity, asserted on declare and retracted on undeclare.
+%   facts, input arity, asserted on declare and retracted on undeclare. The
+%   tables are shared between SWI engines, so a Python Answers cursor and the
+%   term runner reach one answer trie and report one set of statistics.
 % Guarantees:
 %   - A declared table survives a write to a space it reads, and a change
 %     to any equation drops it [tested: tabling_equation_change_drops_tables,
@@ -67,6 +69,15 @@
 
 :- multifile prolog:error_message//1.
 
+%A tabled call is another owner of the universal call-dispatch seam. Like
+%lib_memo, install one indexed handler only for names that are enabled: an
+%ordinary program that imports this library and tables nothing pays nothing at
+%a call site.
+:- multifile seam:dispatch_call/4.
+:- dynamic seam:dispatch_call/4.
+:- dynamic metta_tabling_dispatch_installed/1.
+:- dynamic metta_tabling_registration/3.
+
 %table_statistics/3 is tableutil's, and it is not autoloaded.
 :- use_module(library(tableutil)).
 
@@ -83,25 +94,79 @@ metta_tabling_target(Call0, Module, Name, CompiledArity) :-
     CompiledArity is InputArity + 1,
     metta_tabling_module(Name, CompiledArity, Module).
 
-%The function's clauses live in its space's module; a shared function
-%lives in user. The first module that actually defines the predicate
-%wins, and none defining it is a loud refusal: declare after defining,
-%because tabling a name that does not exist yet tables nothing.
+%The function's clauses live in the module that owns the predicate visible at
+%the call site. A named space may import a function from its parent; tabling
+%the call-site module in that case wraps a shadow the executable call does not
+%enter. imported_from/1 is SWI's published ownership question and is the same
+%late-bound resolution pattern used by lib_memo's dispatch owner.
+%
+%A definition that has arrived but not been translated has no predicate to
+%find yet, and asking current_predicate/1 is not a call, so the engine's
+%undefined-predicate net does not fire for it. None visible is a loud refusal:
+%declare after defining, because tabling a name that does not exist yet tables
+%nothing.
 metta_tabling_module(Name, CompiledArity, Module) :-
-    %A definition that has arrived but not been translated has no predicate to
-    %find yet, and asking current_predicate/1 is not a call, so the engine's
-    %undefined-predicate net does not fire for it.
     metta_ensure_compiled(Name),
-    findall(Candidate, metta_tabling_candidate(Candidate), Candidates),
-    ( member(Module, Candidates),
-      current_predicate(Module:Name/CompiledArity)
-      -> true
-    ; throw(error(existence_error(metta_function, Name/CompiledArity), none)) ).
+    current_metta_module(CallModule),
+    (   metta_tabling_visible_owner(Name, CompiledArity, CallModule, Module)
+    ->  true
+    ;   metta_self_module(Self),
+        Self \== CallModule,
+        metta_tabling_visible_owner(Name, CompiledArity, Self, Module)
+    ->  true
+    ;   throw(error(existence_error(metta_function, Name/CompiledArity), none))
+    ).
 
-metta_tabling_candidate(Module) :-
-    current_metta_space(Space),
-    space_module(Space, Module).
-metta_tabling_candidate(Module) :- metta_self_module(Module).
+metta_tabling_visible_owner(Name, CompiledArity, CallModule, Module) :-
+    current_predicate(CallModule:Name/CompiledArity),
+    functor(Head, Name, CompiledArity),
+    (   predicate_property(CallModule:Head, imported_from(From))
+    ->  Module = From
+    ;   Module = CallModule
+    ).
+
+%The same ownership decision drives execution. A ground-headed seam clause
+%claims only a name with at least one live declaration, resolves the owner from
+%the current call-site module at call time, and returns that exact qualified
+%predicate. Late imports and two spaces defining the same name therefore keep
+%their own tables.
+metta_tabling_dispatch_call(Name, Args, Out, Goal) :-
+    current_metta_module(CallModule),
+    length(Args, InputArity),
+    CompiledArity is InputArity + 1,
+    metta_tabling_visible_owner(Name, CompiledArity, CallModule, Module),
+    metta_tabling_registration(Name, Module, CompiledArity),
+    functor(Head, Name, CompiledArity),
+    predicate_property(Module:Head, tabled),
+    append(Args, [Out], FullArgs),
+    Direct =.. [Name|FullArgs],
+    Goal = Module:Direct.
+
+metta_tabling_register(Name, Module, CompiledArity) :-
+    (   metta_tabling_registration(Name, Module, CompiledArity)
+    ->  true
+    ;   assertz(metta_tabling_registration(Name, Module, CompiledArity))
+    ),
+    metta_tabling_install_dispatch_handler(Name).
+
+metta_tabling_install_dispatch_handler(Name) :-
+    metta_tabling_dispatch_installed(Name),
+    !.
+metta_tabling_install_dispatch_handler(Name) :-
+    assertz(seam:(dispatch_call(Name, Args, Out, Goal) :-
+                      lib_tabling:metta_tabling_dispatch_call(Name, Args, Out,
+                                                              Goal))),
+    assertz(metta_tabling_dispatch_installed(Name)).
+
+metta_tabling_unregister(Name, Module, CompiledArity) :-
+    retractall(metta_tabling_registration(Name, Module, CompiledArity)),
+    (   metta_tabling_registration(Name, _, _)
+    ->  true
+    ;   retractall(seam:(dispatch_call(Name, Args, Out, Goal) :-
+                            lib_tabling:metta_tabling_dispatch_call(Name, Args,
+                                                                    Out, Goal))),
+        retractall(metta_tabling_dispatch_installed(Name))
+    ).
 
 %A table over a space also has to survive writes to that space, and SWI
 %does that when both the table and the dynamic predicates it reads carry
@@ -119,24 +184,42 @@ metta_tabling_candidate(Module) :- metta_self_module(Module).
 %do not live in an SWI dynamic predicate at all.
 metta_tabled_decl(Call, true) :-
     metta_tabling_target(Call, Module, Name, CompiledArity),
+    functor(Head, Name, CompiledArity),
+    ( predicate_property(Module:Head, tabled) -> WasTabled = true
+                                               ; WasTabled = false ),
+    catch(metta_tabling_declare(Module, Name, CompiledArity, Head),
+          Error,
+          ( metta_tabling_rollback_new_table(WasTabled, Module, Name,
+                                             CompiledArity),
+            throw(Error) )).
+
+metta_tabling_declare(Module, Name, CompiledArity, Head) :-
+    metta_tabling_install_table(Module, Name, CompiledArity),
+    ( predicate_property(Module:Head, tabled),
+      predicate_property(Module:Head, tabled(shared))
+      -> true
+    ; throw(error(petta_tabling_failed(Module:Name/CompiledArity), none)) ),
+    metta_tabling_reflect(Module, Name, CompiledArity, Fact),
+    metta_tabling_reflection_ensure(Fact),
+    metta_tabling_register(Name, Module, CompiledArity).
+
+metta_tabling_install_table(Module, Name, CompiledArity) :-
     (   metta_cache_unchecked(Name)
     ->  %The caller accepted staleness by declaration, so the purity walk is
         %skipped and the table is PLAIN: with reads unresolved there is
         %nothing sound to hang the incremental property on, and a stale
         %answer is exactly what (cache Name unchecked) accepts
         %[tested: an_unchecked_declaration_tables_an_impure_body].
-        table(Module:Name/CompiledArity)
+        table(Module:Name/CompiledArity as shared)
     ;   metta_tabling_reads(Module, Name, CompiledArity, Reads),
         forall(member(Storage:Predicate, Reads),
                dynamic(Storage:Predicate as incremental)),
-        table(Module:Name/CompiledArity as incremental)
-    ),
-    functor(Head, Name, CompiledArity),
-    ( predicate_property(Module:Head, tabled) -> true
-    ; throw(error(petta_tabling_failed(Module:Name/CompiledArity), none)) ),
-    metta_tabling_reflect(Module, Name, CompiledArity, Fact),
-    'remove-atom'('&petta', Fact, _),
-    'add-atom'('&petta', Fact, _).
+        table(Module:Name/CompiledArity as (incremental, shared))
+    ).
+
+metta_tabling_rollback_new_table(true, _, _, _) :- !.
+metta_tabling_rollback_new_table(false, Module, Name, CompiledArity) :-
+    catch(untable(Module:Name/CompiledArity), _, true).
 
 metta_untabled_decl(Call, true) :-
     metta_tabling_target(Call, Module, Name, CompiledArity),
@@ -146,7 +229,11 @@ metta_untabled_decl(Call, true) :-
       -> throw(error(petta_untabling_failed(Module:Name/CompiledArity), none))
     ; true ),
     metta_tabling_reflect(Module, Name, CompiledArity, Fact),
-    'remove-atom'('&petta', Fact, _).
+    catch(metta_tabling_reflection_write(remove, Fact),
+          Error,
+          ( metta_tabling_install_table(Module, Name, CompiledArity),
+            throw(Error) )),
+    metta_tabling_unregister(Name, Module, CompiledArity).
 
 %Every space storage predicate this function can read, following the calls
 %its clauses make. The walk carries a seen-set over predicate indicators
@@ -214,11 +301,61 @@ prolog:error_message(petta_tabling_foreign_space(Operation, Space)) -->
 
 %The live-declaration record in &petta: the space whose module holds the
 %predicate, the function name, and its INPUT arity, the arity a MeTTa caller
-%sees. Declaring removes any previous record before adding, so repetition
-%never duplicates.
+%sees. A standing exact record is the idempotent case, so repetition never
+%writes or duplicates it.
 metta_tabling_reflect(Module, Name, CompiledArity, [tabled, Space, Name, InputArity]) :-
     metta_module_space(Module, Space),
     InputArity is CompiledArity - 1.
+
+%A reflection fact already standing is the idempotent case and needs no write.
+%Every actual write must answer the language's unit value. Failure, an error
+%answer, or an exception is rethrown under one named tabling error so a caller
+%cannot receive True from a declaration whose catalog state did not land.
+metta_tabling_reflection_ensure(Fact) :-
+    (   once('get-atoms'('&petta', Fact))
+    ->  true
+    ;   metta_tabling_reflection_write(add, Fact)
+    ).
+
+metta_tabling_reflection_write(Operation, Fact) :-
+    catch((   metta_tabling_reflection_goal(Operation, Fact, Result)
+          ->  Outcome = result(Result)
+          ;   Outcome = failed
+          ),
+          Error,
+          Outcome = exception(Error)),
+    (   Outcome == result([])
+    ->  true
+    ;   throw(error(petta_tabling_reflection_write_failed(Operation, Fact,
+                                                          Outcome), none))
+    ).
+
+metta_tabling_reflection_goal(add, Fact, Result) :-
+    'add-atom'('&petta', Fact, Result).
+metta_tabling_reflection_goal(remove, Fact, Result) :-
+    'remove-atom'('&petta', Fact, Result).
+
+prolog:error_message(petta_tabling_reflection_write_failed(Operation, Fact,
+                                                            Outcome)) -->
+    { swrite(Fact, Text) },
+    [ 'tabling could not ~w its reflection row ~w: the &petta write answered \c
+       ~w. The table declaration and its catalog row must change together.'-
+      [Operation, Text, Outcome] ].
+
+%The engine's ordinary atom-removed event also covers pooled-space cleanup,
+%which removes every (tabled Space ...) row after untabling its predicates. It
+%therefore retires the indexed dispatch handler without a tabling-specific
+%lifecycle callback or an engine edit.
+:- multifile seam:atom_removed/2.
+seam:atom_removed('&petta', Fact) :-
+    (   Fact = [tabled, Space, Name, InputArity],
+        atom(Name),
+        integer(InputArity),
+        space_module(Space, Module)
+    ->  CompiledArity is InputArity + 1,
+        metta_tabling_unregister(Name, Module, CompiledArity)
+    ;   true
+    ).
 
 %Clear answers, keep the declaration: unifying subgoal tables of this
 %predicate are abolished and every other table stands.
