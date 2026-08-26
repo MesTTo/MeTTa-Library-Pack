@@ -19,7 +19,9 @@
 ;facts, input arity, so (match &petta (tabled $s $f $a) ...) lists what
 ;is tabled right now. Undeclaring removes the fact, and clearing or
 ;dropping a space removes its declarations, tables and all: tabling
-;state never outlives the space life that declared it.
+;state never outlives the space life that declared it. The tables are
+;shared between SWI engines, so the live Python Answers cursor, a source
+;run and the statistics door reuse the same answer trie.
 
 !(import! &self (library lib_import))
 !(import_prolog_functions_from_file (library lib_tabling.pl)
@@ -52,7 +54,7 @@
 (= (table-clear-all) (metta_table_clear_all))
 
 ;(table-stats (reach $x $y)) answers what this function's tables have
-;actually done, as ((tables 1) (answers 2) (complete-call 3)
+;actually done, as ((tables 1) (answers 2) (complete-call 2)
 ;(invalidated 1) (reevaluated 1)).
 ;
 ;The pair worth reading is invalidated against reevaluated. A write to a
