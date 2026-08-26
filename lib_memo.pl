@@ -41,7 +41,7 @@
 %   - get-memoize-stats/2 reports one function's live entry and answer counts,
 %     preserving duplicate answer occurrences in the latter [tested:
 %     lib_memo_stats:a_function_report_counts_answer_occurrences;
-%     commit=WORKTREE].
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
 %   - Exact memoization stores each distinct solved answer in SWI's C answer
 %     trie with a summed occurrence count, then expands that count on replay;
 %     equal answers therefore remain equal bag occurrences. A generation is a
@@ -49,7 +49,7 @@
 %     cannot replay an older private table on another [tested:
 %     test_exact_cache_matches_uncached_answer_bags,
 %     invalidation_moves_a_live_worker_to_a_fresh_exact_table_generation;
-%     commit=WORKTREE].
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on

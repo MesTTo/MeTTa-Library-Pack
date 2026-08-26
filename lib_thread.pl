@@ -16,20 +16,20 @@
 %     lib_thread:spawned_engines_multiplex_over_bounded_carriers,
 %     lib_thread:a_suspended_engine_resumes_when_its_space_waker_fires,
 %     lib_thread:cancelling_a_suspended_engine_releases_it_without_an_answer;
-%     commit=WORKTREE]
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - oracleIO host operations detach onto transient offload threads before
 %     entering foreign code, so even more blocked calls than normal carriers
 %     cannot consume scheduler capacity; cancellation reports false until a
 %     running foreign call returns and the engine actually settles [tested:
 %     test_a_blocking_oracle_uses_the_dirty_lane_without_pinning_normal_work;
-%     commit=WORKTREE]
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - future await, empty channel receive and full channel send suspend their
 %     engines and wake from completion or mailbox state instead of blocking
 %     all carriers [tested:
 %     lib_thread:awaiting_futures_suspends_engines_instead_of_all_carriers,
 %     lib_thread:empty_channel_receives_suspend_engines_instead_of_all_carriers,
 %     lib_thread:full_channel_sends_suspend_engines_instead_of_all_carriers;
-%     commit=WORKTREE]
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - future completion is single-assignment, settled pool work cannot be
 %     reported as cancelled, timer dispatch cannot cross a successful
 %     cancellation, and a repeating timer coalesces ticks while its prior
@@ -38,7 +38,7 @@
 %     lib_thread:cancelling_a_completed_unawaited_pool_future_is_false,
 %     lib_thread:timer_fire_and_cancel_have_one_atomic_transition,
 %     lib_thread:a_repeating_timer_never_overlaps_its_own_invocations;
-%     commit=WORKTREE]
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
@@ -97,7 +97,7 @@
 %     retries after 10ms and a repeating timer retries at its next period, so
 %     scheduler deadlines remain independent of timer-body capacity [tested:
 %     lib_thread:a_saturated_timer_pool_does_not_block_scheduler_deadlines;
-%     commit=WORKTREE].
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
 %   - oracleIO follows Go's blocking-syscall handoff: normal scheduler
 %     carriers never enter potentially blocking foreign code; the engine
 %     detaches onto a transient thread until that call returns [source:
