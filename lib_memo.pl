@@ -1617,7 +1617,7 @@ memo_refuse_uncacheable(Fun, Module, Context) :-
     forall(member(Arity, Arities),
            memo_refuse_uncacheable_arity(Fun, Module, Arity, Context)).
 
-%(cache Fun unchecked) in &petta is the caller's declared acceptance of
+%(cache Fun unchecked) in &metta is the caller's declared acceptance of
 %staleness, so the walk is skipped for this function. The volatility gate is
 %NOT skipped: it runs before this predicate is reached, and a library's
 %explicit volatile keeps refusing whatever the caller declares

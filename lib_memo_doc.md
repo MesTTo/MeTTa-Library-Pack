@@ -26,11 +26,11 @@ decision or reload the cache state.
 
 ### Override the automatic decision
 
-Overrides are catalog declarations in `&petta`, not process flags:
+Overrides are catalog declarations in `&metta`, not process flags:
 
 ```metta
-!(add-atom &petta (cache tail-recursive force))
-!(add-atom &petta (cache branching-search refuse))
+!(add-atom &metta (cache tail-recursive force))
+!(add-atom &metta (cache branching-search refuse))
 ```
 
 `force` bypasses only the repeated-call profitability rule. It cannot make an
@@ -38,12 +38,12 @@ impure function cacheable. `refuse` disables an automatic choice. Remove the
 declaration to return to the automatic rule:
 
 ```metta
-!(remove-atom &petta (cache branching-search refuse))
+!(remove-atom &metta (cache branching-search refuse))
 ```
 
 An explicit `lib_tabling` declaration takes precedence while its SWI answer
 trie is live. Automatic bag memoization is withdrawn when `(tabled ...)` lands
-in `&petta` and reconsidered when `(untabled ...)` removes it, so the two cache
+in `&metta` and reconsidered when `(untabled ...)` removes it, so the two cache
 substrates never stack on one function.
 
 ### Enable Memoization
@@ -223,4 +223,4 @@ Always run a reproducible preset when benchmarking:
 7. Printing stats
 - `!(get-memoize-stats)` returns counters; call it after running the workload. If your MeTTa host does not echo return values, use `!(println! (get-memoize-stats))` or add a helper `!(print-memoize-stats (println! (get-memoize-stats)))`.
 8. Automatic overrides
-- Use `(cache <function> force)` or `(cache <function> refuse)` in `&petta` for one function. These declarations change admission, not eviction, size, aggregation, or key configuration.
+- Use `(cache <function> force)` or `(cache <function> refuse)` in `&metta` for one function. These declarations change admission, not eviction, size, aggregation, or key configuration.

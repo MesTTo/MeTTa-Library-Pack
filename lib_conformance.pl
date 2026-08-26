@@ -362,7 +362,7 @@ conformance_rows(Space, Left, Right, Rows) :-
     msort(Unsorted, Rows).
 
 conformance_native_copy(Atoms, Native) :-
-    gensym('&petta-conformance-', Native),
+    gensym('&metta-conformance-', Native),
     forall(member(Atom, Atoms), 'add-atom'(Native, Atom, _)).
 
 conformance_drop_copy(Native, Atoms) :-

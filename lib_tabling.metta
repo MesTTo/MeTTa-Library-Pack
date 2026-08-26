@@ -15,8 +15,8 @@
 ;Declare AFTER defining the function; tabling a name that does not exist
 ;yet is refused by name and arity.
 ;
-;Live declarations reflect into &petta as (tabled space name arity)
-;facts, input arity, so (match &petta (tabled $s $f $a) ...) lists what
+;Live declarations reflect into &metta as (tabled space name arity)
+;facts, input arity, so (match &metta (tabled $s $f $a) ...) lists what
 ;is tabled right now. Undeclaring removes the fact, and clearing or
 ;dropping a space removes its declarations, tables and all: tabling
 ;state never outlives the space life that declared it. The tables are

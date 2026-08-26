@@ -4,7 +4,7 @@
 %   named spaces instrument their own implementation module, repeated
 %   declarations are cumulative and idempotent, and every operation
 %   verifies its effect and throws loudly when the engine disagrees.
-%   Live declarations reflect into &petta as (tabled space name arity)
+%   Live declarations reflect into &metta as (tabled space name arity)
 %   facts, input arity, asserted on declare and retracted on undeclare. The
 %   tables are shared between SWI engines, so a Python Answers cursor and the
 %   term runner reach one answer trie and report one set of statistics.
@@ -52,7 +52,7 @@
 %     is what the examples do.
 %
 %     Which is now DETECTED rather than only written down here. The live
-%     (tabled Space Name Arity) facts this reflects into &petta are what
+%     (tabled Space Name Arity) facts this reflects into &metta are what
 %     space.lint() reads to find a car-atom, cdr-atom or index-atom picking
 %     out of a collapse of a tabled function, reported as
 %     tabled-answer-order-read [tested:
@@ -299,7 +299,7 @@ prolog:error_message(petta_tabling_foreign_space(Operation, Space)) -->
        not live in this engine, so a write there cannot invalidate the \c
        table. Do not table a function that reads a foreign space.'-[Space, Operation] ].
 
-%The live-declaration record in &petta: the space whose module holds the
+%The live-declaration record in &metta: the space whose module holds the
 %predicate, the function name, and its INPUT arity, the arity a MeTTa caller
 %sees. A standing exact record is the idempotent case, so repetition never
 %writes or duplicates it.
@@ -312,7 +312,7 @@ metta_tabling_reflect(Module, Name, CompiledArity, [tabled, Space, Name, InputAr
 %answer, or an exception is rethrown under one named tabling error so a caller
 %cannot receive True from a declaration whose catalog state did not land.
 metta_tabling_reflection_ensure(Fact) :-
-    (   once('get-atoms'('&petta', Fact))
+    (   once('get-atoms'('&metta', Fact))
     ->  true
     ;   metta_tabling_reflection_write(add, Fact)
     ).
@@ -331,14 +331,14 @@ metta_tabling_reflection_write(Operation, Fact) :-
     ).
 
 metta_tabling_reflection_goal(add, Fact, Result) :-
-    'add-atom'('&petta', Fact, Result).
+    'add-atom'('&metta', Fact, Result).
 metta_tabling_reflection_goal(remove, Fact, Result) :-
-    'remove-atom'('&petta', Fact, Result).
+    'remove-atom'('&metta', Fact, Result).
 
 prolog:error_message(petta_tabling_reflection_write_failed(Operation, Fact,
                                                             Outcome)) -->
     { swrite(Fact, Text) },
-    [ 'tabling could not ~w its reflection row ~w: the &petta write answered \c
+    [ 'tabling could not ~w its reflection row ~w: the &metta write answered \c
        ~w. The table declaration and its catalog row must change together.'-
       [Operation, Text, Outcome] ].
 
@@ -347,7 +347,7 @@ prolog:error_message(petta_tabling_reflection_write_failed(Operation, Fact,
 %therefore retires the indexed dispatch handler without a tabling-specific
 %lifecycle callback or an engine edit.
 :- multifile seam:atom_removed/2.
-seam:atom_removed('&petta', Fact) :-
+seam:atom_removed('&metta', Fact) :-
     (   Fact = [tabled, Space, Name, InputArity],
         atom(Name),
         integer(InputArity),
@@ -435,4 +435,4 @@ seam:function_removed(_) :-
 %Nothing is tabled in the overwhelming majority of programs, and this hook
 %runs on every equation the loader compiles, so the test that decides it is
 %one indexed lookup on a predicate that is usually empty.
-metta_tabling_declared :- 'get-atoms'('&petta', [tabled|_]), !.
+metta_tabling_declared :- 'get-atoms'('&metta', [tabled|_]), !.
