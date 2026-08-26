@@ -41,12 +41,15 @@
 %   - get-memoize-stats/2 reports one function's live entry and answer counts,
 %     preserving duplicate answer occurrences in the latter [tested:
 %     lib_memo_stats:a_function_report_counts_answer_occurrences;
-%     commit=04b794b718563ebb114800abebfc6f1200d7b835].
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
 %   - Exact memoization stores each distinct solved answer in SWI's C answer
 %     trie with a summed occurrence count, then expands that count on replay;
-%     equal answers therefore remain equal bag occurrences [tested:
-%     test_exact_cache_matches_uncached_answer_bags;
-%     commit=04b794b718563ebb114800abebfc6f1200d7b835].
+%     equal answers therefore remain equal bag occurrences. A generation is a
+%     hidden input to every tabled call, so invalidation observed on one engine
+%     cannot replay an older private table on another [tested:
+%     test_exact_cache_matches_uncached_answer_bags,
+%     invalidation_moves_a_live_worker_to_a_fresh_exact_table_generation;
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
 % Decides: cache state is keyed by the module that holds the function's
 %   clauses, the way lib_tabling.pl keys its declarations. The function
 %   name stays the first argument, which is where it earns its place on
@@ -670,8 +673,10 @@ exact_memo_table_stats(Fun, Module, EntryCount, AnswerCount) :-
 current_exact_memo_table(Fun, Module, Trie) :-
     exact_memo_specialization(_ReplayName, TableName,
                               Fun, Module, Arity),
-    TableArity is Arity + 1,
+    TableArity is Arity + 2,
     functor(TableGoal, TableName, TableArity),
+    memo_current_generation(Fun, Module, Arity, Generation),
+    arg(1, TableGoal, Generation),
     get_calls(Module:TableGoal, Trie, _Return).
 
 exact_memo_return_multiplicity(Return, Multiplicity) :-
@@ -715,9 +720,9 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
     atomic_list_concat(['$petta_exact_table$', Fun, '$', Arity], TableName),
     length(RawArgs, Arity),
     ReplayHead =.. [ReplayName | RawArgs],
-    append(RawArgs, [Multiplicity], TableArgs),
+    append([Generation|RawArgs], [Multiplicity], TableArgs),
     TableHead =.. [TableName | TableArgs],
-    append(RawArgs, [1], ProducerArgs),
+    append([_Generation|RawArgs], [1], ProducerArgs),
     ProducerHead =.. [TableName | ProducerArgs],
     RawGoal =.. [Fun | RawArgs],
     %system:between, qualified, because this body is ASSERTED into the
@@ -728,14 +733,20 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
     %The module-tier cache asserts into the base tier every space inherits,
     %which is how one cached fib consumed the name for the whole suite
     %[measured 2026-08-26: test_a_cached_definition_memoizes_its_complete_answer_bag
-    %then registering between at MeTTa arity 2 threw petta_op_name_taken].
+    %then registering between at MeTTa arity 2 threw petta_op_name_taken;
+    %pinned by test_a_generated_memo_clause_does_not_consume_a_registrable_name].
     SameContextBody =
-        ( lib_memo:metta_memo_call_ctx(Fun, Module, Arity),
+        ( lib_memo:memo_current_generation(
+              Fun, Module, Arity, Generation),
+          lib_memo:metta_memo_call_ctx(Fun, Module, Arity),
           !,
           TableHead,
           system:between(1, Multiplicity, _Occurrence) ),
-    RootBody = lib_memo:exact_specialized_root(
-                   Fun, Module, Arity, Module:TableHead, Multiplicity),
+    RootBody =
+        ( lib_memo:memo_current_generation(
+              Fun, Module, Arity, Generation),
+          lib_memo:exact_specialized_root(
+              Fun, Module, Arity, Module:TableHead, Multiplicity) ),
     assertz(Module:(ProducerHead :- RawGoal)),
     declare_exact_memo_table(Module, TableName, Arity),
     assertz(Module:(ReplayHead :- SameContextBody)),
@@ -743,6 +754,12 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
     assertz(exact_memo_specialization(ReplayName, TableName,
                                       Fun, Module, Arity)).
 
+%Private tables belong to one calling thread, so local selective abolition
+%cannot invalidate the same specialization already populated on a scheduler
+%carrier. Generation is therefore an ordinary first argument: every carrier
+%reads the shared PeTTa epoch before selecting its private table variant.
+% Source: SWI-Prolog/swipl-devel f49d28558b5f1ade8348f254b5583117e773b2bb,
+% man/tabling.plx, section tabling-shared.
 % A normal argument is answer identity; sum is its coefficient. Every raw
 % proof contributes one in ProducerHead above, so equal solved answers occupy
 % one C-trie answer whose coefficient is their exact multiplicity. SWI uses
@@ -750,7 +767,7 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
 % Source: SWI-Prolog/swipl-devel f49d28558b5f1ade8348f254b5583117e773b2bb,
 % boot/tabling.pl and tests/tabling/test_wfs.pl.
 exact_memo_mode_head(TableName, Arity, ModeHead) :-
-    TableArity is Arity + 1,
+    TableArity is Arity + 2,
     functor(ModeHead, TableName, TableArity),
     arg(TableArity, ModeHead, sum).
 
@@ -774,8 +791,13 @@ memo_current_generation(Fun, Module, Arity, Gen) :-
 bump_metta_memo_generation(Fun, Module, Arity) :-
     memo_current_generation(Fun, Module, Arity, Prev),
     Next is Prev + 1,
-    retractall(metta_memo_generation(Fun, Module, Arity, _)),
-    assertz(metta_memo_generation(Fun, Module, Arity, Next)).
+    % Publish the successor before removing the predecessor. Readers run on
+    % other scheduler engines and do not take this writer mutex; retracting
+    % first would expose the no-fact fallback generation 0 and could select a
+    % stale private table during invalidation. asserta makes every overlapping
+    % read see either Prev before publication or Next after it, never a hole.
+    asserta(metta_memo_generation(Fun, Module, Arity, Next)),
+    retractall(metta_memo_generation(Fun, Module, Arity, Prev)).
 
 memo_state_arities(Fun, Module, Arities) :-
     findall(Arity,
@@ -830,7 +852,7 @@ forget_memo_supports(Fun, Module) :-
 % Source: SWI-Prolog/swipl-devel f49d28558b5f1ade8348f254b5583117e773b2bb,
 % library/tables.pl:get_calls/3.
 reset_exact_memo_table(Module, TableName, Arity) :-
-    TableArity is Arity + 1,
+    TableArity is Arity + 2,
     functor(ModeGoal, TableName, TableArity),
     '$tbl_implementation'(Module:ModeGoal,
                           TableModule:Implementation),
@@ -849,11 +871,14 @@ remove_exact_memo_specializations(Fun, Module) :-
             Specializations),
     forall(member(specialization(ReplayName, TableName, Arity),
                   Specializations),
-           ( TableArity is Arity + 1,
-             reset_exact_memo_table(Module, TableName, Arity),
-             untable(Module:TableName/TableArity),
-             abolish(Module:ReplayName/Arity),
-             abolish(Module:TableName/TableArity) )),
+           with_cache_fun_mutex(
+               Fun, Module, Arity,
+               ( bump_metta_memo_generation(Fun, Module, Arity),
+                 TableArity is Arity + 2,
+                 reset_exact_memo_table(Module, TableName, Arity),
+                 untable(Module:TableName/TableArity),
+                 abolish(Module:ReplayName/Arity),
+                 abolish(Module:TableName/TableArity) ))),
     retractall(exact_memo_specialization(_, _, Fun, Module, _)).
 
 cache_clear :-
@@ -862,9 +887,16 @@ cache_clear :-
             ; supports(memo(Module, Fun, Arity), _) ),
             MemoNodes0),
     sort(MemoNodes0, MemoNodes),
+    findall(exact(Fun, Module, Arity),
+            exact_memo_specialization(_, _, Fun, Module, Arity),
+            ExactNodes0),
+    sort(ExactNodes0, ExactNodes),
+    forall(member(exact(Fun, Module, Arity), ExactNodes),
+           with_cache_fun_mutex(
+               Fun, Module, Arity,
+               bump_metta_memo_generation(Fun, Module, Arity))),
     abolish_exact_memo_tables(_Fun, _Module, _Arity),
     retractall(metta_memo_entry(_, _, _, _, _, _)),
-    retractall(metta_memo_generation(_, _, _, _)),
     retractall(metta_memo_count(_, _, _, _)),
     retractall(metta_memo_head(_, _, _, _)),
     retractall(metta_memo_tail(_, _, _, _)),
@@ -1472,7 +1504,7 @@ exact_specialized_root(Fun, Module, Arity, TableGoal, Multiplicity) :-
       -> memo_stat_inc(cache_hit)
       ;  memo_stat_inc(cache_miss) ),
       call(TableGoal),
-      between(1, Multiplicity, _Occurrence)
+      system:between(1, Multiplicity, _Occurrence)
     )).
 
 %CallModule is the module the compiled call site lives in, fixed when the

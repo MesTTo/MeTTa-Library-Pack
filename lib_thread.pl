@@ -1,9 +1,7 @@
-% Purpose: concurrency for MeTTa over SWI's own primitives. Parallel map,
-%   filter and quantifiers ride library(thread)'s concurrent_maplist/3 and
-%   concurrent_forall/2, racing rides first_solution/3, futures are threads
-%   with a result mailbox, and channels are message queues. Nothing here
-%   hand-rolls a scheduler. Every predicate follows the compiled convention,
-%   inputs then one output.
+% Purpose: concurrency for MeTTa over SWI's own primitives. Futures are
+%   suspended SWI engines multiplexed over one bounded carrier pool; waits,
+%   channel backpressure and blocking host calls release those carriers.
+%   Every predicate follows the compiled convention, inputs then one output.
 % Assumes:
 %   - eval_metta_in_module/3 in engine/translator.pl evaluates one MeTTa
 %     expression under a named space's module, which is what a worker thread
@@ -13,6 +11,34 @@
 %     and calls each goal once [source 2026-08-15:
 %     /usr/lib/swi-prolog/library/thread.pl, workers/2 and once_in_module/5]
 % Guarantees:
+%   - spawned computations are SWI engines stepped over a bounded carrier
+%     pool, and a space write wakes rather than parks a carrier [tested:
+%     lib_thread:spawned_engines_multiplex_over_bounded_carriers,
+%     lib_thread:a_suspended_engine_resumes_when_its_space_waker_fires,
+%     lib_thread:cancelling_a_suspended_engine_releases_it_without_an_answer;
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+%   - oracleIO host operations detach onto transient offload threads before
+%     entering foreign code, so even more blocked calls than normal carriers
+%     cannot consume scheduler capacity; cancellation reports false until a
+%     running foreign call returns and the engine actually settles [tested:
+%     test_a_blocking_oracle_uses_the_dirty_lane_without_pinning_normal_work;
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+%   - future await, empty channel receive and full channel send suspend their
+%     engines and wake from completion or mailbox state instead of blocking
+%     all carriers [tested:
+%     lib_thread:awaiting_futures_suspends_engines_instead_of_all_carriers,
+%     lib_thread:empty_channel_receives_suspend_engines_instead_of_all_carriers,
+%     lib_thread:full_channel_sends_suspend_engines_instead_of_all_carriers;
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+%   - future completion is single-assignment, settled pool work cannot be
+%     reported as cancelled, timer dispatch cannot cross a successful
+%     cancellation, and a repeating timer coalesces ticks while its prior
+%     invocation is still running [tested:
+%     lib_thread:a_future_terminal_outcome_is_single_assignment,
+%     lib_thread:cancelling_a_completed_unawaited_pool_future_is_false,
+%     lib_thread:timer_fire_and_cancel_have_one_atomic_transition,
+%     lib_thread:a_repeating_timer_never_overlaps_its_own_invocations;
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
@@ -25,11 +51,11 @@
 %     pruned branch cannot win [tested: lib_thread:race_survives_a_failing_branch;
 %     commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87]
 %   - a future holds its expression's whole ANSWER SET, because it is a space
-%     the evaluating thread adds every answer to; awaiting twice answers the
+%     the evaluating engine adds every answer to; awaiting twice answers the
 %     same set without blocking a second time [tested: lib_thread:a_future_holds_the_whole_answer_set]
 %   - a channel send never loses a term: message queues copy, so the receiver
 %     gets its own copy and variable bindings do not cross [tested: lib_thread:a_channel_round_trips_a_term, a_channel_carries_a_term_between_threads]
-%   - timers cost no threads: one timer thread and one bounded pool serve every
+%   - timers cost no per-timer threads: one timer thread and one bounded pool serve every
 %     timer in the process [assumed 2026-08-16: no test counts threads around an armed timer]
 % Fails when:
 %   - the work per element is small. A parallel map over cheap elements pays
@@ -49,20 +75,36 @@
 % Owns:
 %   - one seam:atom_added/2 clause and one message queue per live
 %     space_await/space_take call, both released when the call leaves
-%   - one OS thread per live spawned future until it is awaited or cancelled,
-%     one message queue per live channel until it is closed, and, once any
-%     timer has been used, one timer thread plus one bounded pool for the life
-%     of the process.
+%   - one SWI engine and one completion queue per live spawned future; one
+%     bounded normal carrier pool for the process; one transient offload
+%     thread per currently blocking oracleIO step; one message queue per live
+%     channel; and, once any timer has been used, one timer thread plus one
+%     bounded timer pool for the process.
 % Guarded by:
-%   - '$petta_thread_ids' serialises handle allocation; '$petta_timers'
-%     serialises starting the timer service; one mutex per future serialises
-%     that future's await so two awaiters cannot both block on its mailbox.
+%   - '$petta_engine_scheduler' protects task state and carrier creation;
+%     '$petta_timers' serialises starting the timer service; one outcome mutex
+%     per future claims its terminal value, and one await mutex serialises
+%     cancellation, waiter registration and mailbox consumption;
+%     '$petta_timer_lifecycle' serialises timer dispatch and cancellation;
+%     '$petta_scheduler_deadlines' serialises finite wake tokens.
 % Decides:
 %   - a future IS a space, so it carries an answer SET rather than one value.
 %     A MeTTa expression has an answer set, and a future answering only the
 %     first would discard the evaluation model at the concurrency boundary.
 %   - a timer is a future that starts later, so setTimeout and clearTimeout are
 %     spawn-with-a-delay and thread-cancel rather than a separate handle type.
+%   - a saturated timer pool never blocks the one timer service: a one-shot
+%     retries after 10ms and a repeating timer retries at its next period, so
+%     scheduler deadlines remain independent of timer-body capacity [tested:
+%     lib_thread:a_saturated_timer_pool_does_not_block_scheduler_deadlines;
+%     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
+%   - oracleIO follows Go's blocking-syscall handoff: normal scheduler
+%     carriers never enter potentially blocking foreign code; the engine
+%     detaches onto a transient thread until that call returns [source:
+%     https://github.com/golang/go/blob/c19862e5f8415b4f24b189d065ed739517c548ba/src/runtime/proc.go#L4781-L4831,
+%     Go 1.26.5 entersyscallblock; source:
+%     https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/man/engines.plx#L13-L21,
+%     SWI-Prolog 10.1.13 engine_next/2 attachment semantics].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -77,10 +119,18 @@
 :- use_module(library(apply)).
 :- use_module(library(aggregate)).
 :- use_module(library(heaps)).
+:- use_module(library(pairs)).
 
-:- dynamic petta_future/3.          % Space, ThreadId, DoneQueue
+:- dynamic petta_future/3.          % Space, Worker, DoneQueue
 :- dynamic petta_future_result/2.   % Space, done | cancelled | error(Error)
 :- dynamic petta_channel/2.         % Id, Queue
+:- dynamic petta_scheduler_task/6.  % Id, Engine, Space, Done, Context, State
+:- dynamic petta_scheduler_lane/3.  % Lane, runnable queue, carrier threads
+:- dynamic petta_future_waiter/2.   % Future space, suspended scheduler task
+:- dynamic petta_channel_waiter/3.  % Channel, send | recv, scheduler task
+:- dynamic petta_timer_context/3.   % Future space, repeat policy, Python Context
+:- dynamic petta_scheduler_deadline/2. % Token, suspended scheduler task
+:- dynamic petta_async_future/4.    % Token, operation name, space, DoneQueue
 
 %Handles are small integers rather than blobs so they print, compare and
 %cross the Python boundary as ordinary MeTTa values.
@@ -105,24 +155,36 @@ next_petta_handle(Id) :-
 par_map(F, List, Out) :-
     must_be(list, List),
     current_metta_module(Module),
-    concurrent_maplist(par_apply_(Module, F), List, Out).
+    length(List, Count),
+    setup_call_cleanup(
+        petta_capture_python_contexts(Count, Contexts),
+        concurrent_maplist(par_apply_(Module, F), Contexts, List, Out),
+        petta_release_python_contexts(Contexts)).
 
-par_apply_(Module, F, Element, Result) :-
-    eval_metta_in_module(Module, [F, Element], Result).
+par_apply_(Module, F, Context, Element, Result) :-
+    petta_in_python_context(
+        Context,
+        eval_metta_in_module(Module, [F, Element], Result)).
 
 %Keep the elements for which (F Element) answers True.
 par_filter(F, List, Out) :-
     must_be(list, List),
     current_metta_module(Module),
-    concurrent_maplist(par_true_(Module, F), List, Flags),
+    length(List, Count),
+    setup_call_cleanup(
+        petta_capture_python_contexts(Count, Contexts),
+        concurrent_maplist(par_true_(Module, F), Contexts, List, Flags),
+        petta_release_python_contexts(Contexts)),
     keep_flagged_(List, Flags, Out).
 
-par_true_(Module, F, Element, Flag) :-
-    (   eval_metta_in_module(Module, [F, Element], Answer),
-        Answer == true
-    ->  Flag = true
-    ;   Flag = false
-    ).
+par_true_(Module, F, Context, Element, Flag) :-
+    petta_in_python_context(
+        Context,
+        (   eval_metta_in_module(Module, [F, Element], Answer),
+            Answer == true
+        ->  Flag = true
+        ;   Flag = false
+        )).
 
 keep_flagged_([], [], []).
 keep_flagged_([E|Es], [true|Fs], [E|Out]) :- !, keep_flagged_(Es, Fs, Out).
@@ -133,15 +195,22 @@ keep_flagged_([_|Es], [_|Fs], Out) :- keep_flagged_(Es, Fs, Out).
 par_forall(F, List, Answer) :-
     must_be(list, List),
     current_metta_module(Module),
-    (   concurrent_forall(member(Element, List),
-                          par_true_checked_(Module, F, Element))
-    ->  Answer = true
-    ;   Answer = false
-    ).
+    length(List, Count),
+    setup_call_cleanup(
+        ( petta_capture_python_contexts(Count, Contexts),
+          pairs_keys_values(Pairs, Contexts, List) ),
+        (   concurrent_forall(member(Context-Element, Pairs),
+                              par_true_checked_(Module, F, Context, Element))
+        ->  Answer = true
+        ;   Answer = false
+        ),
+        petta_release_python_contexts(Contexts)).
 
-par_true_checked_(Module, F, Element) :-
-    eval_metta_in_module(Module, [F, Element], Answer),
-    Answer == true.
+par_true_checked_(Module, F, Context, Element) :-
+    petta_in_python_context(
+        Context,
+        ( eval_metta_in_module(Module, [F, Element], Answer),
+          Answer == true )).
 
 %True when (F Element) answers True for at least one element.
 %
@@ -153,13 +222,18 @@ par_true_checked_(Module, F, Element) :-
 par_any(F, List, Answer) :-
     must_be(list, List),
     current_metta_module(Module),
-    (   List == []
-    ->  Answer = false
-    ;   concurrent_forall(member(Element, List),
-                          \+ par_true_checked_(Module, F, Element))
-    ->  Answer = false
-    ;   Answer = true
-    ).
+    length(List, Count),
+    setup_call_cleanup(
+        ( petta_capture_python_contexts(Count, Contexts),
+          pairs_keys_values(Pairs, Contexts, List) ),
+        (   List == []
+        ->  Answer = false
+        ;   concurrent_forall(member(Context-Element, Pairs),
+                              \+ par_true_checked_(Module, F, Context, Element))
+        ->  Answer = false
+        ;   Answer = true
+        ),
+        petta_release_python_contexts(Contexts)).
 
 %Evaluate every expression at once and answer the first to SUCCEED, then stop
 %the rest. A branch that fails drops out without ending the race, which is why
@@ -172,13 +246,24 @@ par_race(Exprs, Out) :-
     current_metta_module(Module),
     length(Exprs, Count),
     setup_call_cleanup(
-        race_queues_create(Start, Results),
+        race_resources_create(Count, Start, Results, Contexts),
         setup_call_cleanup(
-            race_start_(Module, Exprs, Start, Results, Threads),
+            race_start_(Module, Exprs, Contexts, Start, Results, Threads),
             ( race_release_(Threads, Start),
               race_collect_(Results, Count, Out) ),
             race_stop_(Threads)),
-        race_queues_destroy(Start, Results)).
+        ( petta_release_python_contexts(Contexts),
+          race_queues_destroy(Start, Results) )).
+
+race_resources_create(Count, Start, Results, Contexts) :-
+    race_queues_create(Start, Results),
+    catch((   petta_capture_python_contexts(Count, Contexts)
+          ->  true
+          ;   race_queues_destroy(Start, Results),
+              fail
+          ),
+          Error,
+          ( race_queues_destroy(Start, Results), throw(Error) )).
 
 race_queues_create(Start, Results) :-
     message_queue_create(Start),
@@ -186,28 +271,48 @@ race_queues_create(Start, Results) :-
           Error,
           ( message_queue_destroy(Start), throw(Error) )).
 
-race_start_(Module, Exprs, Start, Results, Threads) :-
-    findall(Thread,
-            ( member(Expr, Exprs),
-              thread_create(race_body_(Module, Expr, Start, Results),
-                            Thread, []) ),
-            Threads).
+race_start_(Module, Exprs, Contexts, Start, Results, Threads) :-
+    pairs_keys_values(Pairs, Contexts, Exprs),
+    race_start_pairs_(Pairs, Module, Start, Results, [], Outcome),
+    (   Outcome = started(Reverse)
+    ->  reverse(Reverse, Threads)
+    ;   Outcome = error(Error, Started),
+        race_stop_(Started),
+        throw(Error)
+    ).
+
+race_start_pairs_([], _, _, _, Started, started(Started)).
+race_start_pairs_([Context-Expr|Pairs], Module, Start, Results, Started,
+                  Outcome) :-
+    catch(( thread_create(race_body_(Module, Context, Expr, Start, Results),
+                          Thread, []),
+            Created = thread(Thread) ),
+          Error,
+          Created = error(Error)),
+    (   Created = thread(Thread)
+    ->  race_start_pairs_(Pairs, Module, Start, Results, [Thread|Started],
+                          Outcome)
+    ;   Created = error(Error),
+        Outcome = error(Error, Started)
+    ).
 
 race_release_(Threads, Start) :-
     forall(member(_, Threads), thread_send_message(Start, go)).
 
-race_body_(Module, Expr, Start, Results) :-
+race_body_(Module, Context, Expr, Start, Results) :-
     thread_get_message(Start, go),
-    (   catch((   eval_metta_in_module(Module, Expr, Value),
-                  Value \== 'Empty'
-              ->  Message = ok(Value)
-              ;   Message = lost
-              ),
-              Error,
-              Message = error(Error))
-    ->  true
-    ;   Message = lost
-    ),
+    petta_in_python_context(
+        Context,
+        (   catch((   eval_metta_in_module(Module, Expr, Value),
+                      Value \== 'Empty'
+                  ->  Message = ok(Value)
+                  ;   Message = lost
+                  ),
+                  Error,
+                  Message = error(Error))
+        ->  true
+        ;   Message = lost
+        )),
     thread_send_message(Results, Message).
 
 race_collect_(Queue, Remaining, Out) :-
@@ -247,28 +352,496 @@ future_space_name(Number, Space) :-
 
 thread_spawn(Expr, Space) :-
     current_metta_module(Module),
+    petta_capture_python_context(Context),
+    catch(thread_spawn_context_(Context, Module, Expr, Space),
+          Error,
+          ( petta_release_python_context(Context), throw(Error) )).
+
+thread_spawn_context_(Context, Module, Expr, Space) :-
     next_petta_handle(Number),
     future_space_name(Number, Space),
     message_queue_create(Done, [max_size(1)]),
-    thread_create(future_body_(Module, Expr, Space, Done), ThreadId, []),
-    assertz(petta_future(Space, ThreadId, Done)).
+    catch(petta_scheduler_spawn(Module, Expr, Space, Done, Context, _Task),
+          Error,
+          ( message_queue_destroy(Done), throw(Error) )).
 
-%forall/2 over the evaluation, so EVERY answer reaches the space rather than
-%just the first. An expression with no answers leaves the space empty, which
-%is the honest reading of "produced nothing".
-future_body_(Module, Expr, Space, Done) :-
-    (   catch(( forall(eval_metta_in_module(Module, Expr, Value),
-                       'add-atom'(Space, Value, _)),
-                Outcome = done ),
-              Error,
-              Outcome = error(Error))
-    ->  true
-    ;   Outcome = done
+%The scheduler is Go's G/P/M separation at this engine's scale: an engine is
+%the resumable computation, a queue is the execution permission, and a fixed
+%SWI worker is the carrier. Unlike a raw goal in thread_create/3, the engine
+%detaches after each answer, explicit wait, or lane handoff and can resume on
+%another worker. Each carrier is a long-lived queue loop, so resuming an engine
+%does not create another OS thread.
+
+petta_scheduler_ensure :-
+    petta_scheduler_ensure_lane_ready(normal).
+
+petta_scheduler_ensure_lane_ready(normal) :-
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_ensure_lane_ready_locked(normal)).
+
+petta_scheduler_ensure_lane_ready_locked(Lane) :-
+    cpu_count(Cores),
+    Workers is max(1, min(Cores, 4)),
+    petta_scheduler_ensure_lane(Lane, Workers).
+
+petta_scheduler_ensure_lane(Lane, Workers) :-
+    (   petta_scheduler_lane(Lane, Queue, Carriers)
+    ->  include(petta_scheduler_carrier_running, Carriers, Running),
+        retract(petta_scheduler_lane(Lane, Queue, Carriers)),
+        assertz(petta_scheduler_lane(Lane, Queue, Running))
+    ;   message_queue_create(Queue),
+        assertz(petta_scheduler_lane(Lane, Queue, [])),
+        Running = []
     ),
-    thread_send_message(Done, Outcome).
+    length(Running, Count),
+    Missing is Workers - Count,
+    petta_scheduler_start_carriers(Lane, Queue, Missing).
+
+petta_scheduler_carrier_running(Thread) :-
+    catch(thread_property(Thread, status(running)), _, fail).
+
+petta_scheduler_start_carriers(_, _, Missing) :-
+    Missing =< 0, !.
+petta_scheduler_start_carriers(Lane, Queue, Missing) :-
+    thread_create(petta_scheduler_carrier(Lane, Queue), Thread,
+                  [detached(true)]),
+    retract(petta_scheduler_lane(Lane, Queue, Carriers)),
+    assertz(petta_scheduler_lane(Lane, Queue, [Thread|Carriers])),
+    Remaining is Missing - 1,
+    petta_scheduler_start_carriers(Lane, Queue, Remaining).
+
+petta_scheduler_carrier(Lane, Queue) :-
+    thread_get_message(Queue, Message),
+    (   Message = run(Task)
+    ->  catch(petta_scheduler_step(Task, Lane),
+              Error,
+              petta_scheduler_submission_failed(Task, Error)),
+        petta_scheduler_carrier(Lane, Queue)
+    ;   Message == stop
+    ->  true
+    ;   petta_scheduler_carrier(Lane, Queue)
+    ).
+
+petta_scheduler_lane_size(normal, Size) :-
+    petta_scheduler_ensure_lane_ready(normal),
+    petta_scheduler_lane(normal, _, Carriers),
+    include(petta_scheduler_carrier_running, Carriers, Running),
+    length(Running, Size).
+
+petta_scheduler_lane_queue(Queue) :-
+    (   petta_scheduler_lane(normal, Queue, _)
+    ->  true
+    ;   petta_scheduler_ensure_lane_ready(normal),
+        petta_scheduler_lane(normal, Queue, _)
+    ).
+
+petta_scheduler_spawn(Module, Expr, Space, Done, Context, Task) :-
+    petta_scheduler_ensure,
+    next_petta_handle(Task),
+    engine_create(Final,
+                  petta_scheduler_body(Task, Context, Module, Expr, Final),
+                  Engine),
+    catch(( assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                         queued(normal))),
+            assertz(petta_future(Space, scheduler(Task), Done)),
+            petta_scheduler_enqueue(Task, normal) ),
+          Error,
+          ( retractall(petta_scheduler_task(Task, _, _, _, _, _)),
+            retractall(petta_future(Space, scheduler(Task), Done)),
+            engine_destroy(Engine),
+            throw(Error) )).
+
+%forall/2 retains every answer. Each answer is yielded to the scheduler before
+%the carrier writes it, so no engine is attached while an atom hook runs and a
+%hook that wakes another task only queues that task.
+petta_scheduler_body(Task, Context, Module, Expr, done) :-
+    b_setval('$petta_scheduler_task', Task),
+    b_setval('$petta_python_context', Context),
+    forall(eval_metta_in_module(Module, Expr, Value),
+           engine_yield('$petta_scheduler_answer'(Value))).
+
+%A carrier sends its successor step to an unbounded runnable queue, then
+%returns to that queue before the engine may resume. Enqueue is non-blocking,
+%so every carrier can hand off simultaneously without the all-workers-submit
+%deadlock of thread_create_in_pool/4. The handoff is Go's blocking-syscall
+%shape: release the execution permission before the foreign call proceeds.
+%Go performs the corresponding handoff before a goroutine enters a blocking
+%syscall, releasing its P so another M can run queued work [source:
+%https://github.com/golang/go/blob/c19862e5f8415b4f24b189d065ed739517c548ba/src/runtime/proc.go#L4781-L4831,
+%Go 1.26.5 entersyscallblock].
+petta_scheduler_enqueue(Task, normal) :-
+    catch(( petta_scheduler_lane_queue(Queue),
+            thread_send_message(Queue, run(Task)) ),
+          Error,
+          petta_scheduler_submission_failed(Task, Error)).
+petta_scheduler_enqueue(Task, dirty) :-
+    catch(petta_scheduler_offload(Task),
+          Error,
+          petta_scheduler_submission_failed(Task, Error)).
+
+%A blocking foreign call gets a transient M without keeping a scheduler P,
+%which is Go's syscall handoff rather than a second bounded carrier pool. The
+%SWI engine detaches at the lane yield; this worker attaches for exactly one
+%foreign step and exits when the engine yields back to normal. An indefinitely
+%blocked call therefore owns its offload thread, not one of the four carriers
+%that make progress for every other runnable engine [source:
+%https://github.com/golang/go/blob/c19862e5f8415b4f24b189d065ed739517c548ba/src/runtime/proc.go#L4781-L4831,
+%Go 1.26.5 entersyscallblock].
+petta_scheduler_offload(Task) :-
+    thread_create(petta_scheduler_dirty_worker(Task), Thread,
+                  [detached(true)]),
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_bind_offload(Task, Thread, Message)),
+    thread_send_message(Thread, Message).
+
+petta_scheduler_bind_offload(Task, Thread, Message) :-
+    (   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     queued(dirty)))
+    ->  assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     offloaded(Thread))),
+        Message = run
+    ;   Message = stop
+    ).
+
+petta_scheduler_dirty_worker(Task) :-
+    thread_get_message(Message),
+    (   Message == run
+    ->  catch(petta_scheduler_step(Task, dirty),
+              Error,
+              petta_scheduler_submission_failed(Task, Error))
+    ;   true
+    ).
+
+petta_scheduler_submission_failed(Task, Error) :-
+    petta_scheduler_finish(Task, error(Error)).
+
+petta_scheduler_step(Task, Lane) :-
+    (   with_mutex('$petta_engine_scheduler',
+                   petta_scheduler_begin_step(Task, Lane, Engine))
+    ->  catch(engine_next_reified(Engine, Event),
+              Error,
+              Event = throw(Error)),
+        petta_scheduler_event(Task, Lane, Event)
+    ;   true
+    ).
+
+petta_scheduler_begin_step(Task, Lane, Engine) :-
+    thread_self(Thread),
+    petta_scheduler_begin_state(Lane, Thread, Initial),
+    retract(petta_scheduler_task(Task, Engine, Space, Done, Context, Initial)),
+    assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                 running(Lane, Thread))).
+
+petta_scheduler_begin_state(normal, _, queued(normal)).
+petta_scheduler_begin_state(dirty, Thread, offloaded(Thread)).
+
+petta_scheduler_event(Task, Lane,
+                      the('$petta_scheduler_answer'(Value))) :- !,
+    catch(( petta_scheduler_write_answer(Task, Value), Outcome = ok ),
+          Error,
+          Outcome = error(Error)),
+    (   Outcome == ok
+    ->  petta_scheduler_continue(Task, Lane)
+    ;   Outcome = error(WriteError),
+        petta_scheduler_finish(Task, error(WriteError))
+    ).
+petta_scheduler_event(Task, Lane,
+                      the('$petta_scheduler_suspend')) :- !,
+    petta_scheduler_suspend(Task, Lane).
+petta_scheduler_event(Task, _,
+                      the('$petta_scheduler_lane'(Lane))) :- !,
+    petta_scheduler_handoff(Task, Lane).
+petta_scheduler_event(Task, _, the(done)) :- !,
+    petta_scheduler_finish(Task, done).
+petta_scheduler_event(Task, _, no) :- !,
+    petta_scheduler_finish(Task, done).
+petta_scheduler_event(Task, _, throw(Error)) :- !,
+    petta_scheduler_finish(Task, error(Error)).
+petta_scheduler_event(Task, _, Unexpected) :-
+    petta_scheduler_finish(
+        Task,
+        error(error(petta_scheduler_protocol(Unexpected),
+                    context(petta_scheduler_step/2,
+                            'a scheduled engine yielded an unknown event')))).
+
+petta_scheduler_write_answer(Task, Value) :-
+    petta_scheduler_task(Task, _, Space, _, _, _),
+    'add-atom'(Space, Value, _).
+
+petta_scheduler_continue(Task, Lane) :-
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_transition(Task, Lane, continue, Action)),
+    petta_scheduler_action(Task, Action).
+
+petta_scheduler_suspend(Task, Lane) :-
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_transition(Task, Lane, suspend, Action)),
+    petta_scheduler_action(Task, Action).
+
+petta_scheduler_handoff(Task, Lane) :-
+    must_be(oneof([normal, dirty]), Lane),
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_transition(Task, _, handoff(Lane), Action)),
+    petta_scheduler_action(Task, Action).
+
+petta_scheduler_transition(Task, Lane, Operation, Action) :-
+    (   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     cancelling(Lane, _)))
+    ->  assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     finishing(cancelled))),
+        Action = finish(cancelled)
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     wake_pending(Lane, _)))
+    ->  petta_scheduler_next_state(Operation, Lane, NextLane, _),
+        assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     queued(NextLane))),
+        Action = enqueue(NextLane)
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     running(Lane, _)))
+    ->  petta_scheduler_next_state(Operation, Lane, NextLane, NextState),
+        assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     NextState)),
+        ( NextState = queued(_) -> Action = enqueue(NextLane)
+        ; Action = none )
+    ;   Action = none
+    ).
+
+petta_scheduler_next_state(continue, Lane, Lane, queued(Lane)).
+petta_scheduler_next_state(suspend, Lane, Lane, suspended(Lane)).
+petta_scheduler_next_state(handoff(Target), _, Target, queued(Target)).
+
+petta_scheduler_action(_, none).
+petta_scheduler_action(Task, enqueue(Lane)) :-
+    petta_scheduler_enqueue(Task, Lane).
+petta_scheduler_action(Task, finish(Outcome)) :-
+    petta_scheduler_finish(Task, Outcome).
+
+%A wakeup is a hint and the store remains the truth. Running records remember
+%one pending hint, closing the write-before-suspend race; multiple writes fold
+%into that one bit and never enqueue the same engine twice.
+petta_scheduler_wake(Task) :-
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_wake_locked(Task, Action)),
+    petta_scheduler_action(Task, Action).
+
+petta_scheduler_wake_locked(Task, Action) :-
+    (   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     suspended(Lane)))
+    ->  assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     queued(Lane))),
+        Action = enqueue(Lane)
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     running(Lane, Thread)))
+    ->  assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     wake_pending(Lane, Thread))),
+        Action = none
+    ;   Action = none
+    ).
+
+petta_scheduler_finish(Task, Outcome) :-
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_take_task(Task, Engine, Space, Done, Context)),
+    (   nonvar(Engine)
+    ->  catch(engine_destroy(Engine), _, true),
+        retractall(petta_future_waiter(_, Task)),
+        retractall(petta_channel_waiter(_, _, Task)),
+        petta_release_python_context(Context),
+        petta_future_complete(Space, Done, Outcome)
+    ;   true
+    ).
+
+petta_scheduler_take_task(Task, Engine, Space, Done, Context) :-
+    (   retract(petta_scheduler_task(Task, Engine, Space, Done, Context, _))
+    ->  true
+    ;   true
+    ).
+
+petta_scheduler_cancel(Task, Answer) :-
+    with_mutex('$petta_engine_scheduler',
+               petta_scheduler_cancel_locked(Task, Action, Answer)),
+    petta_scheduler_cancel_action(Action).
+
+petta_scheduler_cancel_locked(Task, Action, Answer) :-
+    (   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     queued(_)))
+    ->  Action = dispose(Task, Engine, Space, Done, Context), Answer = true
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     offloaded(_)))
+    ->  Action = dispose(Task, Engine, Space, Done, Context), Answer = true
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     suspended(_)))
+    ->  Action = dispose(Task, Engine, Space, Done, Context), Answer = true
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     running(Lane, Thread)))
+    ->  assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     cancelling(Lane, Thread))),
+        Action = none, Answer = false
+    ;   retract(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     wake_pending(Lane, Thread)))
+    ->  assertz(petta_scheduler_task(Task, Engine, Space, Done, Context,
+                                     cancelling(Lane, Thread))),
+        Action = none, Answer = false
+    ;   petta_scheduler_task(Task, _, _, _, _, cancelling(_, _))
+    ->  Action = none, Answer = false
+    ;   Action = none, Answer = false
+    ).
+
+petta_scheduler_cancel_action(none).
+petta_scheduler_cancel_action(dispose(Task, Engine, Space, Done, Context)) :-
+    catch(engine_destroy(Engine), _, true),
+    retractall(petta_future_waiter(_, Task)),
+    retractall(petta_channel_waiter(_, _, Task)),
+    petta_release_python_context(Context),
+    petta_future_complete(Space, Done, cancelled).
+
+%Async host operations use the same future-space lifecycle without owning an
+%engine. The Python event loop produces one encoded answer and calls the shim's
+%landing predicate; these helpers own the common future registry and mailbox.
+petta_async_future_new(Space, Done) :-
+    next_petta_handle(Number),
+    future_space_name(Number, Space),
+    message_queue_create(Done, [max_size(1)]),
+    assertz(petta_future(Space, async(pending), Done)).
+
+petta_async_future_bind(Token, Name, Space, Done) :-
+    retract(petta_future(Space, async(pending), Done)),
+    assertz(petta_future(Space, async(Token), Done)),
+    assertz(petta_async_future(Token, Name, Space, Done)).
+
+petta_async_future_abandon(Space, Done) :-
+    retractall(petta_future(Space, async(pending), Done)),
+    catch(message_queue_destroy(Done), _, true).
+
+petta_async_future_settle(Token, Outcome, Name, Space) :-
+    (   retract(petta_async_future(Token, Name, Space, Done))
+    ->  petta_future_complete(Space, Done, Outcome)
+    ;   existence_error(petta_async_future, Token)
+    ).
+
+petta_async_future_discard(Token) :-
+    (   retract(petta_async_future(Token, _, Space, Done))
+    ->  petta_async_future_discard(Token, Space, Done)
+    ;   true
+    ).
+
+petta_async_future_discard(Token, Space, Done) :-
+    retractall(petta_async_future(Token, _, Space, Done)),
+    retractall(petta_future(Space, async(Token), Done)),
+    retractall(petta_future(Space, async(pending), Done)),
+    catch(message_queue_destroy(Done), _, true).
+
+petta_async_cancel(Token, Answer) :-
+    (   current_predicate(py_call/2),
+        catch(py_call(petta_ops:async_cancel(Token), Cancelled), _, fail),
+        ( Cancelled == true ; Cancelled == @(true) )
+    ->  Answer = true
+    ;   Answer = false
+    ).
+
+%A nested spawn forks the scheduled engine's retained Context after any host
+%callback mutations made by that engine. A top-level door snapshots the Python
+%caller's ambient Context. Falling back to the carrier's ambient context here
+%would lose nested changes because carriers deliberately do not inherit task
+%state between engine steps.
+petta_capture_python_context(Context) :-
+    (   nb_current('$petta_python_context', Parent), integer(Parent)
+    ->  py_call(petta_ops:fork_context(Parent), Context)
+    ;   current_predicate(petta_py_dispatch_det/3)
+    ->  py_call(petta_ops:capture_context(), Context)
+    ;   Context = none
+    ).
+
+petta_capture_python_contexts(Count, Contexts) :-
+    (   nb_current('$petta_python_context', Parent), integer(Parent)
+    ->  py_call(petta_ops:fork_contexts(Parent, Count), Contexts)
+    ;   current_predicate(petta_py_dispatch_det/3)
+    ->  py_call(petta_ops:capture_contexts(Count), Contexts)
+    ;   length(Contexts, Count),
+        maplist(=(none), Contexts)
+    ).
+
+petta_release_python_context(none) :- !.
+petta_release_python_context(Context) :-
+    (   current_predicate(py_call/2)
+    ->  catch(py_call(petta_ops:release_context(Context), _), _, true)
+    ;   true
+    ).
+
+petta_release_python_contexts(Contexts) :-
+    maplist(petta_release_python_context, Contexts).
+
+petta_in_python_context(Context, Goal) :-
+    setup_call_cleanup(
+        petta_python_context_push(Context, Previous),
+        call(Goal),
+        petta_python_context_pop(Previous)).
+
+petta_python_context_push(Context, Previous) :-
+    (   nb_current('$petta_python_context', Existing)
+    ->  Previous = value(Existing)
+    ;   Previous = absent
+    ),
+    b_setval('$petta_python_context', Context).
+
+petta_python_context_pop(value(Context)) :- !,
+    b_setval('$petta_python_context', Context).
+petta_python_context_pop(absent) :-
+    nb_delete('$petta_python_context').
+
+%Explicit user-created pools and timers promise parallel workers rather than
+%scheduler multiplexing, and run their already-captured Context here.
+future_body_context_(Context, Module, Expr, Space, Done) :-
+    call_cleanup(
+        future_body_outcome_(Context, Module, Expr, Space, Outcome),
+        petta_release_python_context(Context)),
+    petta_future_complete(Space, Done, Outcome).
+
+future_body_outcome_(Context, Module, Expr, Space, Outcome) :-
+    setup_call_cleanup(
+        petta_python_context_push(Context, Previous),
+        (   catch(( forall(eval_metta_in_module(Module, Expr, Value),
+                           'add-atom'(Space, Value, _)),
+                    Outcome = done ),
+                  Error,
+                  Outcome = error(Error))
+        ->  true
+        ;   Outcome = done
+        ),
+        petta_python_context_pop(Previous)).
 
 future_mutex_(Space, Mutex) :-
     atom_concat('$petta_future_', Space, Mutex).
+
+future_completion_mutex_(Space, Mutex) :-
+    atom_concat('$petta_future_completion_', Space, Mutex).
+
+%Claim the terminal outcome before publishing it. The completion mutex is
+%separate from the await mutex because an ordinary awaiter holds the latter
+%while blocked on Done; sending while holding it would deadlock the producer
+%against its consumer. Publishing first then taking the await mutex closes the
+%lost-wakeup window: a scheduled waiter either registers before the drain or
+%observes the already-recorded terminal outcome.
+petta_future_complete(Space, Done, Outcome) :-
+    future_completion_mutex_(Space, CompletionMutex),
+    with_mutex(
+        CompletionMutex,
+        (   petta_future_result(Space, _)
+        ->  Claimed = false
+        ;   assertz(petta_future_result(Space, Outcome)),
+            Claimed = true
+        )),
+    petta_future_publish_(Claimed, Space, Done, Outcome).
+
+petta_future_publish_(false, _, _, _) :- !.
+petta_future_publish_(true, Space, Done, Outcome) :-
+    catch(thread_send_message(Done, Outcome, [timeout(0)]), _, true),
+    future_mutex_(Space, Mutex),
+    with_mutex(
+        Mutex,
+        findall(Task,
+                retract(petta_future_waiter(Space, Task)),
+                Waiters)),
+    maplist(petta_scheduler_wake, Waiters).
 
 %Wait for the future to finish, then answer every atom it produced, one per
 %solution. Awaiting a second time answers the same set without blocking again,
@@ -281,18 +854,61 @@ thread_await(Space, Out) :-
     ).
 
 future_settle_(Space, Outcome) :-
-    future_mutex_(Space, Mutex),
-    with_mutex(Mutex, future_outcome_(Space, Outcome)).
+    (   nb_current('$petta_scheduler_task', Task)
+    ->  scheduler_future_settle_(Task, Space, Outcome)
+    ;   future_mutex_(Space, Mutex),
+        with_mutex(Mutex, future_outcome_(Space, Outcome, Worker)),
+        future_join_(Worker)
+    ).
 
-future_outcome_(Space, Outcome) :-
+%Await inside a scheduled engine parks the engine and leaves its carrier free.
+%The recorded terminal outcome remains the source of truth; the waiter fact is
+%only a level-triggered waker and is installed before completion drains it
+%under the same await mutex.
+scheduler_future_settle_(Task, Space, Outcome) :-
+    future_mutex_(Space, Mutex),
+    with_mutex(Mutex,
+               scheduler_future_probe_(Task, Space, Status)),
+    (   Status = ready(Outcome, Worker)
+    ->  future_join_(Worker)
+    ;   engine_yield('$petta_scheduler_suspend'),
+        scheduler_future_settle_(Task, Space, Outcome)
+    ).
+
+scheduler_future_probe_(_, Space, ready(Outcome, none)) :-
+    petta_future_result(Space, Outcome), !.
+scheduler_future_probe_(_, Space, ready(Outcome, Worker)) :-
+    known_future_(Space, Worker, Done),
+    message_queue_property(Done, size(Pending)),
+    Pending > 0, !,
+    thread_get_message(Done, Received),
+    future_record_received_(Space, Received, Outcome).
+scheduler_future_probe_(Task, Space, pending) :-
+    known_future_(Space, _, _),
+    (   petta_future_waiter(Space, Task)
+    ->  true
+    ;   assertz(petta_future_waiter(Space, Task))
+    ).
+
+future_outcome_(Space, Outcome, Worker) :-
+    (   petta_future_result(Space, Recorded)
+    ->  Outcome = Recorded, Worker = none
+    ;   known_future_(Space, Worker, Done),
+        thread_get_message(Done, Received),
+        future_record_received_(Space, Received, Outcome)
+    ).
+
+future_record_received_(Space, Received, Outcome) :-
     (   petta_future_result(Space, Recorded)
     ->  Outcome = Recorded
-    ;   known_future_(Space, ThreadId, Done),
-        thread_get_message(Done, Received),
-        catch(thread_join(ThreadId, _), _, true),
-        assertz(petta_future_result(Space, Received)),
+    ;   assertz(petta_future_result(Space, Received)),
         Outcome = Received
     ).
+
+future_join_(scheduler(_)) :- !.
+future_join_(async(_)) :- !.
+future_join_(none) :- !.
+future_join_(ThreadId) :- catch(thread_join(ThreadId, _), _, true).
 
 known_future_(Space, ThreadId, Done) :-
     (   petta_future(Space, ThreadId, Done)
@@ -315,20 +931,74 @@ thread_settled(Space, Answer) :-
 %rather than reporting success either way. Cancelling a timer stops the timer;
 %answers already in the space stay there, because they really were produced.
 thread_cancel(Space, Answer) :-
-    cancel_timer_(Space),
-    (   petta_future_result(Space, _)
+    with_mutex('$petta_timer_lifecycle',
+               timer_cancel_prepare_(Space, TimerAction)),
+    timer_cancel_action_(TimerAction, Space, Answer).
+
+timer_cancel_action_(not_timer, Space, Answer) :- !,
+    cancel_future_(Space, Answer).
+timer_cancel_action_(pending(Context, Done), Space, true) :- !,
+    petta_release_python_context(Context),
+    petta_future_complete(Space, Done, cancelled).
+timer_cancel_action_(orphan(Context), _, true) :- !,
+    petta_release_python_context(Context).
+timer_cancel_action_(active(once, Context, _Done, _Worker), Space, Answer) :- !,
+    %Its timer heap entry was already consumed before the worker became
+    %visible, so there is no tombstone to retain once cancellation has won the
+    %lifecycle mutex. The winner also owns the removed context token.
+    call_cleanup(cancel_future_(Space, Answer),
+                 petta_release_python_context(Context)).
+timer_cancel_action_(active(every(_), Context, Done, Worker), Space, true) :- !,
+    call_cleanup(cancel_repeating_worker_(Worker),
+                 petta_release_python_context(Context)),
+    petta_future_complete(Space, Done, cancelled).
+
+cancel_future_(Space, Answer) :-
+    future_mutex_(Space, Mutex),
+    with_mutex(Mutex, future_cancel_probe_(Space, Status)),
+    cancel_future_status_(Status, Space, Answer).
+
+future_cancel_probe_(Space, terminal(Worker)) :-
+    petta_future_result(Space, _),
+    ( petta_future(Space, Worker, _) -> true ; Worker = none ), !.
+future_cancel_probe_(Space, terminal(Worker)) :-
+    petta_future(Space, Worker, Done),
+    message_queue_property(Done, size(Pending)),
+    Pending > 0, !,
+    thread_get_message(Done, Outcome),
+    assertz(petta_future_result(Space, Outcome)).
+future_cancel_probe_(Space, pending(Worker, Done)) :-
+    petta_future(Space, Worker, Done), !.
+future_cancel_probe_(_, missing).
+
+cancel_future_status_(terminal(Worker), _, false) :- !,
+    future_join_(Worker).
+cancel_future_status_(missing, _, false) :- !.
+cancel_future_status_(pending(Worker, Done), Space, Answer) :-
+    cancel_future_worker_(Worker, Space, Done, Answer).
+
+cancel_future_worker_(scheduler(Task), _, _, Answer) :- !,
+    petta_scheduler_cancel(Task, Answer).
+cancel_future_worker_(async(Token), _, _, Answer) :- !,
+    petta_async_cancel(Token, Answer).
+cancel_future_worker_(none, _, _, false) :- !.
+cancel_future_worker_(ThreadId, Space, Done, Answer) :-
+    catch(thread_signal(ThreadId, abort), _, true),
+    catch(thread_join(ThreadId, Status), _, Status = unknown),
+    future_mutex_(Space, Mutex),
+    with_mutex(Mutex, future_cancel_probe_(Space, AfterJoin)),
+    (   AfterJoin = terminal(_)
     ->  Answer = false
-    ;   \+ petta_future(Space, _, _)
-    ->  Answer = true                 % a timer that had not started yet
-    ;   known_future_(Space, ThreadId, _),
-        catch(thread_signal(ThreadId, abort), _, true),
-        (   catch(thread_join(ThreadId, _), _, true),
-            \+ catch(thread_property(ThreadId, status(running)), _, fail)
-        ->  assertz(petta_future_result(Space, cancelled)),
-            Answer = true
-        ;   Answer = false
-        )
+    ;   Status = exception(unwind(abort))
+    ->  petta_future_complete(Space, Done, cancelled),
+        Answer = true
+    ;   Answer = false
     ).
+
+cancel_repeating_worker_(none) :- !.
+cancel_repeating_worker_(ThreadId) :-
+    catch(thread_signal(ThreadId, abort), _, true),
+    catch(thread_join(ThreadId, _), _, true).
 
 % ----------------------------------------------------------------- channels
 
@@ -356,22 +1026,37 @@ known_channel_(Id, Queue) :-
 %it is why a channel is safe between threads.
 channel_send(Id, Term, true) :-
     known_channel_(Id, Queue),
-    thread_send_message(Queue, Term).
+    (   nb_current('$petta_scheduler_task', Task)
+    ->  scheduler_channel_send_(Task, Id, Queue, Term)
+    ;   thread_send_message(Queue, Term),
+        petta_channel_wake(Id, recv)
+    ).
 
 %Block until a term arrives.
 channel_recv(Id, Term) :-
     known_channel_(Id, Queue),
-    thread_get_message(Queue, Term).
+    (   nb_current('$petta_scheduler_task', Task)
+    ->  scheduler_channel_recv_(Task, Id, Queue, infinite, Term)
+    ;   thread_get_message(Queue, Term),
+        petta_channel_wake(Id, send)
+    ).
 
 %Block for at most Timeout seconds; no answer when it expires.
 channel_recv(Id, Timeout, Term) :-
     known_channel_(Id, Queue),
-    thread_get_message(Queue, Term, [timeout(Timeout)]).
+    (   nb_current('$petta_scheduler_task', Task)
+    ->  get_time(Now),
+        Deadline is Now + Timeout,
+        scheduler_channel_recv_(Task, Id, Queue, Deadline, Term)
+    ;   thread_get_message(Queue, Term, [timeout(Timeout)]),
+        petta_channel_wake(Id, send)
+    ).
 
 %Take a term if one is waiting, otherwise no answer, never blocking.
 channel_try_recv(Id, Term) :-
     known_channel_(Id, Queue),
-    thread_get_message(Queue, Term, [timeout(0)]).
+    thread_get_message(Queue, Term, [timeout(0)]),
+    petta_channel_wake(Id, send).
 
 channel_size(Id, Size) :-
     known_channel_(Id, Queue),
@@ -380,7 +1065,48 @@ channel_size(Id, Size) :-
 channel_close(Id, true) :-
     known_channel_(Id, Queue),
     retractall(petta_channel(Id, _)),
-    catch(message_queue_destroy(Queue), _, true).
+    catch(message_queue_destroy(Queue), _, true),
+    petta_channel_wake(Id, send),
+    petta_channel_wake(Id, recv).
+
+%A scheduled bounded send or empty receive follows the same level-triggered
+%pattern as Linda waits: register first, probe the mailbox, and suspend the
+%engine only while the store condition is false. Counterpart operations wake
+%all matching waiters; the queue itself decides which resumed operation wins.
+scheduler_channel_send_(Task, Id, Queue, Term) :-
+    setup_call_cleanup(
+        assertz(petta_channel_waiter(Id, send, Task), Ref),
+        scheduler_channel_send_loop_(Task, Id, Queue, Term),
+        erase(Ref)).
+
+scheduler_channel_send_loop_(Task, Id, Queue, Term) :-
+    (   thread_send_message(Queue, Term, [timeout(0)])
+    ->  petta_channel_wake(Id, recv)
+    ;   engine_yield('$petta_scheduler_suspend'),
+        scheduler_channel_send_loop_(Task, Id, Queue, Term)
+    ).
+
+scheduler_channel_recv_(Task, Id, Queue, Deadline, Term) :-
+    setup_call_cleanup(
+        assertz(petta_channel_waiter(Id, recv, Task), Ref),
+        setup_call_cleanup(
+            scheduler_deadline_start_(Task, Deadline, DeadlineToken),
+            scheduler_channel_recv_loop_(Task, Id, Queue, Deadline, Term),
+            scheduler_deadline_cancel_(DeadlineToken)),
+        erase(Ref)).
+
+scheduler_channel_recv_loop_(Task, Id, Queue, Deadline, Term) :-
+    (   thread_get_message(Queue, Term, [timeout(0)])
+    ->  petta_channel_wake(Id, send)
+    ;   scheduler_deadline_open_(Deadline)
+    ->  engine_yield('$petta_scheduler_suspend'),
+        scheduler_channel_recv_loop_(Task, Id, Queue, Deadline, Term)
+    ;   fail
+    ).
+
+petta_channel_wake(Id, Mode) :-
+    findall(Task, petta_channel_waiter(Id, Mode, Task), Tasks),
+    maplist(petta_scheduler_wake, Tasks).
 
 % ------------------------------------------------------- bounded worker pools
 
@@ -403,12 +1129,22 @@ pool_submit(Name, Expr, Space) :-
     ;   existence_error(petta_thread_pool, Name)
     ),
     current_metta_module(Module),
+    petta_capture_python_context(Context),
+    catch(pool_submit_context_(Name, Context, Module, Expr, Space),
+          Error,
+          ( petta_release_python_context(Context), throw(Error) )).
+
+pool_submit_context_(Name, Context, Module, Expr, Space) :-
     next_petta_handle(Number),
     future_space_name(Number, Space),
     message_queue_create(Done, [max_size(1)]),
-    thread_create_in_pool(Name, future_body_(Module, Expr, Space, Done),
-                          ThreadId, []),
-    assertz(petta_future(Space, ThreadId, Done)).
+    catch(( thread_create_in_pool(Name,
+                                  future_body_context_(Context, Module, Expr,
+                                                       Space, Done),
+                                  ThreadId, []),
+            assertz(petta_future(Space, ThreadId, Done)) ),
+          Error,
+          ( message_queue_destroy(Done), throw(Error) )).
 
 pool_stats(Name, Stats) :-
     (   current_thread_pool(Name)
@@ -492,41 +1228,149 @@ timer_loop_(Heap) :-
     ),
     timer_loop_(Next).
 
+timer_request_(schedule(Deadline, scheduler_wake(Task, Token)), Heap, Next) :- !,
+    with_mutex('$petta_scheduler_deadlines',
+               (   petta_scheduler_deadline(Token, Task)
+               ->  Active = true
+               ;   Active = false
+               )),
+    (   Active == true
+    ->  add_to_heap(Heap, Deadline, scheduler_wake(Task, Token), Next)
+    ;   Next = Heap
+    ).
 timer_request_(schedule(Deadline, Timer), Heap, Next) :-
     add_to_heap(Heap, Deadline, Timer, Next).
 
-%Cancelled timers are marked rather than deleted from the heap: deletion is
-%O(n) in a pairing heap and the check at fire time is O(1).
-timer_fire_(Heap, Next) :-
-    get_from_heap(Heap, _Deadline, Timer, Rest),
-    Timer = timer(Space, Module, Expr, Repeat),
-    (   petta_timer_cancelled(Space)
-    ->  Next = Rest
-    ;   timer_dispatch_(Space, Module, Expr, Repeat),
-        (   Repeat = every(Period)
-        ->  get_time(Now),
-            Again is Now + Period,
-            add_to_heap(Rest, Again, Timer, Next)
-        ;   Next = Rest
-        )
+timer_request_(cancel(Timer), Heap, Next) :-
+    (   delete_from_heap(Heap, _, Timer, Remaining)
+    ->  Next = Remaining
+    ;   Next = Heap
     ).
 
+%Cancelled user timers are marked rather than deleted from the heap: deletion
+%is O(n) in a pairing heap and the check at fire time is O(1). Finite scheduler
+%waits use unique wake tokens and delete their heap records on early success,
+%because retaining one record for every completed wait would retain task IDs.
+timer_fire_(Heap, Next) :-
+    get_from_heap(Heap, _Deadline, Timer, Rest),
+    timer_fire_value_(Timer, Rest, Next).
+
+timer_fire_value_(scheduler_wake(Task, Token), Rest, Rest) :- !,
+    with_mutex('$petta_scheduler_deadlines',
+               (   retract(petta_scheduler_deadline(Token, Task))
+               ->  Wake = true
+               ;   Wake = false
+               )),
+    ( Wake == true -> petta_scheduler_wake(Task) ; true ).
+timer_fire_value_(timer(Space, Module, Expr, Repeat, Context), Rest, Next) :-
+    with_mutex('$petta_timer_lifecycle',
+               timer_fire_value_locked_(Space, Module, Expr, Repeat, Context,
+                                        Rest, Next, Action)),
+    timer_fire_action_(Action).
+
+timer_fire_value_locked_(Space, _, _, _, _, Rest, Rest, none) :-
+    retract(petta_timer_cancelled(Space)), !.
+timer_fire_value_locked_(Space, Module, Expr, Repeat, Context, Rest, Next,
+                         Action) :-
+    catch(( timer_dispatch_(Space, Module, Expr, Repeat, Context),
+            Status = dispatched ),
+          Error,
+          Status = error(Error)),
+    (   Status == dispatched,
+        Repeat = every(Period)
+    ->  get_time(Now),
+        Again is Now + Period,
+        add_to_heap(Rest, Again,
+                    timer(Space, Module, Expr, Repeat, Context), Next),
+        Action = none
+    ;   Status == dispatched
+    ->  Next = Rest,
+        Action = none
+    ;   Status = error(Error),
+        timer_pool_saturated_(Error)
+    ->  timer_retry_(Space, Module, Expr, Repeat, Context, Rest, Next),
+        Action = none
+    ;   Status = error(Error),
+        Next = Rest,
+        timer_dispatch_failed_locked_(Space, Repeat, Context, Error, Action)
+    ).
+
+timer_pool_saturated_(error(resource_error(threads_in_pool(Pool)), _)) :-
+    petta_timer_pool(Pool).
+
+timer_retry_(Space, Module, Expr, Repeat, Context, Rest, Next) :-
+    timer_retry_delay_(Repeat, Delay),
+    get_time(Now),
+    Again is Now + Delay,
+    add_to_heap(Rest, Again,
+                timer(Space, Module, Expr, Repeat, Context), Next).
+
+timer_retry_delay_(once, 0.01).
+timer_retry_delay_(every(Period), Period).
+
+timer_fire_action_(none).
+timer_fire_action_(release(Context)) :-
+    petta_release_python_context(Context).
+timer_fire_action_(fail(Context, Space, Done, Error)) :-
+    petta_release_python_context(Context),
+    petta_future_complete(Space, Done, error(Error)).
+
 %The work runs on the pool, never on the timer thread: one slow expression
-%would otherwise delay every other timer behind it.
-timer_dispatch_(Space, Module, Expr, Repeat) :-
+%would otherwise delay every other timer behind it. A repeating timer keeps at
+%most one invocation live. Periods that elapse during a slow invocation are
+%coalesced rather than building an unbounded pool backlog or overwriting the
+%only worker handle cancellation can reach.
+timer_dispatch_(Space, Module, Expr, Repeat, Context) :-
     petta_timer_pool(Pool),
-    (   petta_future(Space, _, Existing)
-    ->  Done = Existing
-    ;   message_queue_create(Done, [max_size(1)])
+    (   petta_future(Space, Worker, Done)
+    ->  true
+    ;   existence_error(petta_future, Space)
     ),
-    (   Repeat == once
-    ->  Body = future_body_(Module, Expr, Space, Done)
-    ;   Body = repeating_body_(Module, Expr, Space)
-    ),
-    (   catch(thread_create_in_pool(Pool, Body, ThreadId, []), _, fail)
-    ->  retractall(petta_future(Space, _, _)),
-        assertz(petta_future(Space, ThreadId, Done))
-    ;   true
+    (   Repeat = every(_),
+        Worker \== none
+    ->  true
+    ;   timer_dispatch_worker_(Pool, Space, Module, Expr, Repeat, Context,
+                               Done)
+    ).
+
+timer_dispatch_worker_(Pool, Space, Module, Expr, Repeat, Context, Done) :-
+    timer_dispatch_body_(Repeat, Context, Module, Expr, Space, Done,
+                         Start, Body),
+    catch(thread_create_in_pool(Pool, Body, ThreadId, [wait(false)]),
+          Error,
+          ( timer_dispatch_start_destroy_(Start),
+            throw(Error) )),
+    catch(( retractall(petta_future(Space, _, _)),
+            assertz(petta_future(Space, ThreadId, Done)),
+            timer_dispatch_start_(Start) ),
+          Error,
+          ( catch(thread_signal(ThreadId, abort), _, true),
+            catch(thread_join(ThreadId, _), _, true),
+            timer_dispatch_start_destroy_(Start),
+            throw(Error) )).
+
+timer_dispatch_body_(once, Context, Module, Expr, Space, Done, none,
+                     timer_once_body_(Context, Module, Expr, Space, Done)).
+timer_dispatch_body_(every(_), Context, Module, Expr, Space, _, queue(Start),
+                     repeating_body_started_(Start, Context, Module, Expr,
+                                             Space)) :-
+    message_queue_create(Start, [max_size(1)]).
+
+timer_dispatch_start_(none).
+timer_dispatch_start_(queue(Start)) :-
+    thread_send_message(Start, go).
+
+timer_dispatch_start_destroy_(none).
+timer_dispatch_start_destroy_(queue(Start)) :-
+    catch(message_queue_destroy(Start), _, true).
+
+timer_dispatch_failed_locked_(Space, Repeat, Context, Error, Action) :-
+    (   retract(petta_timer_context(Space, Repeat, Context))
+    ->  (   petta_future(Space, _, Done)
+        ->  Action = fail(Context, Space, Done, Error)
+        ;   Action = release(Context)
+        )
+    ;   Action = none
     ).
 
 %A repeating timer never completes, so it must NOT post a completion: the
@@ -536,17 +1380,60 @@ timer_dispatch_(Space, Module, Expr, Repeat) :-
 %An error has nowhere to be raised to, so it is written into the space as an
 %(Error <expr> <message>) atom, HE's own error shape. The consumer sees it by
 %matching, which is how it would see any other answer.
-repeating_body_(Module, Expr, Space) :-
-    catch(forall(eval_metta_in_module(Module, Expr, Value),
-                 'add-atom'(Space, Value, _)),
-          Error,
-          ( term_to_atom(Error, Message),
-            'add-atom'(Space, ['Error', Expr, Message], _) )).
+timer_once_body_(Context, Module, Expr, Space, Done) :-
+    call_cleanup(
+        ( future_body_outcome_(Context, Module, Expr, Space, Outcome),
+          petta_future_complete(Space, Done, Outcome) ),
+        timer_context_release_(Space, once, Context)).
 
-cancel_timer_(Space) :-
-    (   petta_timer_cancelled(Space)
-    ->  true
-    ;   assertz(petta_timer_cancelled(Space))
+timer_context_release_(Space, Repeat, Context) :-
+    with_mutex('$petta_timer_lifecycle',
+               (   retract(petta_timer_context(Space, Repeat, Context))
+               ->  Release = true
+               ;   Release = false
+               )),
+    ( Release == true -> petta_release_python_context(Context) ; true ).
+
+repeating_body_started_(Start, Context, Module, Expr, Space) :-
+    setup_call_cleanup(
+        true,
+        thread_get_message(Start, go),
+        catch(message_queue_destroy(Start), _, true)),
+    call_cleanup(
+        petta_in_python_context(
+            Context,
+            catch(forall(eval_metta_in_module(Module, Expr, Value),
+                         'add-atom'(Space, Value, _)),
+                  Error,
+                  ( term_to_atom(Error, Message),
+                    'add-atom'(Space, ['Error', Expr, Message], _) ))),
+        repeating_body_finished_(Space)).
+
+repeating_body_finished_(Space) :-
+    thread_self(Worker),
+    with_mutex('$petta_timer_lifecycle',
+               (   retract(petta_future(Space, Worker, Done))
+               ->  assertz(petta_future(Space, none, Done))
+               ;   true
+               )).
+
+timer_cancel_prepare_(Space, Action) :-
+    (   retract(petta_timer_context(Space, Repeat, Context))
+    ->  (   petta_timer_cancelled(Space)
+        ->  true
+        ;   assertz(petta_timer_cancelled(Space))
+        ),
+        (   petta_future(Space, Worker, Done)
+        ->  (   Worker == none
+            ->  Action = pending(Context, Done)
+            ;   Repeat == once
+            ->  retractall(petta_timer_cancelled(Space)),
+                Action = active(once, Context, Done, Worker)
+            ;   Action = active(Repeat, Context, Done, Worker)
+            )
+        ;   Action = orphan(Context)
+        )
+    ;   Action = not_timer
     ).
 
 %Evaluate an expression once, after a delay. Answers the future space it will
@@ -566,6 +1453,7 @@ timer_every(Seconds, Expr, Space) :-
 schedule_timer_(Seconds, Expr, Repeat, Space) :-
     ensure_timer_service,
     current_metta_module(Module),
+    petta_capture_python_context(Context),
     next_petta_handle(Number),
     future_space_name(Number, Space),
     %The future exists from the moment the timer is SCHEDULED, not from when it
@@ -573,11 +1461,20 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
     %instead of both raising "no such future".
     message_queue_create(Done, [max_size(1)]),
     assertz(petta_future(Space, none, Done)),
+    assertz(petta_timer_context(Space, Repeat, Context)),
     get_time(Now),
     Deadline is Now + Seconds,
     petta_timer_queue(Queue),
-    thread_send_message(Queue,
-                        schedule(Deadline, timer(Space, Module, Expr, Repeat))).
+    catch(thread_send_message(
+              Queue,
+              schedule(Deadline,
+                       timer(Space, Module, Expr, Repeat, Context))),
+          Error,
+          ( retractall(petta_timer_context(Space, Repeat, Context)),
+            retractall(petta_future(Space, none, Done)),
+            message_queue_destroy(Done),
+            petta_release_python_context(Context),
+            throw(Error) )).
 
 % ------------------------------------------------ blocking on a space change
 %
@@ -635,6 +1532,12 @@ space_wait_(Space, Pattern, Timeout, Mode, Out) :-
     ;   get_time(Now),
         Deadline is Now + Timeout
     ),
+    (   nb_current('$petta_scheduler_task', Task)
+    ->  scheduler_space_wait_(Task, Space, Pattern, Deadline, Mode, Out)
+    ;   blocking_space_wait_(Space, Pattern, Deadline, Mode, Out)
+    ).
+
+blocking_space_wait_(Space, Pattern, Deadline, Mode, Out) :-
     message_queue_create(Queue),
     %The clause gets its own copy of the pattern, so its variables are fresh
     %on every write and testing a candidate never binds the caller's.
@@ -660,6 +1563,78 @@ space_wait_(Space, Pattern, Timeout, Mode, Out) :-
         space_claim_(Space, Pattern, Queue, Deadline, Mode, Out),
         ( erase(HookRef),
           catch(message_queue_destroy(Queue), _, true) )).
+
+%A scheduled engine parks itself, not its carrier. The atom-added hook is the
+%waker: it marks the task runnable, and the resumed engine rechecks the store
+%before trusting the hint. A finite deadline is another one-shot wake record
+%on the existing timer heap, so no sleeping thread is introduced.
+scheduler_space_wait_(Task, Space, Pattern, Deadline, Mode, Out) :-
+    copy_term(Pattern, HookPattern),
+    setup_call_cleanup(
+        assertz((seam:atom_added(Space, Candidate) :-
+                    (   \+ HookPattern \= Candidate
+                    ->  petta_scheduler_wake(Task)
+                    ;   true
+                    )), HookRef),
+        setup_call_cleanup(
+            scheduler_deadline_start_(Task, Deadline, DeadlineToken),
+            scheduler_space_claim_(Task, Space, Pattern, Deadline, Mode, Out),
+            scheduler_deadline_cancel_(DeadlineToken)),
+        erase(HookRef)).
+
+scheduler_deadline_start_(_, infinite, none) :- !.
+scheduler_deadline_start_(Task, Deadline,
+                          deadline(Token, scheduler_wake(Task, Token))) :-
+    ensure_timer_service,
+    flag('$petta_scheduler_deadline_id', Token, Token + 1),
+    with_mutex('$petta_scheduler_deadlines',
+               assertz(petta_scheduler_deadline(Token, Task))),
+    petta_timer_queue(Queue),
+    catch(thread_send_message(
+              Queue, schedule(Deadline, scheduler_wake(Task, Token))),
+          Error,
+          ( with_mutex('$petta_scheduler_deadlines',
+                       retractall(petta_scheduler_deadline(Token, Task))),
+            throw(Error) )).
+
+scheduler_deadline_cancel_(none) :- !.
+scheduler_deadline_cancel_(deadline(Token, Timer)) :-
+    with_mutex('$petta_scheduler_deadlines',
+               (   retract(petta_scheduler_deadline(Token, _))
+               ->  Cancel = true
+               ;   Cancel = false
+               )),
+    (   Cancel == true
+    ->  petta_timer_queue(Queue),
+        catch(thread_send_message(Queue, cancel(Timer)), _, true)
+    ;   true
+    ).
+
+scheduler_space_claim_(Task, Space, Pattern, Deadline, Mode, Out) :-
+    copy_term(Pattern, Attempt),
+    (   space_already_holds_(Space, Attempt, Candidate)
+    ->  scheduler_claim_candidate_(Task, Space, Pattern, Candidate,
+                                   Deadline, Mode, Out)
+    ;   scheduler_deadline_open_(Deadline)
+    ->  engine_yield('$petta_scheduler_suspend'),
+        scheduler_space_claim_(Task, Space, Pattern, Deadline, Mode, Out)
+    ;   fail
+    ).
+
+scheduler_claim_candidate_(_, _, Pattern, Candidate, _, peek, Out) :- !,
+    Pattern = Candidate,
+    Out = Candidate.
+scheduler_claim_candidate_(Task, Space, Pattern, Candidate, Deadline, take,
+                           Out) :-
+    (   'remove-atom'(Space, Candidate, [])
+    ->  Pattern = Candidate, Out = Candidate
+    ;   scheduler_space_claim_(Task, Space, Pattern, Deadline, take, Out)
+    ).
+
+scheduler_deadline_open_(infinite) :- !.
+scheduler_deadline_open_(Deadline) :-
+    get_time(Now),
+    Now < Deadline.
 
 %ONE hook for the whole wait, retries included, and that is not tidiness: a
 %losing taker that tore its hook down and built a new one would miss any

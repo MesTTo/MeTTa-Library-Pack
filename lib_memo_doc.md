@@ -80,7 +80,7 @@ substrates never stack on one function.
 
 ### Clear Memoization
 ```metta
-!(clear-memoize)            ; Clears every space's cached entries and resets generation/queue state
+!(clear-memoize)            ; Clears every space's cached entries and queue state
 !(invalidate-memoize my-fun) ; Invalidate one function in this space, and its dependents
 !(clear-memoize-stats)      ; Reset runtime counters
 ```
@@ -153,6 +153,15 @@ solved answers in its C trie, and replay emits that answer the recorded number
 of times. Exact decorator keys do not use manual float quantization,
 aggregation, or `answer-limit`. `cache_info()` counts tabled call variants as
 entries and sums their coefficients as answer occurrences.
+
+SWI answer tables are private to each Prolog engine unless declared shared.
+The exact path therefore carries `metta_memo_generation/4` as a hidden first
+table argument. Invalidation advances that process-wide generation before it
+reclaims the caller engine's old tries, so a carrier that already cached the
+same function selects a fresh variant instead of replaying its private stale
+table. Generations stay monotonic across `clear-memoize` and disable/re-enable
+cycles for the same reason; only live-generation tries contribute to
+`cache_info()`.
 
 Bounded search is not admitted automatically. `lib_memo` eagerly collects a
 miss's complete bag; probing recursion beneath `once`, `take`, or `top` could
