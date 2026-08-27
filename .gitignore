@@ -1,0 +1,4 @@
+# The standard library's Quick Load Format artifacts, on the same terms as the
+# engine's: lazily generated per boot, tied to the SWI that wrote them, never
+# shipped.
+*.qlf

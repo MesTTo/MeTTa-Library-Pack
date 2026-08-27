@@ -50,8 +50,9 @@
 %imported a library printed `True` for one and `()` for the other, and a caller
 %passing the unit explicitly -- which is what the shell suite did -- simply
 %FAILED to match this head, with no error, because a failed goal is not an
-%error [tested: tests/shell/test_git_import.sh, which now checks all four
-%arities answer the same unit].
+%error. That suite now checks all four arities answer the same unit, so the
+%four cannot drift apart again
+%[tested: tests/shell/test_git_import.sh].
 'git-import!'(Url0, Build0, Base0, Rev0, []) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
     git_validate_sha('git-import!', Rev0, Rev),
