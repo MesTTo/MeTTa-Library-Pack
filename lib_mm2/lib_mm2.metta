@@ -1,3 +1,10 @@
+;Every operator below is a notation over &mork, so this file is the on-demand
+;half of a seat whose other half loads at boot: MORK's provider is
+;extensions/mork, and without it these five names reach builtins that do not
+;exist. Say so once, by name, rather than five times at call time -- the
+;pg_stat_statements shape, and the engine's own door for it.
+!(require-extension! mork)
+
 ;Add
 (: ＋ (-> Atom %Undefined%))
 (= (＋ $x)
