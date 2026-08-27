@@ -274,8 +274,8 @@ conformance_round_trip(Space, Check) :-
     (   foreign_provides(Space, add),
         foreign_provides(Space, remove),
         foreign_provides(Space, enumerate)
-    ->  gensym('petta-conformance-canary-', Marker),
-        Canary = ['petta-conformance-canary', Marker],
+    ->  gensym('metta-conformance-canary-', Marker),
+        Canary = ['metta-conformance-canary', Marker],
         setup_call_cleanup(
             seam:foreign_add(Space, Canary),
             (   \+ \+ ( seam:foreign_atoms(Space, Held),

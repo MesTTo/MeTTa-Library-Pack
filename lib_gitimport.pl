@@ -285,7 +285,7 @@ ensure_git_build(Context, LocalDir, Rev, Build) :-
 git_build_stamp_file(Context, LocalDir, StampFile) :-
     git_output(Context, 'resolve Git metadata directory', LocalDir,
                ['rev-parse', '--absolute-git-dir'], GitDir),
-    directory_file_path(GitDir, 'petta-build-stamp', StampFile).
+    directory_file_path(GitDir, 'metta-build-stamp', StampFile).
 
 valid_git_build_stamp(Context, LocalDir, Rev, Build) :-
     git_build_stamp_file(Context, LocalDir, StampFile),
