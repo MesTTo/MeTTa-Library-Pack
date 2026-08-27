@@ -112,6 +112,13 @@
 %     latches and barriers over spaces, and supervision, are tracked in
 %     ai-todo-parallel.md B9.2 to B9.4.
 
+%Nothing below this line works without threads, so the file says so where the
+%engine's pre-load scan can read it. An import on a build without
+%library(thread) then refuses naming the capability and what it costs, and
+%this file never loads; before it, the two imports failed one after the other
+%and the MeTTa caller got a wrapped transcript of SWI's own source_sink errors
+%[tested: platform_capabilities_reduced:a_library_that_declares_an_absent_capability_never_loads].
+:- metta_requires(concurrency).
 :- use_module(library(thread)).
 :- use_module(library(thread_pool)).
 :- use_module(library(error)).

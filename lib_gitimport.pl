@@ -4,9 +4,24 @@
 %   - git-import! refuses an unbound URL under its own MeTTa name before any
 %     filesystem or process work [tested:
 %     test_the_residual_positions_refuse_by_their_own_names].
+%   - on a build with no library(process) every git route refuses under the
+%     MeTTa name that reached it, naming the absent library and its cost,
+%     rather than raising existence_error(procedure, process_create/3)
+%     [tested: platform_capabilities_reduced:git_import_refuses_by_name_when_subprocess_is_absent].
 
 :- use_module(library(filesex)).
-:- use_module(library(process)).
+%This file loads at BOOT, from engine/metta.pl's own ensure_loaded list, so it
+%cannot use the pre-load declaration lib/lib_thread.pl carries: nothing is
+%reading its manifest. It reads the census instead, which engine/metta.pl has
+%already decided by the time this file loads, and refuses at the one place
+%every route reaches a program (git_process_output/6 below) rather than at
+%load, because a build that cannot start a process can still read every other
+%thing this file does
+%[tested: platform_capabilities_reduced:git_import_refuses_by_name_when_subprocess_is_absent].
+:- ( petta_platform(subprocess, present, _, _)
+   -> use_module(library(process))
+   ;  true
+   ).
 :- use_module(library(random)).
 
 :- dynamic git_dependency/2.
@@ -318,6 +333,7 @@ git_process(Context, Operation, Executable, Args, Options) :-
     git_process_output(Context, Operation, Executable, Args, Options, _).
 
 git_process_output(Context, Operation, Executable, Args, Options, Output) :-
+    metta_require_platform(Context, subprocess),
     tmp_file(git_acquire_stdout, OutFile),
     tmp_file(git_acquire_stderr, ErrFile),
     open(OutFile, write, Out),
