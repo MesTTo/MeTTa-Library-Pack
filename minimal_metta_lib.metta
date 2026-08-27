@@ -24,7 +24,7 @@
 ;   To Do: None
 ;   Hacks: None
 ;   Future Enhancements:
-;     - `reduce` alone is prefixed for a second reason: it is a PeTTa builtin.
+;     - `reduce` alone is prefixed for a second reason: it is a MeTTa builtin.
 ;       The raw `assertz/2: No permission to modify static procedure` that used
 ;       to greet a redefinition is gone; it now names the builtin, its arity,
 ;       the space and the way round: define it in a NAMED space and it shadows
@@ -98,7 +98,7 @@
             "subst expects a variable as a second argument")))
 
 ; The specification stops the loop when eval answers NotReducible, which
-; assumes eval takes ONE step. PeTTa's eval evaluates to completion, so it
+; assumes eval takes ONE step. MeTTa's eval evaluates to completion, so it
 ; never answers NotReducible: (eval (step-down 3)) is `done`, not a step
 ; towards it. Written the specification's way the loop reduced `done` to
 ; `done` forever. The old Python implementation hit a Python recursion error
@@ -125,7 +125,7 @@
 ; ---------------------------------------------------------------------------
 ; The specification's Turing machine, its own Turing-completeness witness.
 ; Names are prefixed because `read` and `move` are ordinary enough to collide
-; with a user's program, not because PeTTa reserves them.
+; with a user's program, not because MeTTa reserves them.
 ; ---------------------------------------------------------------------------
 
 (= (mm-tm $rule $state $tape)

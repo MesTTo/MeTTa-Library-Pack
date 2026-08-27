@@ -18,7 +18,7 @@
 metta_file_to_prolog(Input, Space, Output) :-
     read_file_to_string(Input, Source, []),
     parse_metta_source(Source, ParsedForms),
-    %The storage module, not user. Native atoms live in '$petta_atoms:<space>'
+    %The storage module, not user. Native atoms live in '$metta_atoms:<space>'
     %and the converter wrote its facts into user, so a static import loaded
     %clauses the space could never read and reported success: the data was
     %there, in the database, invisible to (match &self ...) and to get-atoms.
@@ -53,16 +53,16 @@ write_static_import_facts(Out, Module, Facts) :-
 static_import_fact(Input, Space, Parsed, Fact) :-
     parsed_form_parts(Parsed, Kind, Text, Term),
     (   Kind == runnable
-    ->  throw(error(petta_static_import_form(Input, Text),
+    ->  throw(error(metta_static_import_form(Input, Text),
                     context('static-import!',
                             'a runnable form cannot be imported as data')))
     ;   native_atom_clause(Space, Term, Fact)
     ).
 
 :- multifile prolog:error_message//1.
-prolog:error_message(petta_static_import_form(File, Text)) -->
+prolog:error_message(metta_static_import_form(File, Text)) -->
     [ 'static-import! cannot turn this form in ~w into a fact: ~w'-[File, Text] ].
-prolog:error_message(petta_static_import_failed(File)) -->
+prolog:error_message(metta_static_import_failed(File)) -->
     [ 'static-import! could not convert ~w'-[File] ].
 %The static import function that allows loading static data files fast:
 'static-import!'(Space, File, true) :- style_check(-discontiguous),
@@ -126,7 +126,7 @@ static_import_outcome(Outcome, MettaFile, PlFile) :-
     ( exists_file(PlFile) -> delete_file(PlFile) ; true ),
     (   Outcome = raised(Error)
     ->  throw(Error)
-    ;   throw(error(petta_static_import_failed(MettaFile),
+    ;   throw(error(metta_static_import_failed(MettaFile),
                     context('static-import!',
                             'the conversion produced no output')))
     ).

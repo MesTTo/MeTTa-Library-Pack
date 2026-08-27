@@ -19,7 +19,7 @@
 %load, because a build that cannot start a process can still read every other
 %thing this file does
 %[tested: platform_capabilities_reduced:git_import_refuses_by_name_when_subprocess_is_absent].
-:- ( petta_platform(subprocess, present, _, _)
+:- ( metta_platform(subprocess, present, _, _)
    -> use_module(library(process))
    ;  true
    ).
@@ -301,7 +301,7 @@ ensure_git_build(Context, LocalDir, Rev, Build) :-
 git_build_stamp_file(Context, LocalDir, StampFile) :-
     git_output(Context, 'resolve Git metadata directory', LocalDir,
                ['rev-parse', '--absolute-git-dir'], GitDir),
-    directory_file_path(GitDir, 'petta-build-stamp', StampFile).
+    directory_file_path(GitDir, 'metta-build-stamp', StampFile).
 
 valid_git_build_stamp(Context, LocalDir, Rev, Build) :-
     git_build_stamp_file(Context, LocalDir, StampFile),

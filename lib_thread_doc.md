@@ -245,9 +245,9 @@ in `once`, whenever the lock actually protects something.
 
 ## What is safe to do concurrently
 
-Space writes are safe. PeTTa's shared structures already carry their own locks
+Space writes are safe. MeTTa's shared structures already carry their own locks
 because `hyperpose` workers have always reached the same database:
-`'$petta_specializer'` guards specialization, `'$petta_native_storage'` guards
+`'$metta_specializer'` guards specialization, `'$metta_native_storage'` guards
 storage-module creation, `metta_loader` guards compilation through
 `process_metta_string`, and the memoization cache holds one mutex per
 function. SWI keeps individual dynamic predicates consistent by itself.

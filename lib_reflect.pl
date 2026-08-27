@@ -4,7 +4,7 @@
 %
 %   The point is not introspection for its own sake. Two consumers want this
 %   and both currently guess: metta-lsp computes diagnostics against
-%   MeTTaScript's builtin list rather than PeTTa's, and the documentation
+%   MeTTaScript's builtin list rather than this engine's, and the documentation
 %   surface has no way to enumerate what it ought to document. A list
 %   maintained in two places drifts; a list the engine answers cannot.
 % Assumes:

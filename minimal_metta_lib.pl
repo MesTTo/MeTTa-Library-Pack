@@ -63,7 +63,7 @@ metta_function_loop(_Body, Current, _Fuel, Out) :-
 %Only a marker PRODUCED by a completed equation is the protocol result.  The
 %initial body is required to be an expression above, so reaching this atomic
 %state proves an evaluation step returned it.  By contrast, an irreducible
-%call makes petta_function_eval/3 report `not-reducible` below and earns
+%call makes metta_function_eval/3 report `not-reducible` below and earns
 %NoReturn [source: MettaHyperonFull/Minimal/Interpreter.lean:3673-3674 and
 %7533-7564; tested: conformance2:a_function_distinguishes_a_marker_result_from_an_irreducible_body;
 %commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87].
@@ -88,7 +88,7 @@ metta_function_loop(Body, _Current, 0, Out) :- !,
 %[source: MettaHyperonFull/Minimal/Interpreter.lean:419-448,
 %`evalResult` maps every queried equation result; commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87]
 metta_function_loop(Body, Current, Fuel, Out) :-
-    petta_function_eval(Current, Next, Status),
+    metta_function_eval(Current, Next, Status),
     (   Status == 'not-reducible'
     ->  Out = ['Error', [function, Body], 'NoReturn']
     ;   Next \== Current
@@ -132,7 +132,7 @@ metta_return_value(Term, Value) :-
 %variables afterwards gets both: the entry names a variable the caller shares,
 %bound to nothing yet, beside the value that branch gave it.
 %
-%That the variable renders as $_0 rather than $a is the one thing PeTTa cannot
+%That the variable renders as $_0 rather than $a is the one thing MeTTa cannot
 %match here. The parser resolves $x to a plain Prolog variable and keeps the
 %name only inside the parse [source: engine/parser.pl, var_symbol//3 threads a
 %Name-Var environment that sread/2 does not return], so no name reaches

@@ -39,7 +39,7 @@ redis_space_address(Address, Host:Port) :-
     atom_number(PortAtom, Port).
 
 'redis-attach'(Space, Address, true) :-
-    with_mutex(petta_redis_spaces, redis_space_attach(Space, Address)).
+    with_mutex(metta_redis_spaces, redis_space_attach(Space, Address)).
 
 redis_space_attach(Space, Address) :-
     ( redis_space_conn(Space, _, _, _, _, _, _)
@@ -47,8 +47,8 @@ redis_space_attach(Space, Address) :-
                      context(Space, 'already attached; redis-detach first')))
     ; true ),
     redis_space_address(Address, HostPort),
-    atom_concat('petta:space:', Space, Key),
-    atom_concat('petta:events:', Space, Channel),
+    atom_concat('metta:space:', Space, Key),
+    atom_concat('metta:events:', Space, Channel),
     redis_connect(HostPort, Conn, [reconnect(true)]),
     catch(redis_space_attach_subscription(Space, HostPort, Conn, Key, Channel),
           Error,
@@ -77,7 +77,7 @@ redis_space_start_subscription(Space, Conn, SubConn, Key, Channel) :-
 redis_space_register_subscription(
         Space, Conn, SubConn, ListenerId, Key, Channel) :-
     uuid(ReadyId),
-    atom_concat('petta:subscription-ready:', ReadyId, ReadyChannel),
+    atom_concat('metta:subscription-ready:', ReadyId, ReadyChannel),
     setup_call_cleanup(
         message_queue_create(ReadyQueue),
         setup_call_cleanup(
@@ -145,7 +145,7 @@ redis_space_subscription_exit(SubConn) :-
     redis_disconnect(SubConn, [force(true)]).
 
 'redis-detach'(Space, true) :-
-    with_mutex(petta_redis_spaces, redis_space_detach(Space)).
+    with_mutex(metta_redis_spaces, redis_space_detach(Space)).
 
 redis_space_detach(Space) :-
     ( retract(redis_space_conn(

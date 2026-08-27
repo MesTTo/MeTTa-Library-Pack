@@ -48,7 +48,7 @@
 %The whole kit. Answers the checks it ran, one STRING per check, so a caller
 %sees what was covered rather than a bare true, and a MeTTa caller gets the
 %type a message has. The source discipline is READ, not supplied: the
-%engine already holds each context's declared class through petta_source/2
+%engine already holds each context's declared class through metta_source/2
 %((source Ctx Kind), repeated when undeclared), so the checker asks the
 %declaration the enforcement reads rather than trusting a caller's claim.
 metta_check_space_provider(Space, Checks) :-
@@ -69,7 +69,7 @@ metta_check_space_provider(Space, Checks) :-
 refuse_unforeign_space(Space) :-
     (   seam:foreign_space(Space)
     ->  true
-    ;   throw(error(petta_conformance_not_foreign(Space), none))
+    ;   throw(error(metta_conformance_not_foreign(Space), none))
     ).
 
 %Every capability the space declares has a hook with a clause behind it. A
@@ -86,7 +86,7 @@ conformance_capability(Space, Check) :-
     capability_hook(Capability, Hook),
     (   conformance_hook_defined(Hook, Space)
     ->  format(string(Check), '~w: declared, ~w has clauses', [Capability, Hook])
-    ;   throw(error(petta_conformance_no_hook(Space, Capability, Hook), none))
+    ;   throw(error(metta_conformance_no_hook(Space, Capability, Hook), none))
     ).
 
 capability_hook(match, seam:foreign_match/3).
@@ -181,7 +181,7 @@ conformance_match(Space, Atoms, Check) :-
 conformance_answers_itself(Space, Atom) :-
     (   \+ \+ match_foreign(Space, Atom, answered, answered)
     ->  true
-    ;   throw(error(petta_conformance_under_approximates(Space, Atom), none))
+    ;   throw(error(metta_conformance_under_approximates(Space, Atom), none))
     ).
 
 %The pattern FAMILY, the Python kit's own construction asked through the
@@ -232,7 +232,7 @@ conformance_family_covered(Space, Atoms, Pattern) :-
             Candidates),
     (   conformance_covers(Candidates, Expected)
     ->  true
-    ;   throw(error(petta_conformance_family_missed(Space, Pattern,
+    ;   throw(error(metta_conformance_family_missed(Space, Pattern,
                                                     Expected, Candidates),
                     none))
     ).
@@ -253,16 +253,16 @@ conformance_source(Space, _, Check) :-
     \+ foreign_provides(Space, enumerate), !,
     Check = "source: the space does not enumerate, so there is nothing to re-enumerate".
 conformance_source(Space, _, Check) :-
-    petta_source(Space, linear), !,
+    metta_source(Space, linear), !,
     Check = "source: linear, so the second enumeration is not asked".
 conformance_source(Space, First, Check) :-
-    petta_source(Space, Kind),
+    metta_source(Space, Kind),
     findall(Atom, seam:foreign_atoms(Space, Atom), Second),
     msort(First, SortedFirst),
     msort(Second, SortedSecond),
     (   SortedFirst =@= SortedSecond
     ->  format(string(Check), 'source: ~w, two enumerations agree', [Kind])
-    ;   throw(error(petta_conformance_source_disagrees(Space, Kind), none))
+    ;   throw(error(metta_conformance_source_disagrees(Space, Kind), none))
     ).
 
 %The lens literature's GetPut law through the seam: add then enumerate
@@ -274,14 +274,14 @@ conformance_round_trip(Space, Check) :-
     (   foreign_provides(Space, add),
         foreign_provides(Space, remove),
         foreign_provides(Space, enumerate)
-    ->  gensym('petta-conformance-canary-', Marker),
-        Canary = ['petta-conformance-canary', Marker],
+    ->  gensym('metta-conformance-canary-', Marker),
+        Canary = ['metta-conformance-canary', Marker],
         setup_call_cleanup(
             seam:foreign_add(Space, Canary),
             (   \+ \+ ( seam:foreign_atoms(Space, Held),
                         Held =@= Canary )
             ->  Check = "round trip: add then enumerate answers the atom, and remove takes it back"
-            ;   throw(error(petta_conformance_round_trip(Space, Canary),
+            ;   throw(error(metta_conformance_round_trip(Space, Canary),
                             none))
             ),
             seam:foreign_remove(Space, Canary, _))
@@ -314,7 +314,7 @@ conformance_exactly(Space, Atom) :-
 conformance_candidate_matches(Space, Atom, Candidate) :-
     (   \+ \+ Atom = Candidate
     ->  true
-    ;   throw(error(petta_conformance_false_exact(Space, Atom, Candidate), none))
+    ;   throw(error(metta_conformance_false_exact(Space, Atom, Candidate), none))
     ).
 
 %The one claim in this seam the engine cannot check for itself. Everywhere else
@@ -341,7 +341,7 @@ conformance_plan(Space, Atoms, Check) :-
     (   Claimed =@= Split
     ->  length(Claimed, N),
         format(string(Check), 'plan: the claim answers the split, ~w rows', [N])
-    ;   throw(error(petta_conformance_claim_differs(Space, Claimed, Split), none))
+    ;   throw(error(metta_conformance_claim_differs(Space, Claimed, Split), none))
     ).
 
 %A chain self-join on one stored shape: the last argument of the left pattern
@@ -362,31 +362,31 @@ conformance_rows(Space, Left, Right, Rows) :-
     msort(Unsorted, Rows).
 
 conformance_native_copy(Atoms, Native) :-
-    gensym('&petta-conformance-', Native),
+    gensym('&metta-conformance-', Native),
     forall(member(Atom, Atoms), 'add-atom'(Native, Atom, _)).
 
 conformance_drop_copy(Native, Atoms) :-
     forall(member(Atom, Atoms), 'remove-atom'(Native, Atom, _)).
 
-prolog:error_message(petta_conformance_claim_differs(Space, Claimed, Split)) -->
+prolog:error_message(metta_conformance_claim_differs(Space, Claimed, Split)) -->
     [ '~w claims conjunctions and answered ~w where the engine\'s own split \c
        over the same atoms answered ~w. A claim is EXACT: a provider that \c
        cannot answer a conjunction exactly must decline it, because the engine \c
        plans only what you leave and never re-checks a row.'
       -[Space, Claimed, Split] ].
-prolog:error_message(petta_conformance_not_foreign(Space)) -->
+prolog:error_message(metta_conformance_not_foreign(Space)) -->
     [ '~w is not a registered foreign space, so there is no provider to \c
        check. Register it first.'-[Space] ].
-prolog:error_message(petta_conformance_no_hook(Space, Capability, PI)) -->
+prolog:error_message(metta_conformance_no_hook(Space, Capability, PI)) -->
     [ '~w declares the ~w capability and ~w has no clauses. Implement the \c
        hook, or drop the capability from seam:foreign_capability/2.'
       -[Space, Capability, PI] ].
-prolog:error_message(petta_conformance_under_approximates(Space, Atom)) -->
+prolog:error_message(metta_conformance_under_approximates(Space, Atom)) -->
     [ '~w holds ~w and matching it answered nothing. A provider may \c
        over-approximate and may never under-approximate: yielding every atom \c
        is always correct, yielding fewer than match is never allowed to be.'
       -[Space, Atom] ].
-prolog:error_message(petta_conformance_family_missed(Space, Pattern,
+prolog:error_message(metta_conformance_family_missed(Space, Pattern,
                                                      Expected, Candidates)) -->
     [ '~w misses part of the pattern family for ~w: the stored atoms \c
        unifying it are ~w and the yielded candidates ~w do not cover them. \c
@@ -394,17 +394,17 @@ prolog:error_message(petta_conformance_family_missed(Space, Pattern,
        variable, and for repeated-variable folds; a provider handling only \c
        ground patterns answers wrongly in production.'
       -[Space, Pattern, Expected, Candidates] ].
-prolog:error_message(petta_conformance_source_disagrees(Space, Kind)) -->
+prolog:error_message(metta_conformance_source_disagrees(Space, Kind)) -->
     [ '~w declares a ~w source and its second enumeration disagrees with \c
        the first: a ~w source re-enumerates identically, so this provider \c
        is linear and should say so with (source ~w linear), where a second \c
        consumption is a loud error instead of a silently different answer.'
       -[Space, Kind, Kind, Space] ].
-prolog:error_message(petta_conformance_round_trip(Space, Canary)) -->
+prolog:error_message(metta_conformance_round_trip(Space, Canary)) -->
     [ '~w stored ~w through its own add and its enumeration does not \c
        answer it back: add then enumerate is identity on the stored atom, \c
        because stored data keeps its literal atoms.'-[Space, Canary] ].
-prolog:error_message(petta_conformance_false_exact(Space, Atom, Candidate)) -->
+prolog:error_message(metta_conformance_false_exact(Space, Atom, Candidate)) -->
     [ '~w claims exact filtering for ~w and yielded ~w, which does not match \c
        it. exact means every candidate you yield for this pattern unifies \c
        with it, so the caller may stop at its bound; a claim that is wrong \c
