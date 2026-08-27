@@ -43,7 +43,16 @@
     acquire_unpinned_repository('git-import!', Url, Build, Base,
                                 Name, LocalDir),
     register_git_library_path(Name, LocalDir).
-'git-import!'(Url0, Build0, Base0, Rev0, true) :-
+%The result slot is `[]`, the unit every effectful builtin in this engine
+%answers with: 'import!'/3 (engine/metta/interop.pl), 'println!'/2
+%(engine/metta/runtime.pl), and the three git-import! clauses above. This one
+%alone answered `true`, so a program that imported a pinned dependency and then
+%imported a library printed `True` for one and `()` for the other, and a caller
+%passing the unit explicitly -- which is what the shell suite did -- simply
+%FAILED to match this head, with no error, because a failed goal is not an
+%error [tested: tests/shell/test_git_import.sh, which now checks all four
+%arities answer the same unit].
+'git-import!'(Url0, Build0, Base0, Rev0, []) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
     git_validate_sha('git-import!', Rev0, Rev),
     acquire_pinned_repository('git-import!', Url, Build, Base, Rev,
