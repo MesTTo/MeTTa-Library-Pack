@@ -1,7 +1,7 @@
 ; Purpose: provide NARS truth functions, inference rules, and bounded derivation.
 ; Guarantees: a term pair that matches no `|-` inference rule fails as a
 ;   relation instead of entering the derivation queue as a residual call.
-; [tested: examples/reasoning/nars_tuffy.metta; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
+; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/09-nars_tuffy.metta; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
 !(add-atom &metta (dispatch-policy |- NoMatchEnum NoMatchFail))
 
 ;; Truth functions

@@ -21,11 +21,11 @@
 %     [source: engine/metta.pl, eval/2 compiles a runnable and runs it]
 % Guarantees:
 %   - `function` terminates: the loop is bounded and answers
-%     (Error <atom> NoReturn) rather than looping [tested: examples/libraries/minimal_metta.metta]
+%     (Error <atom> NoReturn) rather than looping [tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta]
 %   - `(return x)` survives evaluation as data, because `return` is
 %     deliberately NOT registered. Registering it as the identity its
 %     (-> $t $t) signature suggests makes (return 3) reduce to 3 before
-%     `function` can see it, and every function body answers NoReturn. [tested: examples/libraries/minimal_metta.metta]
+%     `function` can see it, and every function body answers NoReturn. [tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta]
 % Fails when: an expression's evaluation does not converge within the step
 %   bound, which answers NoReturn rather than the true result.
 % Decides: 1000 evaluation steps for `function`, the bound the Python version
@@ -162,7 +162,7 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %row's own value is answered whether or not it carries bindings, so a list
 %that did not come from collapse-bind still superposes
 %[source: MettaHyperonFull/Minimal/Stdlib.lean:915;
-%tested: examples/libraries/minimal_metta.metta and
+%tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta and
 %builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name;
 %commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87].
 'superpose-bind'(Rows, _) :- var(Rows), !,

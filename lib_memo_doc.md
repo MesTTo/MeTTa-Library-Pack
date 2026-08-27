@@ -109,7 +109,7 @@ answers change. `!(is-memoized f)` answers for the space that asks.
 
 A space that does not define the function but inherits `&self`'s is calling
 the same function, so it shares the one cache rather than building a second.
-`examples/libraries/memo_spaces.metta` runs the whole property.
+`examples/ch18-performance/18-02-memoisation-and-tabling/07-memo_spaces.metta` runs the whole property.
 ## Configuration Options
 | Option | Default | Description |
 |--------|---------|-------------|

@@ -11,8 +11,8 @@
 % Guarantees:
 %   - A declared table survives a write to a space it reads, and a change
 %     to any equation drops it [tested: tabling_equation_change_drops_tables,
-%     and end to end by examples/libraries/tabling_equation_change.metta and
-%     examples/libraries/tabling_space_write.metta].
+%     and end to end by examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
+%     examples/ch18-performance/18-02-memoisation-and-tabling/11-tabling_space_write.metta].
 %   - A write the table's own subgoal does not read leaves it VALID, not
 %     merely leaves its answers unchanged, so tabling over a space that is
 %     written to often is worth having. This is finer than the manual's own
@@ -25,7 +25,7 @@
 %     the next call so re-evaluation cannot be what hides it, while adding
 %     (edge a c) took it to 1 immediately
 %     [tested: tabling_statistics_count_invalidations, and end to end by
-%     examples/libraries/tabling_statistics.metta].
+%     examples/ch18-performance/18-02-memoisation-and-tabling/12-tabling_statistics.metta].
 %   - A read that cannot be resolved to one space predicate, or that names
 %     a foreign space, is refused rather than tabled without the guarantee
 %     [tested: tabling_refuses_unresolvable_reads].

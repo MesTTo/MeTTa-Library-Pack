@@ -27,7 +27,7 @@ Guarantees:
     commit=dcfc20be4933c19140ccb5759291401d13058301]
   - the instruction set is available without this module, through
     `!(import! &self (library minimal_metta_lib))`
-    [tested: examples/libraries/minimal_metta.metta]
+    [tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta]
 Fails when: nothing. A missing file or an unregistrable name raises from the
   import itself, naming the path or the predicate.
 Owns: nothing. The registrations belong to the process, as every Prolog

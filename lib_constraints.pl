@@ -14,7 +14,7 @@
 %     references into library(ugraphs), library(lists), library(pairs) and
 %     library(apply) work under autoload=false, not only the engine's
 %     default [measured 2026-08-18: NO_AUTOLOAD=1 sh test.sh,
-%     examples/basics/constraint_domains.metta].
+%     examples/ch05-equations-and-evaluation/05-04-arithmetic-that-runs-backwards/03-constraint_domains.metta].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -30,7 +30,7 @@
 %solved CLP(Q) system's residual goals raises
 %existence_error(procedure,ugraphs:append/2) from inside
 %clpqr_ordering:arrangement/2 [measured 2026-08-18:
-%examples/basics/constraint_domains.metta's residual-goals test, under
+%examples/ch05-equations-and-evaluation/05-04-arithmetic-that-runs-backwards/03-constraint_domains.metta's residual-goals test, under
 %NO_AUTOLOAD=1]. Same trap, same fix, as lib_memo.pl's independent use of
 %library(ugraphs): inject the missing import into ugraphs's own namespace
 %once its real file is loaded, since ugraphs.pl itself is not this repo's
@@ -43,7 +43,7 @@
 %predicates unqualified across its sat/1 compilation, labeling/1 and
 %weighted-labeling steps: same_length/2 and member/2 confirmed by running
 %the corpus [measured 2026-08-18:
-%examples/basics/constraint_domains.metta's card/2 and sat/1 tests, under
+%examples/ch05-equations-and-evaluation/05-04-arithmetic-that-runs-backwards/03-constraint_domains.metta's card/2 and sat/1 tests, under
 %NO_AUTOLOAD=1: existence_error(procedure,clpb:same_length/2), then
 %clpb:member/2]; append/3, memberchk/2, reverse/2 and sum_list/2 read from
 %clpb.pl directly (lines 833-1639) rather than found by crashing on each
@@ -53,7 +53,7 @@
                     reverse/2, sum_list/2]).
 %Same gap, library(pairs): clpb.pl's sat/1 variable-weight bookkeeping
 %calls pairs_values/2, pairs_keys_values/3 and pairs_keys/2 unqualified
-%[measured 2026-08-18: examples/basics/constraint_domains.metta under
+%[measured 2026-08-18: examples/ch05-equations-and-evaluation/05-04-arithmetic-that-runs-backwards/03-constraint_domains.metta under
 %NO_AUTOLOAD=1, existence_error(procedure,clpb:pairs_values/2)].
 :- clpb:use_module(library(pairs),
                    [pairs_values/2, pairs_keys_values/3, pairs_keys/2]).
@@ -64,7 +64,7 @@
 %exclude(eq_1) or maplist(monotonic_variable) is not the literal
 %lambda/named-predicate pattern it inlines), so at least foldl/5 falls
 %through to a real, uninlined call and needs the predicate to exist
-%[measured 2026-08-18: examples/basics/constraint_domains.metta under
+%[measured 2026-08-18: examples/ch05-equations-and-evaluation/05-04-arithmetic-that-runs-backwards/03-constraint_domains.metta under
 %NO_AUTOLOAD=1, existence_error(procedure,clpb:foldl/5)]. The full set
 %below is every arity clpb.pl (lines 348-1784) actually calls, read
 %directly rather than found by crashing on each in turn.
