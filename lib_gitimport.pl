@@ -7,7 +7,8 @@
 %   - on a build with no library(process) every git route refuses under the
 %     MeTTa name that reached it, naming the absent library and its cost,
 %     rather than raising existence_error(procedure, process_create/3)
-%     [tested: platform_capabilities_reduced:git_import_refuses_by_name_when_subprocess_is_absent].
+%     [tested: platform_capabilities_reduced:git_import_refuses_by_name_when_subprocess_is_absent;
+%     commit=87d998c24278fc7f020ccb0e408ebcd9332b63eb].
 
 :- use_module(library(filesex)).
 %This file loads at BOOT, from engine/metta.pl's own ensure_loaded list, so it
