@@ -41,11 +41,33 @@ redis_space_address(Address, Host:Port) :-
 'redis-attach'(Space, Address, true) :-
     with_mutex(metta_redis_spaces, redis_space_attach(Space, Address)).
 
+%The claim is taken BEFORE the connection, so a name another provider already
+%owns is refused without a socket being opened. The already attached check
+%stays first because it is redis's own answer about redis's own name, which
+%reads better than the door's.
+%
+%FAILURE gives the claim back as well as an exception, and both arms are
+%needed: redis_space_address/2 FAILS on an address with no colon or a
+%non-numeric port rather than raising, and a claim that outlived a failed
+%attach would refuse the next one naming redis as the holder of a space
+%nothing serves.
 redis_space_attach(Space, Address) :-
     ( redis_space_conn(Space, _, _, _, _, _, _)
       -> throw(error(permission_error(attach, redis_space, Space),
                      context(Space, 'already attached; redis-detach first')))
     ; true ),
+    metta_claim_space(Space, redis),
+    (   catch(redis_space_attach_claimed(Space, Address), Error, true)
+    ->  (   nonvar(Error)
+        ->  metta_disclaim_space(Space, redis),
+            throw(Error)
+        ;   true
+        )
+    ;   metta_disclaim_space(Space, redis),
+        fail
+    ).
+
+redis_space_attach_claimed(Space, Address) :-
     redis_space_address(Address, HostPort),
     atom_concat('metta:space:', Space, Key),
     atom_concat('metta:events:', Space, Channel),
@@ -147,10 +169,14 @@ redis_space_subscription_exit(SubConn) :-
 'redis-detach'(Space, true) :-
     with_mutex(metta_redis_spaces, redis_space_detach(Space)).
 
+%The claim goes back with the connection, and it goes back FIRST: the name
+%stops being redis's the moment its registry row does, so a failure while
+%unsubscribing cannot leave a claim standing over a space nothing serves.
 redis_space_detach(Space) :-
     ( retract(redis_space_conn(
           Space, Conn, _SubConn, SubId, ListenerId, _, Channel))
-      -> unlisten(redis_space_listener(ListenerId)),
+      -> metta_disclaim_space(Space, redis),
+         unlisten(redis_space_listener(ListenerId)),
          setup_call_cleanup(
              true,
              redis_space_unsubscribe(Space, SubId, [Channel]),

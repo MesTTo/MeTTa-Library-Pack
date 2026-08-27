@@ -446,3 +446,8 @@
 (: Kwargs (-> Atom Atom Atom Atom Atom Atom %Undefined%))
 (: library (-> %Undefined% %Undefined%))
 (: git-import! (-> String (->)))
+;; A library that rests on a seat says so, and the engine answers by name when
+;; the seat is not there. Symbol rather than Atom because the argument is a
+;; NAME the way bind!'s first argument is, and unit because what a require
+;; leaves behind is the right to assume the seat, not a value.
+(: require-extension! (-> Symbol (->)))
