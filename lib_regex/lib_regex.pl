@@ -9,6 +9,16 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+%Nothing below this line works without library(pcre), so the file says so
+%where the engine's pre-load scan can read it: an import on a build without
+%the regex capability then refuses naming this file, the capability and what
+%its absence costs, and the file never loads. Without it the import came back
+%wrapped in a transcript of SWI's own source_sink error and named neither
+%[measured 2026-08-28, pcre withheld from tests/prolog/reduced_platform.pl's
+%farm]. This is what lib/lib_thread/lib_thread.pl does for concurrency; the
+%use_module below stays unguarded because it is only reached on a build that
+%HAS the capability.
+:- metta_requires(regex).
 :- use_module(library(pcre)).
 :- use_module(library(apply)).
 
