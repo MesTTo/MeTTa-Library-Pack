@@ -354,8 +354,20 @@ race_queues_destroy(Start, Results) :-
 %all three. Because the handle is an ordinary space, everything that already
 %works on spaces works on a future: match it, get-atoms it, and await-atom on
 %it to take answers as they land instead of waiting for the end.
+%
+%And it is one FROM THE MOMENT ITS NAME IS HANDED OUT, which is why the space
+%is created here rather than by whoever writes to it first. All four callers
+%mint a fresh handle and hand it straight to a caller; the storage used to
+%appear only on the first answer, so in between the caller held a handle to
+%nothing: (get-metatype &future-1) answered Symbol, metta_space_names/1 omitted
+%it, and a host codec asking the engine what species the atom is was told a
+%symbol, so !(spawn (+ 1 2)) reached Python as a Symbol rather than a
+%FutureSpace [measured 2026-08-27]. The timer path below already said this in
+%prose. ensure_native_storage_module/2 is idempotent, so the first write is a
+%cache hit.
 future_space_name(Number, Space) :-
-    atom_concat('&future-', Number, Space).
+    atom_concat('&future-', Number, Space),
+    ensure_native_storage_module(Space, _).
 
 thread_spawn(Expr, Space) :-
     current_metta_module(Module),
