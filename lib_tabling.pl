@@ -198,7 +198,7 @@ metta_tabling_declare(Module, Name, CompiledArity, Head) :-
     ( predicate_property(Module:Head, tabled),
       predicate_property(Module:Head, tabled(shared))
       -> true
-    ; throw(error(petta_tabling_failed(Module:Name/CompiledArity), none)) ),
+    ; throw(error(metta_tabling_failed(Module:Name/CompiledArity), none)) ),
     metta_tabling_reflect(Module, Name, CompiledArity, Fact),
     metta_tabling_reflection_ensure(Fact),
     metta_tabling_register(Name, Module, CompiledArity).
@@ -226,7 +226,7 @@ metta_untabled_decl(Call, true) :-
     untable(Module:Name/CompiledArity),
     functor(Head, Name, CompiledArity),
     ( predicate_property(Module:Head, tabled)
-      -> throw(error(petta_untabling_failed(Module:Name/CompiledArity), none))
+      -> throw(error(metta_untabling_failed(Module:Name/CompiledArity), none))
     ; true ),
     metta_tabling_reflect(Module, Name, CompiledArity, Fact),
     catch(metta_tabling_reflection_write(remove, Fact),
@@ -258,10 +258,10 @@ metta_tabling_resolve(read(Operation, Space, Pattern), Reads0, Reads) :-
 %One space read, resolved to the dynamic predicates that answer it: one
 %per conjunct, since a conjunction reads each of its patterns.
 metta_tabling_read(Operation, Space, Pattern, Reads) :-
-    ( petta_space_name(Space) -> true
-    ; throw(error(petta_tabling_unresolved_read(Operation, Space), none)) ),
+    ( metta_space_name(Space) -> true
+    ; throw(error(metta_tabling_unresolved_read(Operation, Space), none)) ),
     ( seam:foreign_space(Space)
-      -> throw(error(petta_tabling_foreign_space(Operation, Space), none))
+      -> throw(error(metta_tabling_foreign_space(Operation, Space), none))
     ; true ),
     native_storage_module(Space, Storage),
     native_storage_functor(Space, Functor),
@@ -276,25 +276,25 @@ metta_tabling_read(Operation, Space, Pattern, Reads) :-
 %conjunct; anything whose shape is not fixed cannot be resolved.
 metta_tabling_patterns(Operation, Pattern, _) :-
     \+ is_list(Pattern), !,
-    throw(error(petta_tabling_unresolved_read(Operation, Pattern), none)).
+    throw(error(metta_tabling_unresolved_read(Operation, Pattern), none)).
 metta_tabling_patterns(Operation, [Comma|Conjuncts], Shapes) :-
     nonvar(Comma), Comma == ',', !,
     foldl(metta_tabling_conjunct(Operation), Conjuncts, [], Shapes).
 metta_tabling_patterns(Operation, [Head|Arguments], [Arguments]) :-
     ( nonvar(Head) -> true
-    ; throw(error(petta_tabling_unresolved_read(Operation, [Head|Arguments]), none)) ).
+    ; throw(error(metta_tabling_unresolved_read(Operation, [Head|Arguments]), none)) ).
 
 metta_tabling_conjunct(Operation, Conjunct, Shapes0, Shapes) :-
     metta_tabling_patterns(Operation, Conjunct, Found),
     append(Found, Shapes0, Shapes).
 
-prolog:error_message(petta_tabling_unresolved_read(Operation, Culprit)) -->
+prolog:error_message(metta_tabling_unresolved_read(Operation, Culprit)) -->
     { swrite(Culprit, Text) },
     [ 'a tabled function reads ~w with ~w, which cannot be resolved to one \c
        space predicate, so writes to it could not invalidate the table. \c
        Name the space and the pattern shape, or do not table this \c
        function.'-[Operation, Text] ].
-prolog:error_message(petta_tabling_foreign_space(Operation, Space)) -->
+prolog:error_message(metta_tabling_foreign_space(Operation, Space)) -->
     [ 'a tabled function reads the foreign space ~w with ~w. Its atoms do \c
        not live in this engine, so a write there cannot invalidate the \c
        table. Do not table a function that reads a foreign space.'-[Space, Operation] ].
@@ -326,7 +326,7 @@ metta_tabling_reflection_write(Operation, Fact) :-
           Outcome = exception(Error)),
     (   Outcome == result([])
     ->  true
-    ;   throw(error(petta_tabling_reflection_write_failed(Operation, Fact,
+    ;   throw(error(metta_tabling_reflection_write_failed(Operation, Fact,
                                                           Outcome), none))
     ).
 
@@ -335,7 +335,7 @@ metta_tabling_reflection_goal(add, Fact, Result) :-
 metta_tabling_reflection_goal(remove, Fact, Result) :-
     'remove-atom'('&metta', Fact, Result).
 
-prolog:error_message(petta_tabling_reflection_write_failed(Operation, Fact,
+prolog:error_message(metta_tabling_reflection_write_failed(Operation, Fact,
                                                             Outcome)) -->
     { swrite(Fact, Text) },
     [ 'tabling could not ~w its reflection row ~w: the &metta write answered \c

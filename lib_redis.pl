@@ -39,7 +39,7 @@ redis_space_address(Address, Host:Port) :-
     atom_number(PortAtom, Port).
 
 'redis-attach'(Space, Address, true) :-
-    with_mutex(petta_redis_spaces, redis_space_attach(Space, Address)).
+    with_mutex(metta_redis_spaces, redis_space_attach(Space, Address)).
 
 redis_space_attach(Space, Address) :-
     ( redis_space_conn(Space, _, _, _, _, _, _)
@@ -145,7 +145,7 @@ redis_space_subscription_exit(SubConn) :-
     redis_disconnect(SubConn, [force(true)]).
 
 'redis-detach'(Space, true) :-
-    with_mutex(petta_redis_spaces, redis_space_detach(Space)).
+    with_mutex(metta_redis_spaces, redis_space_detach(Space)).
 
 redis_space_detach(Space) :-
     ( retract(redis_space_conn(

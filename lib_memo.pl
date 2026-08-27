@@ -484,7 +484,7 @@ memo_automatic_candidate(Fun, _) :- memo_cache_override(Fun, force), !.
 memo_automatic_candidate(_, memo_scc(_, true, MaxCalls)) :- MaxCalls >= 2.
 
 memo_cache_override(Fun, Mode) :-
-    petta_contract_fact([cache, Fun, Mode]).
+    metta_contract_fact([cache, Fun, Mode]).
 
 memo_automatic_unsafe_reason(Fun, _, [volatile, Fun]) :-
     \+ metta_function_cacheable(Fun),
@@ -609,7 +609,7 @@ apply_memo_option(['answer-limit', N]) :-
     retractall(memo_answer_limit(_)),
     assertz(memo_answer_limit(N)).
 apply_memo_option([aggregate, Mode]) :-
-    petta_vocabulary_value('memo-aggregate', Mode), !,
+    metta_vocabulary_value('memo-aggregate', Mode), !,
     retractall(memo_aggregate_mode(_)),
     assertz(memo_aggregate_mode(Mode)).
 apply_memo_option(Opt) :-
@@ -716,8 +716,8 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
     exact_memo_specialization(_, _, Fun, Module, Arity),
     !.
 ensure_exact_memo_specialization(Fun, Module, Arity) :-
-    atomic_list_concat(['$petta_exact_replay$', Fun, '$', Arity], ReplayName),
-    atomic_list_concat(['$petta_exact_table$', Fun, '$', Arity], TableName),
+    atomic_list_concat(['$metta_exact_replay$', Fun, '$', Arity], ReplayName),
+    atomic_list_concat(['$metta_exact_table$', Fun, '$', Arity], TableName),
     length(RawArgs, Arity),
     ReplayHead =.. [ReplayName | RawArgs],
     append([Generation|RawArgs], [Multiplicity], TableArgs),
@@ -733,7 +733,7 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
     %The module-tier cache asserts into the base tier every space inherits,
     %which is how one cached fib consumed the name for the whole suite
     %[measured 2026-08-26: test_a_cached_definition_memoizes_its_complete_answer_bag
-    %then registering between at MeTTa arity 2 threw petta_op_name_taken;
+    %then registering between at MeTTa arity 2 threw metta_op_name_taken;
     %pinned by test_a_generated_memo_clause_does_not_consume_a_registrable_name].
     SameContextBody =
         ( lib_memo:memo_current_generation(
@@ -906,9 +906,9 @@ cache_clear :-
     asserta(metta_memo_total_bytes(0)),
     retractall(metta_memo_stat(_, _)),
     forall(member(Node, MemoNodes), support_forget(Node)),
-    ( catch(nb_current('$petta_memo_cms', _), _, fail) -> nb_delete('$petta_memo_cms') ; true ),
-    ( catch(nb_current('$petta_memo_cms_size', _), _, fail) -> nb_delete('$petta_memo_cms_size') ; true ),
-    ( catch(nb_current('$petta_memo_accesses', _), _, fail) -> nb_delete('$petta_memo_accesses') ; true ).
+    ( catch(nb_current('$metta_memo_cms', _), _, fail) -> nb_delete('$metta_memo_cms') ; true ),
+    ( catch(nb_current('$metta_memo_cms_size', _), _, fail) -> nb_delete('$metta_memo_cms_size') ; true ),
+    ( catch(nb_current('$metta_memo_accesses', _), _, fail) -> nb_delete('$metta_memo_accesses') ; true ).
 
 %Every space's cache, because the memory budget it resets is one global
 %budget. Use invalidate-memoize to drop one function in one space.
@@ -958,23 +958,23 @@ with_cms_mutex(Goal) :-
 % Frequency Sketch (WTinyLFU)
 
 ensure_cms :-
-    ( catch(nb_current('$petta_memo_cms', _), _, fail),
-      catch(nb_current('$petta_memo_cms_size', _), _, fail)
+    ( catch(nb_current('$metta_memo_cms', _), _, fail),
+      catch(nb_current('$metta_memo_cms_size', _), _, fail)
     -> true
     ; current_prolog_flag(max_arity, MaxArity0),
       ( integer(MaxArity0), MaxArity0 > 0 -> MaxArity = MaxArity0 ; MaxArity = 1024 ),
       SketchSize is min(8192, MaxArity),
       functor(CMS, v, SketchSize),
       forall(between(1, SketchSize, I), nb_setarg(I, CMS, 0)),
-      nb_setval('$petta_memo_cms', CMS),
-      nb_setval('$petta_memo_cms_size', SketchSize),
-      nb_setval('$petta_memo_accesses', 0)
+      nb_setval('$metta_memo_cms', CMS),
+      nb_setval('$metta_memo_cms_size', SketchSize),
+      nb_setval('$metta_memo_accesses', 0)
     ).
 
 get_freq(Fun, Module, Arity, AVs, Freq) :-
     with_cms_mutex(
-        ( catch(nb_current('$petta_memo_cms', CMS), _, fail)
-        -> ( catch(nb_current('$petta_memo_cms_size', SketchSize), _, fail)
+        ( catch(nb_current('$metta_memo_cms', CMS), _, fail)
+        -> ( catch(nb_current('$metta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
             term_hash((Fun, Module, Arity, AVs), HashRaw),
@@ -986,8 +986,8 @@ get_freq(Fun, Module, Arity, AVs, Freq) :-
 
 record_hit(Fun, Module, Arity, AVs) :-
     with_cms_mutex(
-        ( catch(nb_current('$petta_memo_cms', CMS), _, fail)
-        -> ( catch(nb_current('$petta_memo_cms_size', SketchSize), _, fail)
+        ( catch(nb_current('$metta_memo_cms', CMS), _, fail)
+        -> ( catch(nb_current('$metta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
             term_hash((Fun, Module, Arity, AVs), HashRaw),
@@ -1001,23 +1001,23 @@ record_hit(Fun, Module, Arity, AVs) :-
 record_miss(Fun, Module, Arity, AVs) :-
     with_cms_mutex(
         ( ensure_cms,
-          nb_getval('$petta_memo_cms_size', SketchSize),
+          nb_getval('$metta_memo_cms_size', SketchSize),
           term_hash((Fun, Module, Arity, AVs), HashRaw),
           Hash is (abs(HashRaw) mod SketchSize) + 1,
-          nb_getval('$petta_memo_cms', CMS),
+          nb_getval('$metta_memo_cms', CMS),
           arg(Hash, CMS, Val),
           ( integer(Val) -> NextVal is Val + 1 ; NextVal = 1 ),
           nb_setarg(Hash, CMS, NextVal),
-          nb_getval('$petta_memo_accesses', Acc),
+          nb_getval('$metta_memo_accesses', Acc),
           NextAcc is Acc + 1,
-          nb_setval('$petta_memo_accesses', NextAcc),
+          nb_setval('$metta_memo_accesses', NextAcc),
           ( NextAcc > SketchSize -> halve_cms ; true )
         )).
 
 halve_cms :-
-    nb_setval('$petta_memo_accesses', 0),
-    nb_getval('$petta_memo_cms_size', SketchSize),
-    nb_getval('$petta_memo_cms', CMS),
+    nb_setval('$metta_memo_accesses', 0),
+    nb_getval('$metta_memo_cms_size', SketchSize),
+    nb_getval('$metta_memo_cms', CMS),
     forall(between(1, SketchSize, I),
         ( arg(I, CMS, Val),
           ( integer(Val) -> NewVal is Val // 2 ; NewVal = 0 ),

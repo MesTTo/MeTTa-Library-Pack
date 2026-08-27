@@ -47,7 +47,7 @@
 %for [source: SWI-Prolog 10.1 Reference Manual, flag/3, "The update is
 %atomic. This predicate can be used to create a shared global counter"].
 next_json_space(Space) :-
-    flag('$petta_json_space', Previous, Previous + 1),
+    flag('$metta_json_space', Previous, Previous + 1),
     Next is Previous + 1,
     atom_concat('&json-', Next, Space).
 

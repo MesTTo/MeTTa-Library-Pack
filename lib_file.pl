@@ -27,7 +27,7 @@
 %     lists no close operation; leaving a process to leak descriptors is not
 %     something to copy, so file-close! is added and documented as an addition.
 % Guarded by:
-%   - '$petta_files' serialises handle allocation and the handle table.
+%   - '$metta_files' serialises handle allocation and the handle table.
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -37,7 +37,7 @@
 
 :- use_module(library(lists)).
 
-:- dynamic petta_file/2.            % Handle, Stream
+:- dynamic metta_file/2.            % Handle, Stream
 %The counter is a FLAG rather than a dynamic fact, and the difference is a
 %WRONG ANSWER rather than a style. A fact is source, and importing this
 %library into a SECOND space consults the file again, which put the counter
@@ -50,13 +50,13 @@
 %for [source: SWI-Prolog 10.1 Reference Manual, flag/3, "The update is
 %atomic. This predicate can be used to create a shared global counter"].
 next_file_handle(Handle) :-
-    flag('$petta_file_handle', Previous, Previous + 1),
+    flag('$metta_file_handle', Previous, Previous + 1),
     Handle is Previous + 1.
 
 known_file(Handle, Stream) :-
-    (   petta_file(Handle, Stream)
+    (   metta_file(Handle, Stream)
     ->  true
-    ;   existence_error(petta_file_handle, Handle)
+    ;   existence_error(metta_file_handle, Handle)
     ).
 
 %HE's option letters: r read, w write, c create if absent, a append,
@@ -84,7 +84,7 @@ known_file(Handle, Stream) :-
     ),
     open(PathText, Mode, Stream, [encoding(utf8)]),
     next_file_handle(Handle),
-    with_mutex('$petta_files', assertz(petta_file(Handle, Stream))).
+    with_mutex('$metta_files', assertz(metta_file(Handle, Stream))).
 
 %append wins over write because a caller asking for both means "add to it",
 %and read plus write is SWI's update mode, which keeps the existing content.
@@ -137,8 +137,8 @@ file_open_mode(Letters, Mode) :-
 %descriptors until it dies, so this exists; closing twice is not an error,
 %because a cleanup path should not have to check first.
 'file-close!'(Handle, true) :-
-    (   petta_file(Handle, Stream)
-    ->  with_mutex('$petta_files', retractall(petta_file(Handle, _))),
+    (   metta_file(Handle, Stream)
+    ->  with_mutex('$metta_files', retractall(metta_file(Handle, _))),
         catch(close(Stream), _, true)
     ;   true
     ).
