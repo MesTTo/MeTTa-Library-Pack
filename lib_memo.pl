@@ -757,7 +757,7 @@ ensure_exact_memo_specialization(Fun, Module, Arity) :-
 %Private tables belong to one calling thread, so local selective abolition
 %cannot invalidate the same specialization already populated on a scheduler
 %carrier. Generation is therefore an ordinary first argument: every carrier
-%reads the shared PeTTa epoch before selecting its private table variant.
+%reads the shared MeTTa epoch before selecting its private table variant.
 % Source: SWI-Prolog/swipl-devel f49d28558b5f1ade8348f254b5583117e773b2bb,
 % man/tabling.plx, section tabling-shared.
 % A normal argument is answer identity; sum is its coefficient. Every raw

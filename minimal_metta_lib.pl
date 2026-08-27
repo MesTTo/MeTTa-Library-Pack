@@ -132,7 +132,7 @@ metta_return_value(Term, Value) :-
 %variables afterwards gets both: the entry names a variable the caller shares,
 %bound to nothing yet, beside the value that branch gave it.
 %
-%That the variable renders as $_0 rather than $a is the one thing PeTTa cannot
+%That the variable renders as $_0 rather than $a is the one thing MeTTa cannot
 %match here. The parser resolves $x to a plain Prolog variable and keeps the
 %name only inside the parse [source: engine/parser.pl, var_symbol//3 threads a
 %Name-Var environment that sread/2 does not return], so no name reaches

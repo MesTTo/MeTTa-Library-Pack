@@ -97,9 +97,9 @@ json_to_metta_list([Head|Tail], [MettaHead|MettaTail]) :-
     json_to_metta(Head, MettaHead),
     json_to_metta_list(Tail, MettaTail).
 
-%PeTTa's booleans are lowercase: the reader normalises True to true and False
+%MeTTa's booleans are lowercase: the reader normalises True to true and False
 %to false, and every engine predicate answers true/false, so JSON's literals
-%map onto those rather than onto HE's capitalised spelling. Null has no PeTTa
+%map onto those rather than onto HE's capitalised spelling. Null has no MeTTa
 %equivalent and the reader leaves it alone, so it stays as written
 %[verified 2026-08-15: sread("(True False Null true)", T) gives
 %[true,false,'Null',true]].
@@ -161,7 +161,7 @@ space_to_json(Space, json(Pairs)) :-
            )).
 
 %Nondeterministic, one key per solution, because that is how get-atoms answers
-%in PeTTa and an answer set is the MeTTa reading of "all of them". Wrap it in
+%in MeTTa and an answer set is the MeTTa reading of "all of them". Wrap it in
 %collapse for a tuple.
 'get-keys'(Space, Key) :-
     'get-atoms'(Space, [Key, _]).
@@ -177,7 +177,7 @@ space_to_json(Space, json(Pairs)) :-
 %0.0191s declared with identical inference counts.
 %
 %get-keys and get-value are deliberately absent. get-keys is nondeterministic
-%BY DESIGN, one key per solution, which is how get-atoms answers in PeTTa; and
+%BY DESIGN, one key per solution, which is how get-atoms answers in MeTTa; and
 %get-value has no answer when the key is absent, which is HE's "empty if no
 %such key". Declaring either would raise on the behaviour they are for.
 :- det('json-decode'/2).

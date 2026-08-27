@@ -1,4 +1,4 @@
-; Purpose: declare the type surface of PeTTa's shipped builtins, its type-kind
+; Purpose: declare the type surface of MeTTa's shipped builtins, its type-kind
 ; markers included, for engine reflection and optional live typed dispatch.
 ; Guarantees:
 ;   - reader-token registration takes a regex string and readable constructor
@@ -97,10 +97,10 @@
 ;; The rest of the engine's surface: 117 names that answered %Undefined%.
 ;;
 ;; The types come from the reference corelib dump wherever it has one, because
-;; a type PeTTa does not already have is additive and the reference governs
+;; a type MeTTa does not already have is additive and the reference governs
 ;; there [source: LeaTTa stdlib.md, 146 typed entries; 39 of
 ;; these names are in it]. One vocabulary translation was needed: HE's unit
-;; result `(->)` is PeTTa's `Bool`, because every one of these answers `true`.
+;; result `(->)` is MeTTa's `Bool`, because every one of these answers `true`.
 ;; `SpaceType` is written as itself, because a space handle answers `Grounded`
 ;; here as it does there and carries that type
 ;; [tested: spaces:space_handle_type]. It was written `Symbol` until
@@ -256,7 +256,7 @@
 ;; atom-subst replaces one variable inside a template, all three operands
 ;; as written and the result as produced.
 (: atom-subst (-> Atom Variable Atom Atom))
-;; PeTTa's own, no dump entry. cons/decons are the un-suffixed spellings and
+;; MeTTa's own, no dump entry. cons/decons are the un-suffixed spellings and
 ;; first/second-from-pair read a two-element expression.
 ;;
 ;; Their RESULT is `Atom`, matching the suffixed rows two lines up, and the
