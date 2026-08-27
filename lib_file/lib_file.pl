@@ -66,7 +66,7 @@ known_file(Handle, Stream) :-
     metta_text(Path, PathText),
     metta_text(Options, OptionText),
     string_chars(OptionText, Letters),
-    % policy-inventory-exempt: mechanism-internal; reason=r w c a and t are the fixed HE file-mode instruction alphabet; evidence=lib/lib_file.pl:file-open!/3
+    % policy-inventory-exempt: mechanism-internal; reason=r w c a and t are the fixed HE file-mode instruction alphabet; evidence=lib/lib_file/lib_file.pl:file-open!/3
     (   forall(member(Letter, Letters), memberchk(Letter, [r, w, c, a, t]))
     ->  true
     ;   throw(error(domain_error(file_open_options, Options),

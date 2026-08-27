@@ -12,7 +12,7 @@
 
 :- use_module(library(filesex)).
 %This file loads at BOOT, from engine/metta.pl's own ensure_loaded list, so it
-%cannot use the pre-load declaration lib/lib_thread.pl carries: nothing is
+%cannot use the pre-load declaration lib/lib_thread/lib_thread.pl carries: nothing is
 %reading its manifest. It reads the census instead, which engine/metta.pl has
 %already decided by the time this file loads, and refuses at the one place
 %every route reaches a program (git_process_output/6 below) rather than at

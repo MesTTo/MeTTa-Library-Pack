@@ -202,7 +202,7 @@ seam:foreign_space(Space) :-
 :- multifile seam:foreign_capability/2.
 seam:foreign_capability(Space, Capability) :-
     redis_space_conn(Space, _, _, _, _, _, _),
-    % policy-inventory-exempt: mechanism-internal; reason=a Redis set implements the five fixed foreign-provider protocol hooks rather than choosing an engine policy; evidence=lib/lib_redis.pl:foreign_capability/2
+    % policy-inventory-exempt: mechanism-internal; reason=a Redis set implements the five fixed foreign-provider protocol hooks rather than choosing an engine policy; evidence=lib/lib_redis/lib_redis.pl:foreign_capability/2
     member(Capability, [add, remove, match, enumerate, clear]).
 
 %What an attached space's change events promise, which is the sixth

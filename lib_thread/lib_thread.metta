@@ -81,7 +81,7 @@
 ;without these declarations (par-race ((slow 1) (fast 2))) would compute both
 ;branches first and race two finished values, and (spawn $expr) would evaluate
 ;$expr on the calling thread and hand the answer to a thread with nothing left
-;to do. Atom is the parameter type that stops that [source: lib/lib_he.metta,
+;to do. Atom is the parameter type that stops that [source: lib/lib_he/lib_he.metta,
 ;which declares the same for its assertion forms].
 (: par-race (-> Atom %Undefined%))
 (: spawn (-> Atom %Undefined%))

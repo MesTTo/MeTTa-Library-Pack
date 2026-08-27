@@ -500,7 +500,7 @@ memo_automatic_unsafe_reason(Fun, Module, ['bounded-search', Control]) :-
     nonvar(Form),
     Form = [Control|_],
     atom(Control),
-    % policy-inventory-exempt: mechanism-internal; reason=once take and top are the fixed bounded-search controls whose branch pruning conflicts with eager answer-bag collection; evidence=lib/lib_memo.pl:memo_automatic_unsafe_reason/3
+    % policy-inventory-exempt: mechanism-internal; reason=once take and top are the fixed bounded-search controls whose branch pruning conflicts with eager answer-bag collection; evidence=lib/lib_memo/lib_memo.pl:memo_automatic_unsafe_reason/3
     memberchk(Control, [once, take, top]),
     !.
 memo_automatic_unsafe_reason(Fun, Module, Reason) :-
@@ -577,10 +577,10 @@ memo_aggregate_mode(none).    % none|min|max|sum|count (ground path)
 metta_memo_total_bytes(0).    % Global bytes tracker
 
 normalize_memo_strategy(In, wtinylfu) :-
-    % policy-inventory-exempt: documented-collision-decision; reason=legacy spellings intentionally normalize to the one wtinylfu strategy; evidence=lib/lib_memo.pl:normalize_memo_strategy/2
+    % policy-inventory-exempt: documented-collision-decision; reason=legacy spellings intentionally normalize to the one wtinylfu strategy; evidence=lib/lib_memo/lib_memo.pl:normalize_memo_strategy/2
     memberchk(In, [wtinylfu, 'WTinyLFU', 'W-TinyLFU', 'wtinylfu', 'w-tinylfu']), !.
 normalize_memo_strategy(In, lru) :-
-    % policy-inventory-exempt: documented-collision-decision; reason=case variants intentionally normalize to the one lru strategy; evidence=lib/lib_memo.pl:normalize_memo_strategy/2
+    % policy-inventory-exempt: documented-collision-decision; reason=case variants intentionally normalize to the one lru strategy; evidence=lib/lib_memo/lib_memo.pl:normalize_memo_strategy/2
     memberchk(In, [lru, 'LRU']), !.
 normalize_memo_strategy(In, Out) :-
     atom(In),

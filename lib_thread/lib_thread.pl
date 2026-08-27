@@ -1171,7 +1171,7 @@ pool_stats(Name, Stats) :-
     ;   existence_error(metta_thread_pool, Name)
     ),
     findall([Key, Value],
-            % policy-inventory-exempt: mechanism-internal; reason=these are the fixed SWI thread_pool_property keys exposed by the pool statistics adapter; evidence=lib/lib_thread.pl:pool_stats/2
+            % policy-inventory-exempt: mechanism-internal; reason=these are the fixed SWI thread_pool_property keys exposed by the pool statistics adapter; evidence=lib/lib_thread/lib_thread.pl:pool_stats/2
             ( member(Key, [size, running, backlog, free]),
               Property =.. [Key, Value],
               catch(thread_pool_property(Name, Property), _, fail) ),

@@ -19,7 +19,7 @@ Measured 2026-08-15, one harness, min-of-5, on the trivial case
 3.2x fewer inferences and 18.8x faster in wall clock, and the wall-clock cost
 against a plain MeTTa function falls from 24.65x to 1.30x.
 
-Assumes: the engine can reach `lib/lib_import.metta`, which is how the MeTTa
+Assumes: the engine can reach `lib/lib_import/lib_import.metta`, which is how the MeTTa
   half registers the Prolog half [tested: tests/prolog/prolog_interface.plt].
 Guarantees:
   - install(m) is idempotent and returns the names it registered
