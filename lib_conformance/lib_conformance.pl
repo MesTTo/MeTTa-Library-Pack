@@ -108,7 +108,7 @@ capability_hook(clear, seam:foreign_clear/1).
 %clause that serves THIS space is the payload: the day MORK gained its own
 %clear hook, every other provider's undeclared clear satisfied a
 %whole-predicate count and this check stopped catching the thing it exists
-%for [measured 2026-08-26 under `-- backends`, where the hookless probe
+%for [measured 2026-08-26 under `-- extensions`, where the hookless probe
 %passed while MORK's clause supplied the count]. The seam's ownership-guard
 %protocol (engine/ext_points.pl) is what makes the per-space question
 %decidable without performing the operation: a hook clause's leading body
