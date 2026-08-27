@@ -3,7 +3,7 @@
 ; Guarantees:
 ;   - spawn computations multiplex as suspended engines over a bounded carrier
 ;     pool; await and channel backpressure wake engines instead of parking
-;     carriers [tested: tests/prolog/lib_thread.plt; commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+;     carriers [tested: tests/prolog/suites/libraries/lib_thread.plt; commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 ;
 ;Four kinds of thing live here and they compose.
 ;

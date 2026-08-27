@@ -20,7 +20,7 @@ Measured 2026-08-15, one harness, min-of-5, on the trivial case
 against a plain MeTTa function falls from 24.65x to 1.30x.
 
 Assumes: the engine can reach `lib/lib_import/lib_import.metta`, which is how the MeTTa
-  half registers the Prolog half [tested: tests/prolog/prolog_interface.plt].
+  half registers the Prolog half [tested: tests/prolog/suites/host/prolog_interface.plt].
 Guarantees:
   - install(m) is idempotent and returns the names it registered
     [tested: test_minimal_lib_install_is_idempotent_after_cross_file_traffic;
