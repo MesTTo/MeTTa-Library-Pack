@@ -9,9 +9,20 @@
 % Assumes:
 %   - a MeTTa string is an SWI string and a space is an atom beginning with &
 %     [source: engine/metta.pl, 'is-space'/2]
+%   - the JSON itself is engine/json_codec.pl's, the one JSON door in this
+%     repository, so this file and the Python binding's wire codec cannot
+%     disagree about what a document means or how one is spelled
 % Guarantees:
 %   - decode and encode round-trip an object, an array, a string, a number and
 %     the three literals [tested: lib_json]
+%   - encoding answers ONE LINE, the same text the wire codec produces for the
+%     same value. It used to answer library(json)'s default width(72) layout,
+%     which indents a document over many lines once it passes 72 columns: the
+%     shipped json-wire payload came back as 32,643 characters of tab-indented
+%     text where the document itself is 25,017 [measured 2026-08-28]
+%   - text after one JSON value is refused rather than silently dropped, which
+%     is what the wire codec has always done [tested:
+%     lib_json:trailing_content_after_a_document_is_refused]
 %   - the conversions are deterministic, so a recursive decode keeps last call
 %     optimisation and does not retain a frame per element [measured
 %     2026-08-15: a walk whose step leaves a choice point holds 81,600,096
@@ -32,8 +43,16 @@
 %   Hacks: None
 %   Future Enhancements: None
 
-:- use_module(library(http/json)).
+:- use_module('../../engine/json_codec',
+              [ json_codec_read/3, json_codec_write/3 ]).
 :- use_module(library(lists)).
+
+%The classic json([Name=Value|...]) shape, and MeTTa HE's literal vocabulary
+%read back through json_literal/2 below. One list, named once, because the
+%decode and the encode must agree about it. The name says lib_json because
+%this file is consulted INTO a space's own module, where a MeTTa equation of
+%the same name would replace it.
+lib_json_options([shape(classic), true(@(true)), false(@(false)), null(@(null))]).
 
 %The counter is a FLAG rather than a dynamic fact, and the difference is a
 %WRONG ANSWER rather than a style. A fact is source, and importing this
@@ -55,7 +74,8 @@ next_json_space(Space) :-
 
 'json-decode'(Text, Out) :-
     metta_text(Text, Json),
-    atom_json_term(Json, Term, [value_string_as(string)]),
+    lib_json_options(Options),
+    json_codec_read(Json, Term, Options),
     json_to_metta(Term, Out).
 
 %One rule per JSON shape, as single sided unification rules. The earlier
@@ -111,8 +131,8 @@ json_literal(null, 'Null').
 
 'json-encode'(Value, Text) :-
     metta_to_json(Value, Term),
-    atom_json_term(Atom, Term, [as(atom)]),
-    atom_string(Atom, Text).
+    lib_json_options(Options),
+    json_codec_write(Term, Text, Options).
 
 %Rules rather than clauses, for the reasons on json_to_metta/2 above. The
 %three literals are named atoms and are matched before the general atom rule.
@@ -188,3 +208,4 @@ space_to_json(Space, json(Pairs)) :-
 :- det(metta_to_json/2).
 :- det(metta_to_json_list/2).
 :- det(next_json_space/1).
+:- det(lib_json_options/1).
