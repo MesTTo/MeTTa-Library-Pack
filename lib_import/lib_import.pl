@@ -1,3 +1,11 @@
+% This source holds non-ASCII text, and the encoding is declared HERE, ahead
+% of it, rather than inherited from the ambient locale: SWI decodes the file as
+% a stream, so a directive placed after the first non-ASCII byte is already too
+% late. A boot under LC_ALL=C warned `Illegal multibyte Sequence` without it,
+% which is every perf-measured child, because measure_instructions builds its
+% environment from a small allowlist carrying no locale.
+:- encoding(utf8).
+
 %Translate a MeTTa S-expression file (no code, no bangs) to Prolog facts.
 %
 %Through the engine's own reader, not line by line. The line-based converter
