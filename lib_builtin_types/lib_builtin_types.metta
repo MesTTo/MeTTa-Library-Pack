@@ -174,20 +174,24 @@
 (: |-> (-> Expression Atom %Undefined%))
 
 ;; --- Special forms: spaces ---
-;These five answer the UNIT value, `(->)`, which is the type the standard
-;library gives them and which the engine now returns. They were declared Bool
-;here because the implementation answered `true`; that read the type off the
-;implementation instead of correcting the implementation to the type.
+;These five answer `true`, the effect answer every operation of this family
+;gives; engine/metta/runtime.pl's note above 'println!'/2 carries the list and
+;names the check that holds it together
+;[source: PeTTa@ae66fa8 src/spaces.pl:10,24].
+;
+;They were declared `(->)` here for a while, following Hyperon's unit type, and
+;the clauses were changed to match. Upstream PeTTa is the arbiter on this
+;branch and answers `true`, so both halves came back.
 ;
 ;The second parameter is `Atom` in every one of them, so the argument arrives
 ;UNREDUCED. That is load-bearing for the reducing three: `add-reduct` reduces
 ;the atom itself, and a caller that reduced it first would hand it a value
 ;`reduce/3` has nothing left to do with.
-(: add-atom (-> SpaceType Atom (->)))
-(: remove-atom (-> SpaceType Atom (->)))
-(: add-atoms (-> SpaceType Atom (->)))
-(: add-reduct (-> SpaceType Atom (->)))
-(: add-reducts (-> SpaceType Atom (->)))
+(: add-atom (-> SpaceType Atom Bool))
+(: remove-atom (-> SpaceType Atom Bool))
+(: add-atoms (-> SpaceType Atom Bool))
+(: add-reduct (-> SpaceType Atom Bool))
+(: add-reducts (-> SpaceType Atom Bool))
 (: match (-> SpaceType Atom Atom %Undefined%))
 
 ;; --- Special forms: collections ---
@@ -327,7 +331,7 @@
 (: register-token! (-> String Symbol Bool))
 (: unregister-token! (-> String Bool))
 (: context-space (-> SpaceType))
-(: import! (-> Atom Atom (->)))
+(: import! (-> Atom Atom Bool))
 ;; include pastes a module's source into the space that included it and
 ;; answers its LAST directive's answers, so its result type is open where
 ;; import!'s is unit [source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean,
@@ -338,10 +342,10 @@
 ;; tests/semantics/grounded/25-state-rendering.metta]. A cell is a handle atom
 ;; here, so a plain symbol still names one and the older named spelling keeps
 ;; working; what changed is that (new-state V) answers a cell rather than only
-;; being readable inside bind!, and change-state! answers the cell it wrote
-;; rather than True.
+;; being readable inside bind!. change-state! answers `true` like the rest of
+;; the effect family [source: PeTTa@ae66fa8 src/metta.pl:265].
 (: new-state (-> $t (StateMonad $t)))
-(: change-state! (-> (StateMonad $t) $t (StateMonad $t)))
+(: change-state! (-> (StateMonad $t) $t Bool))
 (: get-state (-> (StateMonad $t) $t))
 
 ;; --- Checked on import: text and printing ---
@@ -445,7 +449,7 @@
 (: Kwargs (-> Atom Atom Atom Atom Atom %Undefined%))
 (: Kwargs (-> Atom Atom Atom Atom Atom Atom %Undefined%))
 (: library (-> %Undefined% %Undefined%))
-(: git-import! (-> String (->)))
+(: git-import! (-> String Bool))
 ;; A library that rests on a seat says so, and the engine answers by name when
 ;; the seat is not there. Symbol rather than Atom because the argument is a
 ;; NAME the way bind!'s first argument is, and unit because what a require

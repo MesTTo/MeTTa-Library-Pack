@@ -1645,7 +1645,7 @@ scheduler_claim_candidate_(_, _, Pattern, Candidate, _, peek, Out) :- !,
     Out = Candidate.
 scheduler_claim_candidate_(Task, Space, Pattern, Candidate, Deadline, take,
                            Out) :-
-    (   'remove-atom'(Space, Candidate, [])
+    (   'remove-atom'(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
     ;   scheduler_space_claim_(Task, Space, Pattern, Deadline, take, Out)
     ).
@@ -1687,7 +1687,7 @@ space_claim_(Space, Pattern, Queue, Deadline, Mode, Out) :-
     ),
     (   Mode == peek
     ->  Pattern = Candidate, Out = Candidate
-    ;   'remove-atom'(Space, Candidate, [])
+    ;   'remove-atom'(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
     ;   space_claim_(Space, Pattern, Queue, Deadline, Mode, Out)
     ).

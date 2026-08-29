@@ -34,11 +34,11 @@
     var(Url),
     !,
     refuse_unbound_input('git-import!', 1).
-'git-import!'(Url, []) :-
+'git-import!'(Url, true) :-
     'git-import!'(Url, '', './repos', _).
-'git-import!'(Url, Build, []) :-
+'git-import!'(Url, Build, true) :-
     'git-import!'(Url, Build, './repos', _).
-'git-import!'(Url0, Build0, Base0, []) :-
+'git-import!'(Url0, Build0, Base0, true) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
     acquire_unpinned_repository('git-import!', Url, Build, Base,
                                 Name, LocalDir),
@@ -53,7 +53,7 @@
 %error. That suite now checks all four arities answer the same unit, so the
 %four cannot drift apart again
 %[tested: tests/shell/test_git_import.sh].
-'git-import!'(Url0, Build0, Base0, Rev0, []) :-
+'git-import!'(Url0, Build0, Base0, Rev0, true) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
     git_validate_sha('git-import!', Rev0, Rev),
     acquire_pinned_repository('git-import!', Url, Build, Base, Rev,

@@ -308,9 +308,11 @@ metta_tabling_reflect(Module, Name, CompiledArity, [tabled, Space, Name, InputAr
     InputArity is CompiledArity - 1.
 
 %A reflection fact already standing is the idempotent case and needs no write.
-%Every actual write must answer the language's unit value. Failure, an error
-%answer, or an exception is rethrown under one named tabling error so a caller
-%cannot receive True from a declaration whose catalog state did not land.
+%Every actual write must answer `true`, the answer this engine's effectful
+%operations give (engine/metta/runtime.pl's note above 'println!'/2 carries the
+%family). Failure, an error answer, or an exception is rethrown under one named
+%tabling error so a caller cannot receive True from a declaration whose catalog
+%state did not land.
 metta_tabling_reflection_ensure(Fact) :-
     (   once('get-atoms'('&metta', Fact))
     ->  true
@@ -324,7 +326,7 @@ metta_tabling_reflection_write(Operation, Fact) :-
           ),
           Error,
           Outcome = exception(Error)),
-    (   Outcome == result([])
+    (   Outcome == result(true)
     ->  true
     ;   throw(error(metta_tabling_reflection_write_failed(Operation, Fact,
                                                           Outcome), none))
