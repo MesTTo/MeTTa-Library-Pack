@@ -158,32 +158,83 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %symbols.
 %
 %Restoring is one unification per entry, undone by backtracking into member/2,
-%which is what lets the next row bind the same variable to its own value. The
-%row's own value is answered whether or not it carries bindings, so a list
-%that did not come from collapse-bind still superposes
-%[source: MettaHyperonFull/Minimal/Stdlib.lean:915;
-%tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta and
-%builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name;
-%commit=b77e3ce5233e5f6032cfc8546ff83ecf4dc3de87].
+%which is what lets the next row bind the same variable to its own value.
+%
+%A row of exactly TWO elements is a collapse-bind pair, and its second element
+%has to decode as a binding carrier: an expression headed by `bindings` whose
+%every entry is a (<- <variable> <value>) triple. One that does not decode is
+%malformed program data and is REFUSED by name rather than ignored. Answering
+%the value anyway is what this did before, and it made
+%`(superpose-bind ((42 ()) (43 ())))` answer 42 and 43 where the oracle
+%answers one error per malformed row; the row shapes that are NOT two-element
+%pairs keep their old readings, because those are the shapes the oracle also
+%passes through
+%[source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean, superposeItems, and
+%its own --min door, which answers
+%`(Error (superpose-bind ((42 ()) (43 ()))) "superpose-bind: expected an
+%encoded bindings value")` per malformed row and `[42, 43]` for the same rows
+%carrying `(bindings)`;
+%tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta,
+%builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name and
+%test_the_presented_core_agrees_with_the_engine_on_the_shared_fragment;
+%commit=WORKTREE].
 'superpose-bind'(Rows, _) :- var(Rows), !,
                             refuse_unbound_input('superpose-bind', 1).
 'superpose-bind'(Rows, Out) :-
     is_list(Rows),
     member(Row, Rows),
     (   is_list(Row), Row = [Value, Bindings]
-    ->  metta_restore_bindings(Bindings), Out = Value
+    ->  (   metta_decoded_bindings(Bindings, Pairs)
+        ->  maplist(metta_restore_binding, Pairs),
+            Out = Value
+        ;   Out = ['Error', ['superpose-bind', Rows],
+                   "superpose-bind: expected an encoded bindings value"]
+        )
     ;   is_list(Row), Row = [Value|_]
     ->  Out = Value
     ;   Out = Row
     ).
 
-metta_restore_bindings(Bindings) :-
-    (   is_list(Bindings), Bindings = [Head|Pairs], Head == bindings
-    ->  maplist(metta_restore_binding, Pairs)
-    ;   true
-    ).
+%The carrier collapse-bind emits, and nothing else. The head must be the symbol
+%`bindings`, and every entry one of the three shapes the oracle's decoder takes
+%-- an ordinary term binding, a SEGMENT binding, or a bare segment name. The
+%last two belong to the sequence-variable extension, which this engine does not
+%produce; they are accepted anyway because a program may WRITE a carrier and
+%the oracle accepts them, and refusing what it accepts is as much a divergence
+%as accepting what it refuses
+%[source: LeaTTa MettaHyperonFull/Core/SeqRuntime.lean, decodeUnified, whose
+%three entry cases these are, checked against its --min door:
+%`(bindings (seq $n))` and `(bindings (<- (:seg $n) (a b)))` answer the value
+%while `(bindings (seq x))` and `(bindings (<- (:seg $n) a))` are refused,
+%because a segment name is a VARIABLE and a segment run is an EXPRESSION;
+%commit=WORKTREE].
+metta_decoded_bindings(Bindings, Entries) :-
+    is_list(Bindings),
+    Bindings = [Head|Entries],
+    Head == bindings,
+    forall(member(Entry, Entries), metta_binding_entry(Entry)).
 
-metta_restore_binding(['<-', Variable, Value]) :- !, Variable = Value.
+metta_binding_entry([Arrow, [Seg, Name], Run]) :-
+    Arrow == '<-', Seg == ':seg', !,
+    var(Name),
+    is_list(Run).
+metta_binding_entry([Arrow, Variable, _]) :-
+    Arrow == '<-', !,
+    var(Variable).
+metta_binding_entry([Seq, Name]) :-
+    Seq == seq,
+    var(Name).
+
+%Every entry has already been checked, so this restores rather than filters. A
+%unification that FAILS is the merge dying, which is an outcome the oracle has
+%too: a variable already bound elsewhere refuses this row rather than the call.
+%A segment entry carries no term binding to restore in this engine, so it is
+%accepted and passed over rather than acted on.
+metta_restore_binding([Arrow, Variable, Value]) :-
+    Arrow == '<-',
+    var(Variable),
+    !,
+    Variable = Value.
 metta_restore_binding(_).
 
 %unify extended with the two things the specification names as open and LeaTTa
