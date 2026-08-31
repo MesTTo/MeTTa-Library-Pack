@@ -148,7 +148,7 @@ memo_owner_module(Fun, CallModule, PredArity, Module) :-
 %the case it exists for, a space memoizing a function &self defines. All
 %four branches are pinned, because only the last one moved
 %[tested: memo_space_isolation:a_declaration_lands_in_the_module_that_is_speaking;
-%commit=WORKTREE].
+%commit=c530ccb8fb7d0a5b2aa53df6e9f981ada9f81be8].
 memo_scope_module(Fun, Module) :-
     current_metta_module(CallModule),
     metta_self_module(Self),
