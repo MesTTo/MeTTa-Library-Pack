@@ -57,6 +57,17 @@
 ;name for peek-atom and stays as sugar. The non-blocking pair needs nothing new:
 ;(match ...) is Linda's rdp and (remove-atom ...) is its inp.
 ;
+;(space_await_where $space $pattern $guard) and (space_take_where ...) are the
+;same two with match's where-guard: a term over the pattern's variables,
+;evaluated once a candidate binds them and required true, so "wait for a job
+;whose priority is above five" is one call rather than a wait and a re-wait
+;around every rejection with the deadline restarting each time. The guard runs
+;BEFORE a take removes anything, so a candidate it rejects stays for whoever
+;does want it. They carry their own names because a guard and a $seconds
+;deadline would both sit third and nothing could tell them apart; the host
+;surfaces spell it peek(where=) and take(where=), which is where match's own
+;guard lives too.
+;
 ;This is the blackboard reading of a space: agents wait on the space instead of
 ;polling it, and a worker pool is (take-atom &jobs (job $x)) in a loop.
 ;
@@ -75,7 +86,8 @@
    channel_size channel_close
    pool_create pool_submit pool_stats pool_destroy
    timer_after timer_every
-   space_await space_take with_lock cpu_count thread_count))
+   space_await space_take space_await_where space_take_where
+   with_lock cpu_count thread_count))
 
 ;Anything that defers evaluation has to say so. MeTTa evaluates arguments, so
 ;without these declarations (par-race ((slow 1) (fast 2))) would compute both
@@ -112,6 +124,16 @@
 (: space_await (-> %Undefined% Atom Number %Undefined%))
 (: space_take (-> %Undefined% Atom %Undefined%))
 (: space_take (-> %Undefined% Atom Number %Undefined%))
+;The guarded pair holds BOTH the pattern and the guard: a guard evaluated
+;before the wait is a guard evaluated against unbound variables. They carry
+;their own names rather than another arity of peek-atom, because a guard and
+;a timeout would both sit third and nothing could tell (peek-atom &s (job $x) 5)
+;apart. This is match/4's arrangement too: MeTTa's match has no guard arity
+;either, and where= is the host surface's word over the engine's guarded query.
+(: space_await_where (-> %Undefined% Atom Atom %Undefined%))
+(: space_await_where (-> %Undefined% Atom Atom Number %Undefined%))
+(: space_take_where (-> %Undefined% Atom Atom %Undefined%))
+(: space_take_where (-> %Undefined% Atom Atom Number %Undefined%))
 
 (= (par-map $f $list) (par_map $f $list))
 (= (par-filter $f $list) (par_filter $f $list))

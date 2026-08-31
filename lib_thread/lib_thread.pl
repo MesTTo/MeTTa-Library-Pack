@@ -1524,27 +1524,51 @@ schedule_timer_(Seconds, Expr, Repeat, Space) :-
 %add fast path for as long as the wait lasts, which is what makes per-atom
 %events fire at all [source: engine/spaces.pl, metta_add_hooks_idle/1].
 space_await(Space, Pattern, Out) :-
-    space_wait_(Space, Pattern, infinite, peek, Out).
+    space_wait_(Space, Pattern, true, infinite, peek, Out).
 
 %The same, giving up after Timeout seconds with no answer.
 space_await(Space, Pattern, Timeout, Out) :-
     must_be(number, Timeout),
-    space_wait_(Space, Pattern, Timeout, peek, Out).
+    space_wait_(Space, Pattern, true, Timeout, peek, Out).
+
+%The same again, with a GUARD: a term over the pattern's variables that must
+%evaluate true before the candidate is claimed. match/4 has taken a guard all
+%along and the blocking pair had no way to say one, so "wait for a job whose
+%priority is above five" had to be spelled as a wait plus a re-wait in the
+%caller. A guard is one more reason to keep waiting, which is exactly the
+%shape await_matching_ already has for a candidate that fails the real
+%unification after passing the hook's loose test.
+space_await_where(Space, Pattern, Guard, Out) :-
+    space_wait_(Space, Pattern, Guard, infinite, peek, Out).
+
+space_await_where(Space, Pattern, Guard, Timeout, Out) :-
+    must_be(number, Timeout),
+    space_wait_(Space, Pattern, Guard, Timeout, peek, Out).
 
 %Block until an atom unifying with Pattern is in Space, then REMOVE exactly
 %one and answer it. Linda's in, and the primitive futures, worker pools and
 %rendezvous are one line of MeTTa over.
 space_take(Space, Pattern, Out) :-
-    space_wait_(Space, Pattern, infinite, take, Out).
+    space_wait_(Space, Pattern, true, infinite, take, Out).
 
 space_take(Space, Pattern, Timeout, Out) :-
     must_be(number, Timeout),
-    space_wait_(Space, Pattern, Timeout, take, Out).
+    space_wait_(Space, Pattern, true, Timeout, take, Out).
+
+%Guarded take. The guard is checked BEFORE the removal, so a candidate the
+%guard rejects is left in the space for whoever wants it, and the waiter goes
+%back to waiting on the deadline it already has.
+space_take_where(Space, Pattern, Guard, Out) :-
+    space_wait_(Space, Pattern, Guard, infinite, take, Out).
+
+space_take_where(Space, Pattern, Guard, Timeout, Out) :-
+    must_be(number, Timeout),
+    space_wait_(Space, Pattern, Guard, Timeout, take, Out).
 
 %Waiting is a promise about the CONTEXT, so a context that declares no event
 %delivery is refused here rather than parked on a channel that will never
 %report anything [P12.14]. A native space needs no declaration.
-space_wait_(Space, Pattern, Timeout, Mode, Out) :-
+space_wait_(Space, Pattern, Guard, Timeout, Mode, Out) :-
     metta_require_events(Space, 'be waited on'),
     (   Timeout == infinite
     ->  Deadline = infinite
@@ -1552,11 +1576,11 @@ space_wait_(Space, Pattern, Timeout, Mode, Out) :-
         Deadline is Now + Timeout
     ),
     (   nb_current('$metta_scheduler_task', Task)
-    ->  scheduler_space_wait_(Task, Space, Pattern, Deadline, Mode, Out)
-    ;   blocking_space_wait_(Space, Pattern, Deadline, Mode, Out)
+    ->  scheduler_space_wait_(Task, Space, Pattern, Guard, Deadline, Mode, Out)
+    ;   blocking_space_wait_(Space, Pattern, Guard, Deadline, Mode, Out)
     ).
 
-blocking_space_wait_(Space, Pattern, Deadline, Mode, Out) :-
+blocking_space_wait_(Space, Pattern, Guard, Deadline, Mode, Out) :-
     message_queue_create(Queue),
     %The clause gets its own copy of the pattern, so its variables are fresh
     %on every write and testing a candidate never binds the caller's.
@@ -1579,7 +1603,7 @@ blocking_space_wait_(Space, Pattern, Deadline, Mode, Out) :-
                               true)
                     ;   true
                     )), HookRef),
-        space_claim_(Space, Pattern, Queue, Deadline, Mode, Out),
+        space_claim_(Space, Pattern, Guard, Queue, Deadline, Mode, Out),
         ( erase(HookRef),
           catch(message_queue_destroy(Queue), _, true) )).
 
@@ -1587,7 +1611,7 @@ blocking_space_wait_(Space, Pattern, Deadline, Mode, Out) :-
 %waker: it marks the task runnable, and the resumed engine rechecks the store
 %before trusting the hint. A finite deadline is another one-shot wake record
 %on the existing timer heap, so no sleeping thread is introduced.
-scheduler_space_wait_(Task, Space, Pattern, Deadline, Mode, Out) :-
+scheduler_space_wait_(Task, Space, Pattern, Guard, Deadline, Mode, Out) :-
     copy_term(Pattern, HookPattern),
     setup_call_cleanup(
         assertz((seam:atom_added(Space, Candidate) :-
@@ -1597,7 +1621,7 @@ scheduler_space_wait_(Task, Space, Pattern, Deadline, Mode, Out) :-
                     )), HookRef),
         setup_call_cleanup(
             scheduler_deadline_start_(Task, Deadline, DeadlineToken),
-            scheduler_space_claim_(Task, Space, Pattern, Deadline, Mode, Out),
+            scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Mode, Out),
             scheduler_deadline_cancel_(DeadlineToken)),
         erase(HookRef)).
 
@@ -1629,25 +1653,25 @@ scheduler_deadline_cancel_(deadline(Token, Timer)) :-
     ;   true
     ).
 
-scheduler_space_claim_(Task, Space, Pattern, Deadline, Mode, Out) :-
-    copy_term(Pattern, Attempt),
-    (   space_already_holds_(Space, Attempt, Candidate)
-    ->  scheduler_claim_candidate_(Task, Space, Pattern, Candidate,
+scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Mode, Out) :-
+    copy_term(Pattern-Guard, Attempt-AttemptGuard),
+    (   space_already_holds_(Space, Attempt, AttemptGuard, Candidate)
+    ->  scheduler_claim_candidate_(Task, Space, Pattern, Guard, Candidate,
                                    Deadline, Mode, Out)
     ;   scheduler_deadline_open_(Deadline)
     ->  engine_yield('$metta_scheduler_suspend'),
-        scheduler_space_claim_(Task, Space, Pattern, Deadline, Mode, Out)
+        scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Mode, Out)
     ;   fail
     ).
 
-scheduler_claim_candidate_(_, _, Pattern, Candidate, _, peek, Out) :- !,
+scheduler_claim_candidate_(_, _, Pattern, _Guard, Candidate, _, peek, Out) :- !,
     Pattern = Candidate,
     Out = Candidate.
-scheduler_claim_candidate_(Task, Space, Pattern, Candidate, Deadline, take,
-                           Out) :-
+scheduler_claim_candidate_(Task, Space, Pattern, Guard, Candidate, Deadline,
+                           take, Out) :-
     (   metta_remove_atom(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
-    ;   scheduler_space_claim_(Task, Space, Pattern, Deadline, take, Out)
+    ;   scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, take, Out)
     ).
 
 scheduler_deadline_open_(infinite) :- !.
@@ -1681,53 +1705,74 @@ scheduler_deadline_open_(Deadline) :-
 %Each attempt probes with a fresh COPY of the pattern, because a match binds
 %and a retry must not inherit the losing attempt's bindings; the caller's own
 %variables are bound once, by the winning candidate.
-space_claim_(Space, Pattern, Queue, Deadline, Mode, Out) :-
-    copy_term(Pattern, Attempt),
+space_claim_(Space, Pattern, Guard, Queue, Deadline, Mode, Out) :-
+    %The pair is copied TOGETHER so the guard keeps sharing the pattern's
+    %variables; copying them apart would leave the guard testing free ones.
+    copy_term(Pattern-Guard, Attempt-AttemptGuard),
     %Check the space only AFTER the hook is live. An atom that is already
     %there answers at once, which is what "wait until this holds" means,
     %and doing it in this order means a write landing between the check and
     %the wait is caught by the hook rather than missed. Checking first and
     %installing after loses exactly that write, which is what made a
     %spawned writer race this and win.
-    (   space_already_holds_(Space, Attempt, Candidate)
+    (   space_already_holds_(Space, Attempt, AttemptGuard, Candidate)
     ->  true
-    ;   await_matching_(Queue, Attempt, Deadline, Candidate)
+    ;   await_matching_(Queue, Attempt, AttemptGuard, Deadline, Candidate)
     ),
     (   Mode == peek
     ->  Pattern = Candidate, Out = Candidate
     ;   metta_remove_atom(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
-    ;   space_claim_(Space, Pattern, Queue, Deadline, Mode, Out)
+    ;   space_claim_(Space, Pattern, Guard, Queue, Deadline, Mode, Out)
     ).
 
-space_already_holds_(Space, Pattern, Out) :-
+space_already_holds_(Space, Pattern, Guard, Out) :-
     current_metta_module(Module),
-    eval_metta_in_module(Module, [match, Space, Pattern, Pattern], Out).
+    eval_metta_in_module(Module, [match, Space, Pattern, Pattern], Out),
+    guard_holds_(Module, Guard).
+
+%A guard is a MeTTa term over the pattern's variables, evaluated once the
+%candidate has bound them and required TRUE, which is match/4's own rule for
+%its where-guard. `true` is the unguarded spelling and costs no evaluation.
+guard_holds_(_Module, Guard) :-
+    Guard == true,
+    !.
+guard_holds_(Module, Guard) :-
+    eval_metta_in_module(Module, Guard, Verdict),
+    Verdict == true.
 
 %The hook test is deliberately loose (unifiable, binding nothing), so a
 %candidate can still fail the real unification here; keep waiting when it does.
-await_matching_(Queue, Pattern, infinite, Out) :-
+await_matching_(Queue, Pattern, Guard, infinite, Out) :-
     !,
+    current_metta_module(Module),
     repeat,
       thread_get_message(Queue, Candidate),
       Pattern = Candidate,
+      guard_holds_(Module, Guard),
       !,
       Out = Candidate.
 %ONE deadline for the whole call, computed once by space_wait_/5 and carried
 %through every claim retry, not one per candidate: thread_get_message/3 FAILS
 %when its timeout expires, so a repeat loop around a per-call timeout would
 %restart the clock on every non-matching write and never give up.
-await_matching_(Queue, Pattern, Deadline, Out) :-
-    await_until_(Queue, Pattern, Deadline, Out).
+await_matching_(Queue, Pattern, Guard, Deadline, Out) :-
+    current_metta_module(Module),
+    await_until_(Queue, Pattern, Guard, Module, Deadline, Out).
 
-await_until_(Queue, Pattern, Deadline, Out) :-
+await_until_(Queue, Pattern, Guard, Module, Deadline, Out) :-
     get_time(Now),
     Remaining is Deadline - Now,
     Remaining > 0,
     thread_get_message(Queue, Candidate, [timeout(Remaining)]),
-    (   Pattern = Candidate
-    ->  Out = Candidate
-    ;   await_until_(Queue, Pattern, Deadline, Out)
+    %The candidate is tested against a FRESH copy so a rejection leaves the
+    %caller's pattern unbound for the next one; the guard rides along in the
+    %copy for the same reason.
+    (   copy_term(Pattern-Guard, Try-TryGuard),
+        Try = Candidate,
+        guard_holds_(Module, TryGuard)
+    ->  Pattern = Candidate, Out = Candidate
+    ;   await_until_(Queue, Pattern, Guard, Module, Deadline, Out)
     ).
 
 % --------------------------------------------------------- synchronisation
