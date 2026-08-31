@@ -37,9 +37,15 @@
 (: > (-> Number Number Bool))
 (: >= (-> Number Number Bool))
 
-;; Type definitions of equality and negated equality operators
-(: == (-> $a $a Bool))
-(: != (-> $a $a Bool))
+;; Type definitions of equality and negated equality operators.
+;; TWO INDEPENDENT variables, not one shared one: comparing values of two
+;; different types is a legitimate question whose answer is False, not a type
+;; error. Written `(-> $a $a Bool)` here until 2026-08-30, which refused
+;; upstream's own examples/types_nondet.metta at `(== $a T1in)` with
+;; `(Error (== T2in T1in) (BadArgType 2 Type2 Type1))` where upstream answers
+;; False and carries on [source: PeTTa@ae66fa8 lib/lib_builtin_types.metta:17-18].
+(: == (-> $a $b Bool))
+(: != (-> $a $b Bool))
 
 ;; Type definitions of common mathematical functions
 (: pow-math (-> Number Number Number))
@@ -253,13 +259,28 @@
 ;; expression is whatever that expression holds.
 (: car-atom (-> Expression %Undefined%))
 (: cdr-atom (-> Expression Expression))
-(: cons-atom (-> Atom Expression Atom))
-(: decons-atom (-> Expression Atom))
+;; Both operands EVALUATE. Upstream ships cons-atom, cons, decons-atom,
+;; decons, index-atom and the three set operations as bare Prolog predicates
+;; with no declaration at all, so their arguments are ordinary evaluated
+;; ones; a held operand answered `((+ 1 2) b)` where upstream answers
+;; `(3 b)` [source: PeTTa@ae66fa8 src/metta.pl:111,153; measured 2026-08-30,
+;; ai-tmp/family.metta, 7 of 15 forms in this family differed and every one
+;; of them differed only here]. The RESULT types are untouched: `Atom` on
+;; cons is what keeps a rebuild linear, per the note below.
+(: cons-atom (-> %Undefined% %Undefined% Atom))
+(: decons-atom (-> %Undefined% Atom))
 (: size-atom (-> Expression Number))
-(: index-atom (-> Expression Number Atom))
+(: index-atom (-> %Undefined% Number Atom))
 ;; atom-subst replaces one variable inside a template, all three operands
 ;; as written and the result as produced.
-(: atom-subst (-> Atom Variable Atom Atom))
+;;The BINDER is held, and it must be a variable. `Atom` is the only parameter
+;;type that holds now, so the second position says both things at once through
+;;this engine's type-position modifier: hold it, and check it is a Variable.
+;;Written plain `Variable` the binder EVALUATED, so
+;;`(atom-subst 1 (car-atom ($x)) ($x $x))` reduced its second operand to the
+;;variable inside it and substituted happily, where holding the written
+;;`(car-atom ($x))` refuses it as the non-binder it is [measured 2026-08-30].
+(: atom-subst (-> Atom (:Atom Variable) Atom Atom))
 ;; MeTTa's own, no dump entry. cons/decons are the un-suffixed spellings and
 ;; first/second-from-pair read a two-element expression.
 ;;
@@ -271,8 +292,8 @@
 ;; had just built and a million-element `range` went from linear to quadratic
 ;; [measured 2026-08-24: 20,000 elements, 0.30s to 7.01s, and the shipped
 ;; million-element holbenchmark kernel stopped finishing at all].
-(: cons (-> Atom Expression Atom))
-(: decons (-> Expression Atom))
+(: cons (-> %Undefined% %Undefined% Atom))
+(: decons (-> %Undefined% Atom))
 (: first (-> %Undefined% Atom))
 ;; first-from-pair is UNDECLARED, with empty, nop, pragma!, type-cast,
 ;; match-types and match-type-or: each official corelib block reads
@@ -286,9 +307,9 @@
 (: second-from-pair (-> %Undefined% Atom))
 
 ;; --- Checked on import: set and list operations ---
-(: union-atom (-> Expression Expression Atom))
-(: intersection-atom (-> Expression Expression Atom))
-(: subtraction-atom (-> Expression Expression Atom))
+(: union-atom (-> %Undefined% %Undefined% Atom))
+(: intersection-atom (-> %Undefined% %Undefined% Atom))
+(: subtraction-atom (-> %Undefined% %Undefined% Atom))
 (: unique-atom (-> Expression Atom))
 (: alpha-unique-atom (-> Expression Atom))
 (: sort-atom (-> %Undefined% Expression))
@@ -322,7 +343,6 @@
 ;; the reference implements it, and it is the whole definition.
 (: noeval (-> Atom Atom))
 (: get-type (-> Atom %Undefined%))
-(: =alpha (-> Atom Atom Bool))
 (: id (-> $t $t))
 
 ;; --- Checked on import: spaces and state ---
@@ -361,6 +381,21 @@
 ;; --- Checked on import: time, files, process ---
 (: current-time (-> Number))
 (: format-time (-> String String))
+;; assert's operand EVALUATES, so what reaches assert/2 is the VERDICT and not
+;; the comparison, which is what upstream's `assert(Goal, true) :- call(Goal)`
+;; receives: `call(true)` succeeds and `call(false)` fails. Declared `Atom`
+;; here until 2026-08-30, and holding it made assert evaluate the written form
+;; a SECOND time, so an operand whose variables were already bound to values
+;; was re-applied: `(assertAlphaEqual (quote (+ $x $y)) (quote (+ $a $b)))`
+;; aborted with `+ ran backwards` where upstream answers True
+;; [source: PeTTa@ae66fa8 src/metta.pl:224-227 and examples/he_assert.metta:5].
+;;
+;; DECLARED rather than left out: retract_unrelated_system_arities/0 drops a
+;; system predicate's arity only for a name the surface declares, so with no
+;; declaration at all SWI's own assert/1 stayed callable and `!(assert)`
+;; reached it instead of answering a partial application
+;; [tested: test_an_underapplied_operation_answers_instead_of_aborting].
+(: assert (-> %Undefined% (->)))
 (: exists_file (-> %Undefined% Bool))
 (: argv (-> Number %Undefined%))
 
@@ -404,7 +439,6 @@
 (: assertaPredicate (-> %Undefined% Bool))
 (: assertzPredicate (-> %Undefined% Bool))
 (: retractPredicate (-> %Undefined% Bool))
-(: assert (-> Atom (->)))
 (: import_prolog_function (-> Symbol Bool))
 
 ;; --- Checked on import: the compiler's own surface ---

@@ -33,10 +33,14 @@
   (file-open! file-read-to-string! file-read-exact! file-write!
    file-seek! file-get-size! file-close!
    read-file! write-file! append-file! file-lines! file-space!
-   delete-file! list-dir! file-exists dir-exists))
+   delete-file! temp-path! list-dir! file-exists dir-exists))
 
 ;(file-exists $path) and (dir-exists $path) answer True or False. They have no
 ;! because they change nothing.
+(@doc temp-path!
+      (@desc "A unique fresh path in the system temporary directory, created exclusively so concurrent runners cannot mint the same name; the caller owns the file")
+      (@params ((@param "a name prefix for the path")))
+      (@return "String"))
 (@doc file-exists
       (@desc "True when a regular file exists at the path, False otherwise")
       (@params ((@param "the path")))

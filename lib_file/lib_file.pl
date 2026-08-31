@@ -200,6 +200,23 @@ drop_trailing_empty(Lines, Kept) :-
     forall(nth1(Index, Lines, Text),
            'add-atom'(Space, [line, Index, Text], _)).
 
+%A unique fresh path in the system temporary directory, mkstemp-grade:
+%tmp_file_stream/3 creates the file exclusively, which is what makes the
+%name safe against a concurrent runner minting at the same moment, and the
+%caller owns the file from that point (write-file! truncates it, delete-file!
+%ends it). The shipped text example uses it so two checkouts running the
+%corpus at once cannot collide on a fixed name
+%[tested: examples/ch08-data/08-03-the-shipped-libraries/03-text_lib.metta].
+'temp-path!'(Prefix, PathString) :-
+    metta_text(Prefix, PrefixText),
+    tmp_file_stream(Path, Stream, [encoding(utf8), extension(txt)]),
+    close(Stream),
+    file_directory_name(Path, Dir),
+    file_base_name(Path, Base),
+    atomic_list_concat([Dir, '/', PrefixText, '-', Base], Unique),
+    rename_file(Path, Unique),
+    atom_string(Unique, PathString).
+
 'delete-file!'(Path, true) :-
     metta_text(Path, PathText),
     (   exists_file(PathText)
@@ -260,6 +277,7 @@ entry_to_string(Name, Text) :- atom_string(Name, Text).
 :- det('file-lines!'/2).
 :- det('file-space!'/2).
 :- det('delete-file!'/2).
+:- det('temp-path!'/2).
 :- det('list-dir!'/2).
 :- det('file-exists'/2).
 :- det('dir-exists'/2).
