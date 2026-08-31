@@ -177,7 +177,7 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta,
 %builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name and
 %test_the_presented_core_agrees_with_the_engine_on_the_shared_fragment;
-%commit=WORKTREE].
+%commit=57f21ba9edf94bcf28cde11f938bce2c241a3709].
 'superpose-bind'(Rows, _) :- var(Rows), !,
                             refuse_unbound_input('superpose-bind', 1).
 'superpose-bind'(Rows, Out) :-
@@ -207,7 +207,7 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %`(bindings (seq $n))` and `(bindings (<- (:seg $n) (a b)))` answer the value
 %while `(bindings (seq x))` and `(bindings (<- (:seg $n) a))` are refused,
 %because a segment name is a VARIABLE and a segment run is an EXPRESSION;
-%commit=WORKTREE].
+%commit=57f21ba9edf94bcf28cde11f938bce2c241a3709].
 metta_decoded_bindings(Bindings, Entries) :-
     is_list(Bindings),
     Bindings = [Head|Entries],

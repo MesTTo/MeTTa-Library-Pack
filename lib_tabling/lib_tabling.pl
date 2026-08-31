@@ -13,7 +13,7 @@
 %     further: one equation change after a table of N answers was built and
 %     dropped costs the same 377 inferences at N of 5,000, 20,000 and 80,000,
 %     where abolish_all_tables/0 cost 2N [tested:
-%     test_an_equation_change_does_not_pay_for_a_dropped_table; commit=WORKTREE]
+%     test_an_equation_change_does_not_pay_for_a_dropped_table; commit=57f21ba9edf94bcf28cde11f938bce2c241a3709]
 %   - A declared table survives a write to a space it reads, and a change
 %     to any equation drops it [tested: tabling_equation_change_drops_tables,
 %     and end to end by examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
