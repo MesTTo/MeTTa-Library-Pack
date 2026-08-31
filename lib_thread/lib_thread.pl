@@ -1645,7 +1645,7 @@ scheduler_claim_candidate_(_, _, Pattern, Candidate, _, peek, Out) :- !,
     Out = Candidate.
 scheduler_claim_candidate_(Task, Space, Pattern, Candidate, Deadline, take,
                            Out) :-
-    (   'remove-atom'(Space, Candidate, true)
+    (   metta_remove_atom(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
     ;   scheduler_space_claim_(Task, Space, Pattern, Deadline, take, Out)
     ).
@@ -1661,14 +1661,22 @@ scheduler_deadline_open_(Deadline) :-
 %after the check would cause. Measured 2026-08-21 with the hook rebuilt per
 %retry: eight takers over four atoms claimed three and left one behind.
 %
-%The STORE rather than the queue is the truth. Two takers wake on one atom,
-%one 'remove-atom' answers unit and the other answers its not-in-the-space
-%error, and the loser goes round; going round re-checks what the space holds
-%FIRST, so an atom that arrived while this caller was losing a race is found
-%whether it is still queued or not, and a queue entry for an atom somebody
-%else took is discarded by the same claim that fails. The removal is the one
-%atomic step and everything else is a wake-up, which is what makes
+%The STORE rather than the queue is the truth, and the claim is
+%metta_remove_atom/3 rather than the language's 'remove-atom'/3 BECAUSE it
+%reports. Two takers wake on one atom, one removal answers true and the other
+%answers false, and the loser goes round; going round re-checks what the space
+%holds FIRST, so an atom that arrived while this caller was losing a race is
+%found whether it is still queued or not, and a queue entry for an atom
+%somebody else took is discarded by the same claim that fails. The removal is
+%the one atomic step and everything else is a wake-up, which is what makes
 %exactly-one hold with no lock held across the wait.
+%
+%'remove-atom'/3 cannot serve here since 2026-08-30: it answers True whether
+%or not the space held the atom, which is upstream's law, so every loser would
+%read its own claim as a win. It also DRAINS what unifies, where a take wants
+%one tuple. Both are why the reporting one-occurrence door exists
+%[source: engine/spaces/foreign.pl, remove_matching_atoms/2;
+%tested: lib_thread:test_a_blocking_take_waits_for_a_matching_atom_and_removes_exactly_one].
 %
 %Each attempt probes with a fresh COPY of the pattern, because a match binds
 %and a retry must not inherit the losing attempt's bindings; the caller's own
@@ -1687,7 +1695,7 @@ space_claim_(Space, Pattern, Queue, Deadline, Mode, Out) :-
     ),
     (   Mode == peek
     ->  Pattern = Candidate, Out = Candidate
-    ;   'remove-atom'(Space, Candidate, true)
+    ;   metta_remove_atom(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
     ;   space_claim_(Space, Pattern, Queue, Deadline, Mode, Out)
     ).
