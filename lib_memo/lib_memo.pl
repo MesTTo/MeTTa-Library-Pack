@@ -1589,10 +1589,17 @@ cache_call(Fun, CallModule, AVs, Out) :-
     memo_target(Fun, CallArity, 'memoize!/3', Space, Module, Terms),
     memo_recompile(Space, Terms, enable_memoization(Fun, Module, CallArity)).
 
-%The Python @cache contract is an exact answer bag. This is an internal bridge
-%service rather than another MeTTa declaration spelling: unlike configurable
-%manual memoize, it never quantizes keys, aggregates answers or applies
-%answer-limit, because those policies would change the decorated function.
+%An exact answer bag: unlike configurable manual memoize this never quantizes
+%keys, aggregates answers or applies answer-limit, because those policies
+%change what the function ANSWERS and this variant exists not to.
+%
+%It was an internal bridge service for one host's decorator, which made the
+%capability reachable only from that host. It is an ordinary library form now
+%(user, 2026-08-31), so every seat reaches it the way every seat reaches
+%memoize, and no host needs a door of its own for it.
+'memoize-exact'(Fun, true) :-
+    memoize_exact(Fun).
+
 memoize_exact(Fun) :-
     memo_target(Fun, any, 'memoize-exact!/2', Space, Module, Terms),
     findall(Arity,
@@ -1633,6 +1640,7 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
                           'the library that registered this declared it volatile')))
     ),
     memo_scope_module(Fun, Module),
+    memo_refuse_operation_effect(Fun, Context),
     memo_refuse_uncacheable(Fun, Module, Context),
     metta_module_space(Module, Space),
     findall(Term, memo_equation(Fun, Module, Arities, Term), RawTerms),
@@ -1651,6 +1659,35 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
 %carries the incremental property against it, so a read is something it can
 %invalidate on. Memoization invalidates on an equation change and on nothing
 %else, so a read it cannot see change is a cache that goes stale in silence.
+%The TARGET itself, not only what its body calls. The walk below examines
+%compiled CLAUSES, and a registered operation has none, so an oracleIO
+%operation passed it and memoized in silence: caching a clock answers the
+%first reading forever. One host's decorator used to refuse this with a
+%blanket ban on wrapping an operation at all, which served that host and no
+%other; the rule belongs here, where every seat reaches it, and it is the law
+%already written down -- pureStructural is the only class memoization admits
+%without an explicit policy [measured 2026-08-31].
+%NOT skipped by (cache Name unchecked), the same way the volatility gate is
+%not: a declared effect class is the AUTHOR's no and outranks the caller's
+%insistence, which is the rule metta_cache_unchecked's own comment states.
+memo_refuse_operation_effect(Fun, Context) :-
+    %A REGISTERED OPERATION only, which is a catalog op row: a compiled
+    %definition has equations and the body walk below judges those. Asking
+    %the effect class alone refused every generator definition, because a
+    %generator is LIFTED to nondeterministicReadOnly and that lift is about
+    %answer COUNT rather than about observing anything -- and a
+    %multiplicity-preserving memo over a generator is the whole point of the
+    %exact variant [measured 2026-08-31].
+    metta_catalog_row([op, Fun, _, _]),
+    metta_operation_effect(Fun, Effect),
+    metta_effect_rank(Effect, Rank),
+    metta_effect_rank(pureStructural, PureRank),
+    Rank > PureRank,
+    !,
+    throw(error(permission_error(memoize, impure_operation, Fun),
+                context(Context, Effect))).
+memo_refuse_operation_effect(_, _).
+
 memo_refuse_uncacheable(Fun, Module, Context) :-
     findall(Arity, current_predicate(Module:Fun/Arity), Arities),
     forall(member(Arity, Arities),
@@ -1676,6 +1713,14 @@ memo_refuse_uncacheable_arity(Fun, Module, Arity, Context) :-
     ).
 
 :- multifile prolog:error_message//1.
+prolog:error_message(permission_error(memoize, impure_operation, Name)) -->
+    [ '~w IS an operation declared above pureStructural, so a cached answer \c
+       would hide what it observes. pureStructural is the only class \c
+       memoization admits without an explicit policy. (cache ~w unchecked) \c
+       does NOT open this, because a declared effect class is the author\'s \c
+       answer and outranks the caller\'s; declare the operation \c
+       (effect ~w pureStructural) if it really inspects its arguments \c
+       without observing mutable state'-[Name, Name, Name] ].
 prolog:error_message(permission_error(memoize, impure_function, Name)) -->
     [ '~w calls an operation that is not classified pureStructural, so a \c
        cached answer would hide its effect. Declare that operation with \c

@@ -13,6 +13,7 @@
 !(import! &self (library lib_import))
 
 !(import_prolog_function memoize)
+!(import_prolog_function memoize-exact)
 !(import_prolog_function config-memoize)
 !(import_prolog_function get-memoize-config)
 !(import_prolog_function clear-memoize)
