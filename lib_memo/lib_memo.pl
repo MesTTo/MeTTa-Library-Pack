@@ -138,13 +138,27 @@ memo_owner_module(Fun, CallModule, PredArity, Module) :-
 %Which module a call from the running space is asking about: its own when
 %the space defines the function, &self's when it only inherits it. Used by
 %the public API, where no arity is in hand and the equations answer.
+%A declaration may PRECEDE the definitions it governs, which is how the
+%aggregate example writes it: (memoize choices) then the three equations.
+%Preferring the calling module only when it ALREADY holds equations sent
+%that forward declaration to &self, and the definitions then landed in the
+%context's own module, so the memoisation governed a module the program
+%never wrote to: (choices 5) answered its three raw answers in a MeTTa()
+%context where &self answered the aggregate 18. A forward declaration now
+%lands where the program is speaking, and the fallback to &self stays for
+%the case it exists for, a space memoizing a function &self defines
+%[tested: example_parity over 02-memo_aggregate.metta].
 memo_scope_module(Fun, Module) :-
     current_metta_module(CallModule),
     metta_self_module(Self),
-    (   CallModule \== Self,
-        memo_equation(Fun, CallModule, any, _)
+    (   CallModule == Self
+    ->  Module = Self
+    ;   memo_equation(Fun, CallModule, any, _)
     ->  Module = CallModule
-    ;   Module = Self ).
+    ;   memo_equation(Fun, Self, any, _)
+    ->  Module = Self
+    ;   Module = CallModule
+    ).
 
 %This module's equations for Fun, with a fixed input arity when one is
 %asked for and every arity for `any`. The clause's module is the test:
@@ -279,6 +293,30 @@ memo_remove_dispatch_handler(Fun) :-
 seam:function_call_graph_changed(_, Module) :-
     memo_automatic_mark_dirty(Module),
     ( active_source_program(_) -> true ; memo_automatic_reconcile_dirty ).
+
+%THE DECISION HAS TO REACH THE FIRST CALL. This engine defers a function's
+%translation until something calls it, and the call graph only becomes
+%readable then, so waiting for the source's flush decided after the recursion
+%it was about had already run: `(= (fib $N) ... (fib (- $N 1)) ...
+%(fib (- $N 2)))` followed by `!(test (fib 25) 75025)` IN THE SAME FILE ran
+%naive recursion, while the same two forms split across two files ran memoised
+%because the second file's flush found fib already translated
+%[measured 2026-08-30: 2,477,617,522 instructions:u against 1,175,403,448 of
+%which ~1,040,000,000 is startup, and the explanation seam reads
+%`declined not-recursive` in the first case against
+%`automatic [recursive-scc,[fib],body-call-count,2]` in the second].
+%
+%seam:deferred_translation_settled/0 rather than the call-graph event, because
+%reconciling RECOMPILES and that event fires while the function is still
+%inside its own compilation guard [source: engine/ext_points.pl]. Reading the
+%arcs off the SOURCE instead was tried and is wrong for a different reason: a
+%source walk cannot tell a call from a match pattern, so
+%`(= (sentence ...) ... (sentence ...))` in upstream's plntestdirect.metta
+%looked like two self-calls and was memoised, and the file stopped finishing
+%inside 180 seconds.
+:- multifile seam:deferred_translation_settled/0.
+seam:deferred_translation_settled :-
+    memo_automatic_reconcile_dirty.
 
 :- multifile seam:source_program_compiled/0.
 seam:source_program_compiled :-
@@ -1641,7 +1679,9 @@ prolog:error_message(permission_error(memoize, impure_function, Name)) -->
     [ '~w calls an operation that is not classified pureStructural, so a \c
        cached answer would hide its effect. Declare that operation with \c
        (effect <operation> pureStructural) only when it inspects its \c
-       arguments without observing mutable state'-[Name] ].
+       arguments without observing mutable state, or declare \c
+       (cache ~w unchecked) to memoize it on your word and accept the stale \c
+       answers that follow'-[Name, Name] ].
 prolog:error_message(permission_error(memoize, space_reading_function, Name)) -->
     [ '~w reads a space, and memoization invalidates on an equation change \c
        and on nothing else, so the cache would outlive the atoms it was \c
@@ -1651,7 +1691,14 @@ prolog:error_message(permission_error(memoize, space_reading_function, Name)) --
 %Recompiling is what makes memoization take effect: the translator bakes
 %the dispatch into every compiled call site, so equations already compiled
 %go through the compiler again with the flag set.
+%metta_remove_atom/3, not 'remove-atom'/3: this takes ONE occurrence of each
+%term because it puts that one occurrence back, and the MeTTa-facing door
+%takes every atom that unifies, which is upstream's `retractall` shape
+%[source: engine/spaces/foreign.pl, remove_matching_atoms/2]. Through the
+%MeTTa door a function defined by three identical equations came back with
+%one, so a cached definition yielding `a a b` answered `a b`
+%[tested: test_a_cached_definition_preserves_duplicate_answers].
 memo_recompile(Space, Terms, Enable) :-
-    forall(member(Term, Terms), 'remove-atom'(Space, Term, _)),
+    forall(member(Term, Terms), metta_remove_atom(Space, Term, _)),
     call(Enable),
     forall(member(Term, Terms), 'add-atom'(Space, Term, _)).

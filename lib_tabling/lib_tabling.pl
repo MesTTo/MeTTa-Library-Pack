@@ -9,6 +9,11 @@
 %   tables are shared between SWI engines, so a Python Answers cursor and the
 %   term runner reach one answer trie and report one set of statistics.
 % Guarantees:
+%   - a function change invalidates the tables MeTTa DECLARED and walks no
+%     further: one equation change after a table of N answers was built and
+%     dropped costs the same 377 inferences at N of 5,000, 20,000 and 80,000,
+%     where abolish_all_tables/0 cost 2N [tested:
+%     test_an_equation_change_does_not_pay_for_a_dropped_table; commit=WORKTREE]
 %   - A declared table survives a write to a space it reads, and a change
 %     to any equation drops it [tested: tabling_equation_change_drops_tables,
 %     and end to end by examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
@@ -182,6 +187,29 @@ metta_tabling_unregister(Name, Module, CompiledArity) :-
 %A read this cannot resolve is refused rather than tabled without the
 %guarantee: a computed space or pattern, or a foreign space, whose atoms
 %do not live in an SWI dynamic predicate at all.
+%A DECLARATION MAY PRECEDE ITS DEFINITION. `!(tabled (fib $N))` written above
+%`(= (fib $N) ...)` is the reading order upstream's own
+%examples/tabling_fib.metta uses, and refusing it there refused a name the
+%very next form defines. The declaration is HELD and installed when the
+%function's clauses arrive, which is exactly what
+%seam:function_clauses_changed/1 announces: "a handler that acts on the
+%compiled predicate ... listens here instead, because at definition time there
+%may be nothing to wrap and at materialisation time nothing else fires"
+%[source: engine/ext_points.pl]. A name that is never defined never tables,
+%and its held row is visible to the same (match &metta (tabled ...)) question
+%the installed ones are [tested:
+%examples/ch18-performance/18-02-memoisation-and-tabling/09-tabling_fib.metta].
+%
+%The handler clause is GROUND-HEADED and installed per held name, the shape
+%lib_memo uses for seam:function_removed/1, because a resident handler costs
+%four inferences on every compiled equation in the process
+%[source: engine/ext_points.pl, measured 2026-08-15].
+:- dynamic metta_tabling_held/1.
+
+metta_tabled_decl(Call, true) :-
+    \+ metta_tabling_resolvable(Call),
+    !,
+    metta_tabling_hold(Call).
 metta_tabled_decl(Call, true) :-
     metta_tabling_target(Call, Module, Name, CompiledArity),
     functor(Head, Name, CompiledArity),
@@ -192,6 +220,41 @@ metta_tabled_decl(Call, true) :-
           ( metta_tabling_rollback_new_table(WasTabled, Module, Name,
                                              CompiledArity),
             throw(Error) )).
+
+metta_tabling_resolvable(Call) :-
+    catch(metta_tabling_target(Call, _, _, _),
+          error(existence_error(metta_function, _), _),
+          fail).
+
+metta_tabling_hold(Call) :-
+    metta_tabling_call_name(Call, Name),
+    (   metta_tabling_held(Call)
+    ->  true
+    ;   assertz(metta_tabling_held(Call)),
+        assertz(seam:(function_clauses_changed(Name) :-
+                          lib_tabling:metta_tabling_release(Name)))
+    ).
+
+metta_tabling_call_name(Call0, Name) :-
+    ( Call0 = [quote, Call] -> true ; Call = Call0 ),
+    ( is_list(Call), Call = [Name|_], atom(Name)
+      -> true
+    ; throw(error(type_error(metta_function_call, Call0), none)) ).
+
+%Every held declaration for this name, tried once its clauses exist. A
+%declaration that still cannot resolve stays held: a function may be defined
+%at one arity and declared at another, and the later definition is what
+%decides.
+metta_tabling_release(Name) :-
+    forall(( metta_tabling_held(Call),
+             metta_tabling_call_name(Call, Name) ),
+           (   metta_tabling_resolvable(Call)
+           ->  retract(metta_tabling_held(Call)),
+               retractall(seam:(function_clauses_changed(Name) :-
+                                    lib_tabling:metta_tabling_release(Name))),
+               metta_tabled_decl(Call, _)
+           ;   true
+           )).
 
 metta_tabling_declare(Module, Name, CompiledArity, Head) :-
     metta_tabling_install_table(Module, Name, CompiledArity),
@@ -428,11 +491,48 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %(not-provable (pq 2)) answered both False from the recompiled path and True
 %from the dual that was never dropped [tested: duals_survive_tabling].
 seam:function_changed(_) :-
-    ( metta_tabling_declared -> abolish_all_tables ; true ).
+    ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
 
 :- multifile seam:function_removed/1.
 seam:function_removed(_) :-
-    ( metta_tabling_declared -> abolish_all_tables ; true ).
+    ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
+
+%Every table a MeTTa declaration made, and nothing else.
+%
+%abolish_all_tables/0 walks the WHOLE variant trie, which keeps a variant for
+%every table the process has ever built. After one space tabled a
+%200,000-answer recursion and was dropped, each call still cost 73ms with no
+%live table left anywhere, and these two hooks fire once per compiled
+%equation: one library import paid 13 walks and 0.9 seconds, and the 60-cycle
+%drop test above spent 156 seconds
+%[measured 2026-08-31: 5,266,337 inferences for one import, 2,600,026
+%'$tbl_destroy_table'/1 calls under 13 abolish_all_tables/0 walks].
+%
+%abolish_table_subgoals/1 walks the same trie indexed by the predicate, so the
+%cost is the tables a declared function actually has and a dropped space's
+%variants are never walked again. abolish_module_tables/1 is NOT the
+%narrowing: it misses `as shared` tables entirely, which is what every MeTTa
+%table is [measured 2026-08-31: 50 tables before it and 50 after,
+%0 after abolish_table_subgoals/1].
+%
+%The scope this drops is the tables of OTHER libraries, which own their own
+%invalidation: lib_memo carries a generation argument rather than abolishing
+%(its own comment says a private table cannot be selectively abolished across
+%carriers), and engine/parser.pl abolishes metta_symbol_writable/1 itself.
+metta_tabling_abolish_declared :-
+    forall(metta_tabling_declared_table(Module, Head),
+           abolish_table_subgoals(Module:Head)).
+
+%metta_exec_module_known/2 rather than space_module/2: this is a READ, and
+%space_module/2 would ENSURE a module for a space that has none, which is a
+%space with no table to abolish.
+metta_tabling_declared_table(Module, Head) :-
+    'get-atoms'('&metta', [tabled, Space, Name, InputArity]),
+    atom(Name),
+    integer(InputArity),
+    metta_exec_module_known(Space, Module),
+    CompiledArity is InputArity + 1,
+    functor(Head, Name, CompiledArity).
 
 %Nothing is tabled in the overwhelming majority of programs, and this hook
 %runs on every equation the loader compiles, so the test that decides it is
