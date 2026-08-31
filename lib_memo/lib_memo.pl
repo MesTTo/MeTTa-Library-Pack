@@ -139,15 +139,16 @@ memo_owner_module(Fun, CallModule, PredArity, Module) :-
 %the space defines the function, &self's when it only inherits it. Used by
 %the public API, where no arity is in hand and the equations answer.
 %A declaration may PRECEDE the definitions it governs, which is how the
-%aggregate example writes it: (memoize choices) then the three equations.
-%Preferring the calling module only when it ALREADY holds equations sent
-%that forward declaration to &self, and the definitions then landed in the
-%context's own module, so the memoisation governed a module the program
-%never wrote to: (choices 5) answered its three raw answers in a MeTTa()
-%context where &self answered the aggregate 18. A forward declaration now
+%aggregate example writes it: !(memoize choices) and then the three
+%(= (choices $x) ...) alternatives. Preferring the calling module only when
+%it ALREADY holds equations for the name sent that forward declaration to
+%&self, so the memoisation governed a module the program never wrote to
+%while the definitions compiled into the speaking one. A forward declaration
 %lands where the program is speaking, and the fallback to &self stays for
-%the case it exists for, a space memoizing a function &self defines
-%[tested: example_parity over 02-memo_aggregate.metta].
+%the case it exists for, a space memoizing a function &self defines. All
+%four branches are pinned, because only the last one moved
+%[tested: memo_space_isolation:a_declaration_lands_in_the_module_that_is_speaking;
+%commit=WORKTREE].
 memo_scope_module(Fun, Module) :-
     current_metta_module(CallModule),
     metta_self_module(Self),

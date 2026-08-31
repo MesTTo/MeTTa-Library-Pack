@@ -102,10 +102,17 @@
 ;; ===========================================================================
 ;; The rest of the engine's surface: 117 names that answered %Undefined%.
 ;;
-;; The types come from the reference corelib dump wherever it has one, because
-;; a type MeTTa does not already have is additive and the reference governs
-;; there [source: LeaTTa stdlib.md, 146 typed entries; 39 of
-;; these names are in it]. One vocabulary translation was needed: HE's unit
+;; The types were SOURCED from the reference corelib dump wherever it had one,
+;; because a type MeTTa does not already have is additive [source: LeaTTa
+;; stdlib.md, 146 typed entries; 39 of these names are in it]. What GOVERNS is
+;; upstream PeTTa, which became this branch's arbiter with the alignment: where
+;; both declare a name, upstream's arrow wins. Nothing is in dispute today --
+;; upstream declares 36 names, every one of them is declared here, and all 36
+;; arrows are identical, this file declaring 189 in all [measured 2026-08-31 by
+;; comparing the two files' (: name arrow) forms]. The distinction matters
+;; because the two sentences differ the day they disagree, and the file said
+;; the reference governed.
+;; One vocabulary translation was needed: HE's unit
 ;; result `(->)` is MeTTa's `Bool`, because every one of these answers `true`.
 ;; `SpaceType` is written as itself, because a space handle answers `Grounded`
 ;; here as it does there and carries that type
@@ -244,6 +251,16 @@
 (: #max (-> Number Number Number))
 (: #< (-> Number Number Bool))
 (: #> (-> Number Number Bool))
+;; The rest of the same two families, which the engine backs and this file did
+;; not declare: `(get-type #<)` answered its arrow while `(get-type #=)`,
+;; `(get-type #>=)` and `(get-type #//)` answered %Undefined%, so five working
+;; operators were invisible to the type surface and to everything generated
+;; from it [measured 2026-08-31 through `!(get-type ...)` on each].
+(: #// (-> Number Number Number))
+(: #= (-> Number Number Bool))
+(: #\= (-> Number Number Bool))
+(: #=< (-> Number Number Bool))
+(: #>= (-> Number Number Bool))
 
 ;; --- Runtime-guarded: the rest ---
 (: exp-math (-> Number Number))
