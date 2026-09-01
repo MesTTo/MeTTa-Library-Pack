@@ -1,7 +1,9 @@
-# lib_memo - Memoization Library for MeTTa
-Thread-safe, policy-driven memoization system with multiple eviction strategies (LRU and WTinyLFU), variant-key support for non-ground calls, and multi-answer caching.
-This document explains the public API, configuration options, internal behavior you should rely on, and practical recommendations for effective usage.
-## Quick Start
+# lib_memo
+
+Memoization for MeTTa. It is thread-safe, evicts by LRU or WTinyLFU, keys
+non-ground calls by variant, and caches every answer rather than the first.
+
+## Quick start
 Pure recursive definitions are considered automatically. A recursive strongly
 connected component is selected when one equation body calls that component at
 least twice; a single recursive call has no repeated subproblem and stays
@@ -46,17 +48,17 @@ trie is live. Automatic bag memoization is withdrawn when `(tabled ...)` lands
 in `&metta` and reconsidered when `(untabled ...)` removes it, so the two cache
 substrates never stack on one function.
 
-### Enable Memoization
+### Enable memoization
 ```metta
 !(memoize fib)
 !(memoize fib 1) ; only memoize fib with one input argument
 ```
-### Check Status
+### Check status
 ```metta
 !(is-memoized fib)  ; Returns: true or false
 !(is-memoized fib 1) ; Returns: true if fib/1-input arity is memoized
 ```
-### Configure Cache
+### Configure the cache
 ```metta
 ; Set eviction strategy
 !(config-memoize (strategy wtinylfu))
@@ -69,7 +71,7 @@ substrates never stack on one function.
 ; Combine options
 !(config-memoize (strategy lru) (unique-limit 500) (size-limit 10))
 ```
-### Get Configuration & Stats
+### Read configuration and stats
 ```metta
 !(get-memoize-config)
 ; Example return: ((strategy wtinylfu) ('unique-limit' 100) ('size-limit' 5368709120)
@@ -78,7 +80,7 @@ substrates never stack on one function.
 ; Returns runtime counters as a list of [Key, Value] pairs, e.g. ((cache_miss 1001) (cache_hit 998))
 ```
 
-### Clear Memoization
+### Clear memoization
 ```metta
 !(clear-memoize)            ; Clears every space's cached entries and queue state
 !(invalidate-memoize my-fun) ; Invalidate one function in this space, and its dependents
@@ -110,7 +112,7 @@ answers change. `!(is-memoized f)` answers for the space that asks.
 A space that does not define the function but inherits `&self`'s is calling
 the same function, so it shares the one cache rather than building a second.
 `examples/ch18-performance/18-02-memoisation-and-tabling/07-memo_spaces.metta` runs the whole property.
-## Configuration Options
+## Configuration options
 | Option | Default | Description |
 |--------|---------|-------------|
 | `strategy` | `wtinylfu` | Eviction policy: `wtinylfu` or `lru` |
@@ -120,21 +122,21 @@ the same function, so it shares the one cache rather than building a second.
 | `answer-limit` | 2048 | Maximum answers stored per cache key |
 | `aggregate` | `none` | Ground-call aggregation mode: `none|min|max|sum|count` |
 
-## Arity-Aware Memoization
+## Arity-aware memoization
 - `!(memoize fun)` enables memoization for all arities of `fun` (backward compatible behavior).
 - `!(memoize fun N)` enables memoization only for arity `N`, where `N` is the number of input arguments in MeTTa.
 - Arities do not conflict: functions like `(fun $x)` and `(fun $x $y)` can be memoized independently, including in the same file.
 - Status checks support the same shape: `!(is-memoized fun)` (any arity enabled) and `!(is-memoized fun N)` (specific arity).
-## Eviction Policies
+## Eviction policies
 - LRU (Least Recently Used): simple FIFO per-function queue; evicts oldest entries when per-function capacity is reached. Good for workloads with recent locality.
 - WTinyLFU (Window TinyLFU): uses a Count‑Min Sketch to estimate frequency and an admission policy that compares a candidate's frequency against the victim's frequency. Prevents "one‑hit wonders" from polluting the cache and is a good default when a small subset of keys are hot.
 Choose `wtinylfu` when you expect a stable hot set; choose `lru` when recency is the dominant access pattern.
-## Global Memory (`size-limit`)
+## Global memory (`size-limit`)
 - `size-limit` is a global cap across all cached entries. The code converts the GB value to bytes internally.
 - Estimated entry size = (term_size(Args) + term_size(Results)) × 8 bytes (rough term-cell estimate).
 - On store: if CurrentTotal + NewEntry > Limit, the runtime evicts the oldest entries across all functions until there is enough space, updating the global total accordingly.
 - `size-limit` controls only the estimated cache entry memory; it does not cap the Prolog VM's other memory usage (stacks, atoms, etc.).
-## Replay Semantics & Multi-Answer Caching
+## Replay semantics and multi-answer caching
 - Ground calls: cache keys are quantized (floats rounded to configured precision) and replay mode returns stored outputs only. Ground aggregation modes (`count|min|max|sum`) apply to the collected answers.
 - Non-ground (variant) calls: the cache stores answer patterns `(Args, Out)` and replays bindings on hit; this preserves tabling-like semantics.
 - Multi-answer support: probing collects up to `answer-limit` answers per key; excess answers are truncated and the `answer_limit_truncated` metric is incremented.
@@ -168,7 +170,7 @@ miss's complete bag; probing recursion beneath `once`, `take`, or `top` could
 continue after the source construct had its answer and then wait on the same
 in-progress variant. `explain` reports `(bounded-search <construct>)` for this
 safety refusal. Explicit `memoize` retains its requested variant behaviour.
-## Core State (short reference)
+## Core state (short reference)
 Dynamic predicates exposed in the runtime (for debugging and reasoning):
 Every table below is keyed by `(Fun, Module)`, where the module is the one
 holding the function's clauses. See "Memoization is per space" above.
@@ -187,7 +189,7 @@ holding the function's clauses. See "Memoization is per space" above.
   edges; memo nodes use these for dependency-aware invalidation
 - `metta_memo_stat/2` — runtime counters (cache_hit, cache_miss, waited_on_in_progress, etc.)
 Refer to source predicates if you need deeper internal debugging; avoid relying on internal facts for program logic unless you intend to keep compatibility with future changes.
-## Integration Hooks & Synchronization
+## Integration hooks and synchronization
 The library integrates with the MeTTa runtime via multifile hooks:
 - `seam:dispatch_call/4` — intercepts dispatch to memoized functions, and is told the module the call site lives in
 - `seam:function_call_graph_changed/2` — schedules a new SCC decision only when a source-call edge changes
@@ -197,8 +199,7 @@ The library integrates with the MeTTa runtime via multifile hooks:
 Synchronization primitives:
 - `with_cache_fun_mutex/4` — per-(Fun,Module,Arity) mutex to protect queue/state for that function
 - `with_cms_mutex/1` — global mutex used for the Count‑Min Sketch updates
-## Practical Recommendations & Effective API Usage
-These are concise, actionable guidelines derived from observed behaviors and common pitfalls.
+## Using it well
 1. Global vs per-function config
 - Configuration options (strategy, unique-limit, size-limit, float, answer-limit, aggregate) are global to the running MeTTa/Prolog process. Which functions are memoized is per-function (`!(memoize <fun>)`).
 - If you need different cache parameters for different examples, set the global config and clear the cache before running each example (procedural approach). See the helper snippet below.
