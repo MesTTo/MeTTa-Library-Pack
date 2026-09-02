@@ -53,6 +53,11 @@
 %   - a future holds its expression's whole ANSWER SET, because it is a space
 %     the evaluating engine adds every answer to; awaiting twice answers the
 %     same set without blocking a second time [tested: lib_thread:a_future_holds_the_whole_answer_set]
+%   - future answer writes and iteration snapshots share a dedicated mutex and
+%     a monotone publication position, so a snapshot plus later changes emits
+%     every duplicate occurrence exactly once [tested:
+%     test_future_iteration_watermark_separates_snapshot_from_later_events;
+%     commit=WORKTREE]
 %   - a channel send never loses a term: message queues copy, so the receiver
 %     gets its own copy and variable bindings do not cross [tested: lib_thread:a_channel_round_trips_a_term, a_channel_carries_a_term_between_threads]
 %   - timers cost no per-timer threads: one timer thread and one bounded pool serve every
@@ -83,7 +88,8 @@
 % Guarded by:
 %   - '$metta_engine_scheduler' protects task state and carrier creation;
 %     '$metta_timers' serialises starting the timer service; one outcome mutex
-%     per future claims its terminal value, and one await mutex serialises
+%     per future claims its terminal value, one answer mutex serialises
+%     publication with iteration snapshots, and one await mutex serialises
 %     cancellation, waiter registration and mailbox consumption;
 %     '$metta_timer_lifecycle' serialises timer dispatch and cancellation;
 %     '$metta_scheduler_deadlines' serialises finite wake tokens.
@@ -585,7 +591,7 @@ metta_scheduler_event(Task, _, Unexpected) :-
 
 metta_scheduler_write_answer(Task, Value) :-
     metta_scheduler_task(Task, _, Space, _, _, _),
-    'add-atom'(Space, Value, _).
+    future_add_atom(Space, Value).
 
 metta_scheduler_continue(Task, Lane) :-
     with_mutex('$metta_engine_scheduler',
@@ -819,7 +825,7 @@ future_body_outcome_(Context, Module, Expr, Space, Outcome) :-
     setup_call_cleanup(
         metta_python_context_push(Context, Previous),
         (   catch(( forall(eval_metta_in_module(Module, Expr, Value),
-                           'add-atom'(Space, Value, _)),
+                           future_add_atom(Space, Value)),
                     Outcome = done ),
                   Error,
                   Outcome = error(Error))
@@ -831,8 +837,54 @@ future_body_outcome_(Context, Module, Expr, Space, Outcome) :-
 future_mutex_(Space, Mutex) :-
     atom_concat('$metta_future_', Space, Mutex).
 
+future_answer_mutex_(Space, Mutex) :-
+    atom_concat('$metta_future_answers_', Space, Mutex).
+
 future_completion_mutex_(Space, Mutex) :-
     atom_concat('$metta_future_completion_', Space, Mutex).
+
+%A future iterator needs the same relationship PostgreSQL gives an exported
+%logical-decoding snapshot: the snapshot shows exactly the state after which
+%the change stream starts. Each future answer receives one process-wide
+%position while holding a dedicated answer mutex, which covers the write and
+%its synchronous atom-added callback. A snapshot under the same mutex therefore
+%has one exact watermark. Duplicate values need no identity
+%guess: position, not equality, decides which side of the snapshot owns them.
+%[source: PostgreSQL 15, Logical Decoding Concepts, Exported Snapshots,
+%https://www.postgresql.org/docs/15/logicaldecoding-explanation.html#LOGICALDECODING-SNAPSHOTS;
+%commit=WORKTREE].
+future_add_atom(Space, Term) :-
+    future_answer_mutex_(Space, Mutex),
+    with_mutex(Mutex, future_add_atom_locked_(Space, Term)).
+
+future_add_atom_locked_(Space, Term) :-
+    flag('$metta_future_answer_position', Previous, Previous + 1),
+    Sequence is Previous + 1,
+    setup_call_cleanup(
+        future_answer_sequence_push_(Space, Sequence, Prior),
+        'add-atom'(Space, Term, _),
+        future_answer_sequence_pop_(Prior)).
+
+future_answer_sequence_push_(Space, Sequence, Prior) :-
+    (   nb_current('$metta_future_answer_sequence', Existing)
+    ->  Prior = value(Existing)
+    ;   Prior = absent
+    ),
+    b_setval('$metta_future_answer_sequence', future(Space, Sequence)).
+
+future_answer_sequence_pop_(value(Sequence)) :- !,
+    b_setval('$metta_future_answer_sequence', Sequence).
+future_answer_sequence_pop_(absent) :-
+    nb_delete('$metta_future_answer_sequence').
+
+metta_future_snapshot(Space, Atoms, Watermark) :-
+    known_future_(Space, _, _),
+    future_answer_mutex_(Space, Mutex),
+    with_mutex(
+        Mutex,
+        (   findall(Atom, 'get-atoms'(Space, Atom), Atoms),
+            flag('$metta_future_answer_position', Watermark, Watermark)
+        )).
 
 %Claim the terminal outcome before publishing it. The completion mutex is
 %separate from the await mutex because an ordinary awaiter holds the latter
@@ -1422,10 +1474,10 @@ repeating_body_started_(Start, Context, Module, Expr, Space) :-
         metta_in_python_context(
             Context,
             catch(forall(eval_metta_in_module(Module, Expr, Value),
-                         'add-atom'(Space, Value, _)),
+                         future_add_atom(Space, Value)),
                   Error,
                   ( term_to_atom(Error, Message),
-                    'add-atom'(Space, ['Error', Expr, Message], _) ))),
+                    future_add_atom(Space, ['Error', Expr, Message]) ))),
         repeating_body_finished_(Space)).
 
 repeating_body_finished_(Space) :-
