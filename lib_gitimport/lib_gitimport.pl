@@ -6,7 +6,7 @@
 %     test_the_residual_positions_refuse_by_their_own_names].
 %   - an existing target must itself be a Git worktree root; being nested in
 %     another checkout is not enough [tested: tests/shell/test_git_import.sh;
-%     commit=WORKTREE].
+%     commit=60b4e5a39f2274ad5d207dd9ce7b948b74a299ab].
 %   - on a build with no library(process) every git route refuses under the
 %     MeTTa name that reached it, naming the absent library and its cost,
 %     rather than raising existence_error(procedure, process_create/3)
