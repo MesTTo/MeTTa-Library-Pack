@@ -32,13 +32,15 @@
 %     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - future completion is single-assignment, settled pool work cannot be
 %     reported as cancelled, timer dispatch cannot cross a successful
-%     cancellation, and a repeating timer coalesces ticks while its prior
-%     invocation is still running [tested:
+%     cancellation, a failed async landing publication records a terminal
+%     error without overwriting an outcome already committed, and a repeating
+%     timer coalesces ticks while its prior invocation is still running [tested:
 %     lib_thread:a_future_terminal_outcome_is_single_assignment,
 %     lib_thread:cancelling_a_completed_unawaited_pool_future_is_false,
 %     lib_thread:timer_fire_and_cancel_have_one_atomic_transition,
-%     lib_thread:a_repeating_timer_never_overlaps_its_own_invocations;
-%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+%     lib_thread:a_repeating_timer_never_overlaps_its_own_invocations,
+%     test_a_failed_landing_publication_settles_the_future_as_an_error;
+%     commit=WORKTREE]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
@@ -740,6 +742,16 @@ metta_async_future_abandon(Space, Done) :-
 metta_async_future_settle(Token, Outcome, Name, Space) :-
     (   retract(metta_async_future(Token, Name, Space, Done))
     ->  metta_future_complete(Space, Done, Outcome)
+    ;   existence_error(metta_async_future, Token)
+    ).
+
+%Recovery is keyed by the durable future record rather than the transient
+%publisher record: ordinary settlement removes the latter before lifecycle
+%notification, and a watcher can fail after that successful settlement.
+metta_async_future_fail(Token, Outcome) :-
+    (   metta_future(Space, async(Token), Done)
+    ->  retractall(metta_async_future(Token, _, _, _)),
+        metta_future_complete(Space, Done, Outcome)
     ;   existence_error(metta_async_future, Token)
     ).
 
