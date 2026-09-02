@@ -57,7 +57,7 @@
 %     a monotone publication position, so a snapshot plus later changes emits
 %     every duplicate occurrence exactly once [tested:
 %     test_future_iteration_watermark_separates_snapshot_from_later_events;
-%     commit=WORKTREE]
+%     commit=1877bec75a9a22265c9222f0c0c538c8f65a983f]
 %   - a channel send never loses a term: message queues copy, so the receiver
 %     gets its own copy and variable bindings do not cross [tested: lib_thread:a_channel_round_trips_a_term, a_channel_carries_a_term_between_threads]
 %   - timers cost no per-timer threads: one timer thread and one bounded pool serve every
@@ -852,7 +852,7 @@ future_completion_mutex_(Space, Mutex) :-
 %guess: position, not equality, decides which side of the snapshot owns them.
 %[source: PostgreSQL 15, Logical Decoding Concepts, Exported Snapshots,
 %https://www.postgresql.org/docs/15/logicaldecoding-explanation.html#LOGICALDECODING-SNAPSHOTS;
-%commit=WORKTREE].
+%commit=1877bec75a9a22265c9222f0c0c538c8f65a983f].
 future_add_atom(Space, Term) :-
     future_answer_mutex_(Space, Mutex),
     with_mutex(Mutex, future_add_atom_locked_(Space, Term)).
