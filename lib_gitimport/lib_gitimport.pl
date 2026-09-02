@@ -4,6 +4,9 @@
 %   - git-import! refuses an unbound URL under its own MeTTa name before any
 %     filesystem or process work [tested:
 %     test_the_residual_positions_refuse_by_their_own_names].
+%   - an existing target must itself be a Git worktree root; being nested in
+%     another checkout is not enough [tested: tests/shell/test_git_import.sh;
+%     commit=WORKTREE].
 %   - on a build with no library(process) every git route refuses under the
 %     MeTTa name that reached it, naming the absent library and its cost,
 %     rather than raising existence_error(procedure, process_create/3)
@@ -239,8 +242,9 @@ create_staging_directory(Context, _, Name, _) :-
 
 ensure_git_checkout(Context, LocalDir) :-
     catch(git_output(Context, 'validate Git checkout', LocalDir,
-                     ['rev-parse', '--is-inside-work-tree'], IsGit), _, fail),
-    IsGit == true, !.
+                     ['rev-parse', '--show-toplevel'], WorktreeRoot), _, fail),
+    catch(same_file(LocalDir, WorktreeRoot), _, fail),
+    !.
 ensure_git_checkout(Context, LocalDir) :-
     throw(error(domain_error(git_checkout, LocalDir),
                 context(Context, 'existing target is not a Git checkout'))).
