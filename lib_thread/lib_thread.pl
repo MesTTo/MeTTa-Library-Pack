@@ -40,7 +40,7 @@
 %     lib_thread:timer_fire_and_cancel_have_one_atomic_transition,
 %     lib_thread:a_repeating_timer_never_overlaps_its_own_invocations,
 %     test_a_failed_landing_publication_settles_the_future_as_an_error;
-%     commit=WORKTREE]
+%     commit=2f562bc5c051ee373cb7ab27ea6cae641f1df094]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
