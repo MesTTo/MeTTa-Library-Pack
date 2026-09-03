@@ -12,7 +12,7 @@
 %   table trie per engine instead: the Node seat's one-engine-per-run contract
 %   reuses answers between forms in one run and recomputes them in the next
 %   [tested: "recomputes across Node runs and reuses within one run";
-%   commit=WORKTREE].
+%   commit=42df19d71823b963fce5594a42f57fd23a89b7a9].
 % Guarantees:
 %   - a function change invalidates the tables MeTTa DECLARED and walks no
 %     further: one equation change after a table of N answers was built and
