@@ -19,9 +19,11 @@
 ;facts, input arity, so (match &metta (tabled $s $f $a) ...) lists what
 ;is tabled right now. Undeclaring removes the fact, and clearing or
 ;dropping a space removes its declarations, tables and all: tabling
-;state never outlives the space life that declared it. The tables are
-;shared between SWI engines, so the live Python Answers cursor, a source
-;run and the statistics door reuse the same answer trie.
+;state never outlives the space life that declared it. On a threaded SWI the
+;tables are shared between engines, so the live Python Answers cursor, a
+;source run and the statistics door reuse the same answer trie. On the
+;threads-disabled swipl-wasm used by the Node seat, each run's SWI engine owns
+;its trie: forms in one run reuse answers, while a later run recomputes them.
 
 !(import! &self (library lib_import))
 !(import_prolog_functions_from_file (library lib_tabling.pl)

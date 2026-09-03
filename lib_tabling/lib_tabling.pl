@@ -5,9 +5,14 @@
 %   declarations are cumulative and idempotent, and every operation
 %   verifies its effect and throws loudly when the engine disagrees.
 %   Live declarations reflect into &metta as (tabled space name arity)
-%   facts, input arity, asserted on declare and retracted on undeclare. The
-%   tables are shared between SWI engines, so a Python Answers cursor and the
-%   term runner reach one answer trie and report one set of statistics.
+%   facts, input arity, asserted on declare and retracted on undeclare. On a
+%   threaded SWI the tables are shared between engines, so a Python
+%   Answers cursor and the term runner reach one answer trie and report one
+%   set of statistics. A threads-disabled SWI, including swipl-wasm, owns its
+%   table trie per engine instead: the Node seat's one-engine-per-run contract
+%   reuses answers between forms in one run and recomputes them in the next
+%   [tested: "recomputes across Node runs and reuses within one run";
+%   commit=WORKTREE].
 % Guarantees:
 %   - a function change invalidates the tables MeTTa DECLARED and walks no
 %     further: one equation change after a table of N answers was built and
