@@ -32,7 +32,7 @@
 %   - a clause whose body is module-qualified is admitted only when its leading
 %     ownership guard succeeds in that module; the operation behind the guard
 %     is never run [tested: a_qualified_hook_body_runs_only_its_leading_guard,
-%     a_qualified_hook_body_with_a_failing_guard_is_refused; commit=WORKTREE]
+%     a_qualified_hook_body_with_a_failing_guard_is_refused; commit=90362cf551149c822a05fb26fbf80d0c2ce11fa4]
 %   - a false exact pushdown claim is refused, which is the one claim in the
 %     seam that costs answers
 %     [tested: conformance_catches_a_false_exact_claim]
