@@ -1,4 +1,6 @@
-;Shared spaces over Redis, SWI's own library(redis) underneath.
+;Shared spaces over Redis, SWI's own library(redis) underneath. A platform
+;without that library refuses this import by the redis capability's name
+;before any part of the provider loads.
 ;
 ;(redis-attach &shared "localhost:6379") binds the space name to a
 ;Redis set. From then on add-atom, remove-atom, match, and get-atoms on

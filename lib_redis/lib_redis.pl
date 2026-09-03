@@ -10,12 +10,22 @@
 %   asynchronously and local writes fire them synchronously through the
 %   engine, each write heard exactly once per process.
 %   [tested: test_subscriptions_fire_across_processes; commit=dcfc20be4933c19140ccb5759291401d13058301]
+% Assumes:
+%   - the platform supplies library(redis). The source declares that before
+%     any directive can run, so an absent provider is refused through the
+%     platform census rather than half-loading this file [tested:
+%     platform_capabilities_reduced:redis_import_refuses_by_name_without_redis;
+%     commit=WORKTREE]
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
 %   Future Enhancements: None
 
-:- use_module(library(redis)).
+%The import door reads this declaration before consulting the file. The
+%directive repeats the check for a direct Prolog consult, and the load itself
+%uses the same census route as every other optional platform library.
+:- metta_requires(redis).
+:- metta_platform_load(redis).
 :- use_module(library(broadcast)).
 
 %Space, command connection, pub/sub connection, subscription thread,
