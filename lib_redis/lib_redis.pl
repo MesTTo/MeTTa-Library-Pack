@@ -15,7 +15,7 @@
 %     any directive can run, so an absent provider is refused through the
 %     platform census rather than half-loading this file [tested:
 %     platform_capabilities_reduced:redis_import_refuses_by_name_without_redis;
-%     commit=WORKTREE]
+%     commit=59792b524568755a2fbfe1c5f7cdb571bd78a3bf]
 % Open Obligations:
 %   To Do: None
 %   Hacks: None

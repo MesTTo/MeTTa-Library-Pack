@@ -6,12 +6,13 @@
 %   - hashes answer lowercase hex strings, and the five shared SHA providers
 %     agree byte for byte [tested:
 %     platform_capabilities_reduced:sha_hashing_survives_without_crypto,
-%     test_hashes_are_deterministic_and_agree_with_hashlib; commit=WORKTREE]
+%     test_hashes_are_deterministic_and_agree_with_hashlib;
+%     commit=59792b524568755a2fbfe1c5f7cdb571bd78a3bf]
 %   - a build without library(crypto) refuses secure randomness and a
 %     non-SHA hash by the crypto capability's name instead of calling an
 %     undefined predicate [tested:
 %     platform_capabilities_reduced:crypto_only_operations_refuse_by_name_without_crypto;
-%     commit=WORKTREE]
+%     commit=59792b524568755a2fbfe1c5f7cdb571bd78a3bf]
 % Fails when: a requested algorithm is unknown. Where library(crypto) is
 %   present its own domain error remains authoritative; where it is absent an
 %   algorithm outside the five portable SHA names needs that capability.
