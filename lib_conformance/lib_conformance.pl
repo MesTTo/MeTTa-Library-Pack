@@ -29,6 +29,10 @@
 %   - a capability declared with no hook clause behind it is refused, which is
 %     a registration-time mistake that otherwise surfaces inside a callback
 %     [tested: conformance_catches_a_capability_with_no_hook]
+%   - a clause whose body is module-qualified is admitted only when its leading
+%     ownership guard succeeds in that module; the operation behind the guard
+%     is never run [tested: a_qualified_hook_body_runs_only_its_leading_guard,
+%     a_qualified_hook_body_with_a_failing_guard_is_refused; commit=WORKTREE]
 %   - a false exact pushdown claim is refused, which is the one claim in the
 %     seam that costs answers
 %     [tested: conformance_catches_a_false_exact_claim]
@@ -147,11 +151,21 @@ conformance_hook_admits(Module:Name/Arity, Space) :-
     ),
     !.
 
-%Only the LEADING goal runs. A fact applies unconditionally; a guard that
-%throws is not an admission.
-conformance_guard_admits(true) :- !.
-conformance_guard_admits((Guard, _)) :- !, catch(Guard, _, fail).
-conformance_guard_admits(Guard) :- catch(Guard, _, fail).
+%Only the LEADING goal runs. clause/2 returns a body qualified with the module
+%that owns it, so strip that qualification before inspecting conjunction/2,
+%then put the module back on the one goal that may run. Without the strip the
+%top-level functor is :/2, the conjunction clause never matches, and the
+%catch-all executes the hook's operation as well as its ownership guard.
+%A fact applies unconditionally; a guard that throws is not an admission.
+conformance_guard_admits(Qualified) :-
+    strip_module(Qualified, Module, Body),
+    conformance_guard_admits_in(Module, Body).
+
+conformance_guard_admits_in(_, true) :- !.
+conformance_guard_admits_in(Module, (Guard, _)) :- !,
+    catch(call(Module:Guard), _, fail).
+conformance_guard_admits_in(Module, Guard) :-
+    catch(call(Module:Guard), _, fail).
 
 conformance_atoms(Space, Atoms) :-
     (   foreign_provides(Space, enumerate)
