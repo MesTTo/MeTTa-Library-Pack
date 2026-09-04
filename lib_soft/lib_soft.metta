@@ -76,17 +76,29 @@
 ;
 ;It says Symbol, which is what the name actually is. It said %Undefined% for
 ;one day, because a metatype parameter was checked through the typing-rule
-;registry on every call and on this fold that is two checks per position: it
-;more than doubled the whole scorer, 218,975 inferences against 99,369 where
-;the pattern mismatches at position 0 and 600,591 against 195,375 where it
-;matches [measured 2026-09-04, ai-tmp/probe_soft_cost.py, 400 six-position
-;candidates]. The check now tries the shape before the registry and this same
-;probe reads 150,971 and 369,383, so the metatype declaration carries a 1.52x
-;tax where it carried 2.20x. It is NOT free and the number is here rather than
-;hidden: %Undefined% still measures 99,369. The declaration stays because a
-;cost tax on the honest spelling is an engine defect to keep fixing, not a
-;reason to teach the dishonest one [measured 2026-09-04,
-;ai-tmp/probe_soft_cost.py; commit=WORKTREE].
+;registry on every call and on this fold that is two checks per position. The
+;check now tries the shape before the registry, and the tax that remains is
+;measured rather than remembered, both arms in one run:
+;
+;  mismatch at position 0   Symbol   162,971   %Undefined%   299,377   1.84x
+;  match at position 0      Symbol   410,183   %Undefined%   798,599   1.95x
+;
+;It is NOT free and the number is here rather than hidden. The declaration
+;stays because a cost tax on the honest spelling is an engine defect to keep
+;fixing, not a reason to teach the dishonest one.
+;
+;The figures this replaces, 99,369 and 150,971 for a 1.52x tax, DID NOT
+;REPRODUCE. The probe they named lived in ai-tmp, which is gitignored, and the
+;file now there reads 163,892 at 82167e07, the very commit the claim describes,
+;and 163,892 at HEAD, so the engine did not drift under them and the probe must
+;have. That is the argument for citing a tracked artifact: an untracked one
+;makes a measured claim unfalsifiable the moment it changes. The probe is now
+;extensions/python/benchmarks/soft_match_cost.py, it swaps the declaration
+;itself so the ratio is derived rather than carried, and three samples agreed
+;exactly [measured 2026-09-05, three identical samples at loadavg 28.8,
+;0.0000% spread; command=$CHECK_PY
+;extensions/python/benchmarks/soft_match_cost.py; fixture=400 six-position
+;candidates, main checkout; commit=WORKTREE].
 (: soft-fold (-> Symbol Atom Atom Number))
 (: soft-walk (-> Symbol Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
