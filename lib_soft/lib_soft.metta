@@ -74,19 +74,21 @@
 ;it answers, and the walk had no clause for it. A symbol evaluates to
 ;itself, so an evaluated parameter is the right one.
 ;
-;It is %Undefined% rather than Symbol, which is what it actually is, and
-;that is a cost the engine charges rather than a claim this library declines
-;to make. `Symbol` is a METATYPE, and a metatype parameter is checked on
-;every call through the typing-rule registry; on this fold that is two
-;checks per position, and it more than doubled the whole scorer: 218,975
-;inferences against 99,369 where the pattern mismatches at position 0, and
-;600,591 against 195,375 where it matches [measured 2026-09-04,
-;ai-tmp/probe_soft_cost.py, 400 six-position candidates]. Against the
-;scorer before any aggregation seam existed, 98,135 and 189,341, the seam
-;itself costs 1.3% and 3.2%. Restore the Symbol declaration when the
-;metatype check stops costing more than the work it guards.
-(: soft-fold (-> %Undefined% Atom Atom Number))
-(: soft-walk (-> %Undefined% Atom Atom Number Number))
+;It says Symbol, which is what the name actually is. It said %Undefined% for
+;one day, because a metatype parameter was checked through the typing-rule
+;registry on every call and on this fold that is two checks per position: it
+;more than doubled the whole scorer, 218,975 inferences against 99,369 where
+;the pattern mismatches at position 0 and 600,591 against 195,375 where it
+;matches [measured 2026-09-04, ai-tmp/probe_soft_cost.py, 400 six-position
+;candidates]. The check now tries the shape before the registry and this same
+;probe reads 150,971 and 369,383, so the metatype declaration carries a 1.52x
+;tax where it carried 2.20x. It is NOT free and the number is here rather than
+;hidden: %Undefined% still measures 99,369. The declaration stays because a
+;cost tax on the honest spelling is an engine defect to keep fixing, not a
+;reason to teach the dishonest one [measured 2026-09-04,
+;ai-tmp/probe_soft_cost.py; commit=WORKTREE].
+(: soft-fold (-> Symbol Atom Atom Number))
+(: soft-walk (-> Symbol Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
 (= (soft-walk min $ps $as $acc)
    (if (or (== $ps ()) (== $acc 0.0))
@@ -133,7 +135,7 @@
 (= (soft-score $p $a) (soft-score-by (soft-aggregation) $p $a))
 
 ;The same, under a named aggregation rather than the space's declared one.
-(: soft-score-by (-> %Undefined% Atom Atom Number))
+(: soft-score-by (-> Symbol Atom Atom Number))
 (= (soft-score-by $agg $p $a)
    (if (== (get-metatype $p) Variable)
        (let $p $a 1.0)
