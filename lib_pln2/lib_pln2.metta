@@ -7,7 +7,7 @@
 ; Guarantees: every formula that assumes independence either accepts explicit
 ; disjoint support sets or refuses overlap [tested:
 ; test_supported_total_probability_matches_the_formula;
-; commit=WORKTREE].
+; commit=afc4024cef7d4b7bcdd194bb030a112187b676d0].
 ; Fails when: a probability, variance, Beta shape, confidence, evidence scale,
 ; or support identity violates its declared domain; the error names a remedy.
 ; Decides: the evidence scale is an explicit argument and no fixed constant,

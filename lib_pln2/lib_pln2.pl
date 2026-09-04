@@ -293,6 +293,60 @@ pln2_finite_number(Value) :-
 pln2_refuse(Operation, Problem, Remedy) :-
     throw(error(Problem, context(Operation, Remedy))).
 
+% Every refusal above carries a remedy, and SWI prints the context half that
+% holds it. The FORMAL half needs a clause of its own or SWI answers "Unknown
+% error term: pln2_invalid_probability(mean,170)", which shows the caller the
+% shape of the complaint instead of the complaint
+% [measured 2026-09-05: !(pln2-moments-stv (moments 170 25) 100) answered
+% "'pln2-moments-stv'/2: Unknown error term: pln2_invalid_probability(mean,170)"
+% through the library's public door].
+%
+% error_message//1 rather than message//1: SWI dispatches the formal half of an
+% error(Formal, Context) pair through this hook, and a message//1 clause for the
+% formal is never reached [source: extensions/cmetta/bridge.pl records the same
+% measurement for cmetta_operation_failed/2;
+% commit=WORKTREE].
+%
+% Each sentence names what was WRONG and leaves what to DO to the remedy the
+% throw already carries, so the two halves do not repeat each other.
+:- multifile prolog:error_message//1.
+
+prolog:error_message(pln2_invalid_probability(Role, Value)) -->
+    [ 'the ~w is ~p, which is not a probability'-[Role, Value] ].
+prolog:error_message(pln2_invalid_confidence(Value)) -->
+    [ 'the confidence is ~p'-[Value] ].
+prolog:error_message(pln2_invalid_positive(Role, Value)) -->
+    [ 'the ~w is ~p, which is not a finite positive number'-[Role, Value] ].
+prolog:error_message(pln2_invalid_nonnegative(Role, Value)) -->
+    [ 'the ~w is ~p, which is not a finite non-negative number'-[Role, Value] ].
+prolog:error_message(pln2_invalid_variance(Mean, Variance)) -->
+    [ 'a variance of ~p is larger than a mean of ~p allows'-[Variance, Mean] ].
+prolog:error_message(pln2_invalid_stv(Raw)) -->
+    [ '~p is not a truth value'-[Raw] ].
+prolog:error_message(pln2_invalid_beta(Raw)) -->
+    [ '~p is not a Beta distribution'-[Raw] ].
+prolog:error_message(pln2_invalid_moments(Raw)) -->
+    [ '~p is not the moments of a probability-valued random variable'-[Raw] ].
+prolog:error_message(pln2_invalid_supported_moments(Raw)) -->
+    [ '~p does not carry moments together with the support they rest on'-[Raw] ].
+prolog:error_message(pln2_invalid_support(Support)) -->
+    [ '~p is not a support list'-[Support] ].
+prolog:error_message(pln2_invalid_support_groups(Supports)) -->
+    [ '~p is not one support list per operand'-[Supports] ].
+prolog:error_message(pln2_invalid_support_identity(Id)) -->
+    [ '~p cannot identify a source, because an evidence ID must be ground \c
+       and acyclic'-[Id] ].
+prolog:error_message(pln2_duplicate_support_identity(Id)) -->
+    [ 'the evidence ID ~p appears twice in one operand support'-[Id] ].
+prolog:error_message(pln2_dependent_supports(Id)) -->
+    [ 'the evidence ID ~p supports more than one operand, so the operands \c
+       are not independent and the formula does not apply'-[Id] ].
+prolog:error_message(pln2_unidentifiable_concentration(endpoint_mean, Mean)) -->
+    [ 'a mean of ~p sits at the end of the range, where no finite Beta \c
+       concentration fits'-[Mean] ].
+prolog:error_message(pln2_unidentifiable_concentration(zero_variance, Variance)) -->
+    [ 'a variance of ~p leaves the Beta concentration unbounded'-[Variance] ].
+
 :- det('pln2-beta-moments'/2).
 :- det('pln2-beta-update'/4).
 :- det('pln2-confidence-count'/3).

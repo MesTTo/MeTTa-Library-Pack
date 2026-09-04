@@ -5,7 +5,7 @@
 ; 11-weighted_subset_posterior.metta.
 ; Guarantees: weighted-subset-posterior-independent preserves candidate order
 ; and exact reduced ratios [tested: test_weighted_subset_matches_exhaustive;
-; commit=WORKTREE].
+; commit=afc4024cef7d4b7bcdd194bb030a112187b676d0].
 ; Fails when: candidate identity or exact-number contracts are missing, or an
 ; observation has zero mass; each refusal names the supported remedy.
 
