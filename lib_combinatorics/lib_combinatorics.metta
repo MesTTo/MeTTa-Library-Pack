@@ -1,3 +1,18 @@
+; Purpose: finite-choice combinators and exact posterior marginals for
+; independent Bernoulli choices conditioned on an additive observation.
+; Assumes: weighted subset candidates use the public
+; (candidate ID LOSS (ratio NUMERATOR DENOMINATOR)) shape documented in
+; 11-weighted_subset_posterior.metta.
+; Guarantees: weighted-subset-posterior-independent preserves candidate order
+; and exact reduced ratios [tested: test_weighted_subset_matches_exhaustive;
+; commit=WORKTREE].
+; Fails when: candidate identity or exact-number contracts are missing, or an
+; observation has zero mass; each refusal names the supported remedy.
+
+!(import! &self (library lib_import))
+!(import_prolog_functions_from_file (library lib_combinatorics.pl)
+  (weighted-subset-mass-independent weighted-subset-posterior-independent))
+
 ;Range number generator, separate non-det return of each item:
 (= (range $K $N)
    (if (< $K $N)
