@@ -5,6 +5,7 @@
 ;   collapsed at their first occurrence, and product operations state their
 ;   independence assumption in their names [tested:
 ;   test_additive_convolution_is_commutative_associative_and_linear,
+;   test_average_preserves_a_refusal_at_every_input_position,
 ;   test_independent_marginals_and_a_correlated_joint_are_not_interchangeable,
 ;   test_operations_preserve_the_normalization_refusal,
 ;   examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/12-distribution.metta;
@@ -102,13 +103,17 @@
 
 ;The distribution of the arithmetic mean of a nonempty expression of MUTUALLY
 ;INDEPENDENT numeric distributions. The product fold forms the distribution of
-;their sum before one unary map divides by the number of inputs.
+;their sum before one unary map divides by the number of inputs. A refusal
+;short-circuits each fold step so a later input cannot consume Error as rows.
 (= (ws-average-independent $dists)
    (if (== $dists ())
        (Error $dists "ws-average-independent requires at least one distribution; provide a nonempty expression of independent distributions")
        (let $sum
             (foldl-atom $dists ((1 0))
-              (|-> ($acc $dist) (ws-map2-independent + $acc $dist)))
+              (|-> ($acc $dist)
+                (if-error $acc
+                  $acc
+                  (ws-map2-independent + $acc $dist))))
          (if-error $sum
            $sum
            (let $count (size-atom $dists)
