@@ -929,7 +929,39 @@ metta_future_publish_(true, Space, Done, Outcome) :-
 %Wait for the future to finish, then answer every atom it produced, one per
 %solution. Awaiting a second time answers the same set without blocking again,
 %so a handle can be shared.
+%A transaction reads the database as it was when it OPENED, so a write another
+%thread makes while it runs stays invisible inside it for as long as it lasts.
+%Every wait here waits for exactly such a write, which makes the condition
+%unreachable rather than slow, and a caller has no way to learn that from a
+%wait that simply never ends.
+%
+%Measured 2026-09-04: `(let $f (spawn (inc 41)) (await $f))` answers 42 in
+%0.00s and never returns inside a transaction, with the future space still
+%empty a second after the worker finished; a spawned write under
+%`(space_await $s (job $x) 2)` answers `(job 1)` outside and `[]` after the
+%full two seconds inside, which is a WRONG answer rather than a slow one.
+%
+%A channel is NOT guarded, because its queue is not database state and the
+%hazard does not reach it: `(let $c (channel) (let $_ (send $c hello)
+%(recv $c)))` answers hello inside a transaction and outside one alike.
+metta_refuse_wait_in_transaction(Waiter) :-
+    (   current_transaction(_)
+    ->  throw(error(metta_wait_in_transaction(Waiter),
+                    context(Waiter,
+                            'a transaction cannot see another thread''s writes')))
+    ;   true
+    ).
+
+:- multifile prolog:error_message//1.
+prolog:error_message(metta_wait_in_transaction(Waiter)) -->
+    { _ = Waiter },
+    [ 'this waits for another thread, and a transaction reads the database as \c
+       it was when it opened, so the write being waited for cannot become \c
+       visible while the transaction lasts. Wait outside the transaction, or \c
+       use a channel, whose queue is not database state.'-[] ].
+
 thread_await(Space, Out) :-
+    metta_refuse_wait_in_transaction(await),
     future_settle_(Space, Outcome),
     (   Outcome = error(Error)
     ->  throw(Error)
@@ -1633,6 +1665,8 @@ space_take_where(Space, Pattern, Guard, Timeout, Out) :-
 %delivery is refused here rather than parked on a channel that will never
 %report anything [P12.14]. A native space needs no declaration.
 space_wait_(Space, Pattern, Guard, Timeout, Mode, Out) :-
+    ( Mode == take -> Waiter = space_take ; Waiter = space_await ),
+    metta_refuse_wait_in_transaction(Waiter),
     metta_require_events(Space, 'be waited on'),
     (   Timeout == infinite
     ->  Deadline = infinite
