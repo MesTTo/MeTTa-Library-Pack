@@ -357,7 +357,7 @@ metta_tabling_conjunct(Operation, Conjunct, Shapes0, Shapes) :-
     append(Found, Shapes0, Shapes).
 
 prolog:error_message(metta_tabling_unresolved_read(Operation, Culprit)) -->
-    { swrite(Culprit, Text) },
+    { sdisplay(Culprit, Text) },
     [ 'a tabled function reads ~w with ~w, which cannot be resolved to one \c
        space predicate, so writes to it could not invalidate the table. \c
        Name the space and the pattern shape, or do not table this \c
@@ -407,7 +407,7 @@ metta_tabling_reflection_goal(remove, Fact, Result) :-
 
 prolog:error_message(metta_tabling_reflection_write_failed(Operation, Fact,
                                                             Outcome)) -->
-    { swrite(Fact, Text) },
+    { sdisplay(Fact, Text) },
     [ 'tabling could not ~w its reflection row ~w: the &metta write answered \c
        ~w. The table declaration and its catalog row must change together.'-
       [Operation, Text, Outcome] ].
