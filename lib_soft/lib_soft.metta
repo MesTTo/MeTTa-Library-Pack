@@ -98,7 +98,7 @@
 ;exactly [measured 2026-09-05, three identical samples at loadavg 28.8,
 ;0.0000% spread; command=$CHECK_PY
 ;extensions/python/benchmarks/soft_match_cost.py; fixture=400 six-position
-;candidates, main checkout; commit=WORKTREE].
+;candidates, main checkout; commit=6c7db55ba23900172d7481dd47923aca13b84433].
 (: soft-fold (-> Symbol Atom Atom Number))
 (: soft-walk (-> Symbol Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
