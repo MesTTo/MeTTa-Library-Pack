@@ -305,7 +305,7 @@ pln2_refuse(Operation, Problem, Remedy) :-
 % error(Formal, Context) pair through this hook, and a message//1 clause for the
 % formal is never reached [source: extensions/cmetta/bridge.pl records the same
 % measurement for cmetta_operation_failed/2;
-% commit=WORKTREE].
+% commit=e34e8e386772b582ba24828138056c5d26be28f8].
 %
 % Each sentence names what was WRONG and leaves what to DO to the remedy the
 % throw already carries, so the two halves do not repeat each other.
