@@ -10,12 +10,12 @@
 %     moments use the standard mean and variance, and Beta-Binomial updates add
 %     observed success and failure counts [tested:
 %     test_confidence_count_round_trip, test_beta_moments_match_definition,
-%     test_beta_update_adds_observations; commit=WORKTREE]
+%     test_beta_update_adds_observations; commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 %   - independent product and conditional total-probability variance are the
 %     exact second moments under the stated mutual-independence assumption
 %     [tested: test_supported_product_matches_the_formula,
 %     test_supported_total_probability_matches_the_formula;
-%     commit=WORKTREE]
+%     commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 % Fails when:
 %   - values are non-finite or outside their mathematical domains
 %   - support overlaps; the refusal requires a reasoner to factor shared
@@ -27,7 +27,7 @@
 
 % The standard Beta mean and variance fix the parameterization used below.
 % [source: https://www.itl.nist.gov/div898/handbook/eda/section3/eda366h.htm;
-% commit=WORKTREE]
+% commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 'pln2-beta-moments'(RawBeta, [moments, Mean, Variance]) :-
     Operation = 'pln2-beta-moments'/1,
     pln2_beta(Operation, RawBeta, Alpha, Beta),
@@ -39,7 +39,7 @@
 % A Beta prior followed by binomial observations has posterior shapes
 % alpha+successes and beta+failures.
 % [source: https://mc-stan.org/docs/2_22/stan-users-guide/exploiting-conjugacy.html;
-% commit=WORKTREE]
+% commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 'pln2-beta-update'(RawBeta, Successes, Failures,
                    [beta, UpdatedAlpha, UpdatedBeta]) :-
     Operation = 'pln2-beta-update'/3,
@@ -98,7 +98,7 @@
 % supported operations below enforce the corresponding minimum contract: a
 % source identity may occur in only one independent operand. They refuse
 % overlap rather than pretending to perform reasoner-owned proof factoring.
-% [source: https://doi.org/10.1145/1265530.1265535; commit=WORKTREE]
+% [source: https://doi.org/10.1145/1265530.1265535; commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 'pln2-require-independent-supports'(Supports, true) :-
     pln2_validate_support_groups('pln2-require-independent-supports'/1,
                                   Supports, _),

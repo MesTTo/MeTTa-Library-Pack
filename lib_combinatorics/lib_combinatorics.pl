@@ -10,12 +10,12 @@
 %   - outputs preserve input order and contain only reduced exact ratios with
 %     positive denominators [tested: test_weighted_subset_matches_exhaustive,
 %     weighted_subset:equivalent_input_ratios_are_canonical;
-%     commit=WORKTREE]
+%     commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 %   - equal partial sums are merged at every prefix and suffix layer, and all
 %     marginals are recovered by a forward/backward join rather than by
 %     enumerating subsets [tested:
 %     weighted_subset:repeated_unit_losses_have_target_bounded_rows;
-%     commit=WORKTREE]
+%     commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 % Fails when:
 %   - an input violates the identity, integer-lattice, or exact-ratio contract
 %   - posterior conditioning has zero mass; the refusal names
@@ -33,7 +33,7 @@
 % recover marginals with forward/backward passes. This implementation derives
 % that recurrence independently and uses sparse exact-integer rows rather than
 % the paper's dense floating convolutions.
-% [source: https://doi.org/10.1371/journal.pone.0091507; commit=WORKTREE]
+% [source: https://doi.org/10.1371/journal.pone.0091507; commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]
 
 'weighted-subset-mass-independent'(RawCandidates, Target, Ratio) :-
     weighted_subset_validate('weighted-subset-mass-independent'/2,
