@@ -24,16 +24,51 @@
    (let $weights (map-atom $ps (|-> ($p) (index-atom $p 0)))
      (foldl-atom $weights 0.0 +)))
 
-;Scale every weight so the mass is one; a distribution:
+;Scale every weight so the mass is one; a distribution. A distribution has at
+;least one positive, finite weight and no negative weights. Apache Commons
+;Math applies those same validity checks before normalizing an enumerated PMF;
+;equal outcomes are additionally collapsed here because this representation is
+;the PMF itself, not a separate list of samples.
+;[source: https://github.com/apache/commons-math/blob/7bc81e97e91d3a988e4e569e31b77909af884be1/commons-math-legacy/src/main/java/org/apache/commons/math4/legacy/distribution/EnumeratedDistribution.java#L66-L102; commit=WORKTREE]
+;
+;Collapse retains the first occurrence of each value. Zero-weight rows carry no
+;support and are removed. A mass already equal to one is returned without a
+;division, preserving exact integer and binary-fraction weights where possible.
+;If adding finite weights overflows, division by the largest weight moves the
+;same ratios into a finite range before normalization is retried.
 (= (ws-normalize $ps)
    (if (== $ps ())
-       ()
-       (let $t (ws-total $ps)
-            (if (<= (abs-math $t) 0.0)
-                (Error $ps "ws-normalize requires nonzero total mass")
-                (map-atom $ps
-                  (|-> ($p) ((/ (index-atom $p 0) $t)
-                              (index-atom $p 1))))))))
+       (Error $ps "ws-normalize requires a nonempty finite distribution; provide at least one positive-weight outcome")
+       (let $negative
+            (filter-atom $ps (|-> ($p) (< (index-atom $p 0) 0.0)))
+         (if (!= $negative ())
+             (Error $ps "ws-normalize requires nonnegative weights; remove negative weights and provide at least one positive-weight outcome")
+             (let $nonfinite
+                  (filter-atom $ps
+                    (|-> ($p)
+                      (or (isnan-math (index-atom $p 0))
+                          (isinf-math (index-atom $p 0)))))
+               (if (!= $nonfinite ())
+                   (Error $ps "ws-normalize requires finite weights; replace NaN or infinite weights with finite nonnegative weights")
+                   (let $positive
+                        (filter-atom $ps
+                          (|-> ($p) (> (index-atom $p 0) 0.0)))
+                     (if (== $positive ())
+                         (Error $ps "ws-normalize requires positive total mass; provide at least one positive-weight outcome")
+                         (let $t (ws-total $positive)
+                           (if (isinf-math $t)
+                               (let $peak (ws-peak $positive)
+                                 (ws-normalize
+                                   (map-atom $positive
+                                     (|-> ($p)
+                                       ((/ (index-atom $p 0) $peak)
+                                        (index-atom $p 1))))))
+                               (let $collapsed (ws-collapse $positive)
+                                 (if (== $t 1.0)
+                                     $collapsed
+                                     (map-atom $collapsed
+                                       (|-> ($p) ((/ (index-atom $p 0) $t)
+                                                   (index-atom $p 1))))))))))))))))
 
 ;Softmax with a temperature: scores become a distribution. Low temperature
 ;sharpens toward the best pair, high temperature flattens toward uniform.
@@ -45,7 +80,7 @@
 ;the two failures look nothing alike:
 ;
 ;  (ws-softmax ((1000.0 a) (1001.0 b)) 1.0)     ((NaN a) (NaN b))
-;  (ws-softmax ((-1000.0 a) (-1001.0 b)) 1.0)   (Error ... "nonzero total mass")
+;  (ws-softmax ((-1000.0 a) (-1001.0 b)) 1.0)   (Error ... "positive total mass")
 ;
 ;Both are the same one-unit gap that answers (0.2689 0.7311) at small
 ;scores. After the shift the largest term is exp(0) exactly, so the mass is
