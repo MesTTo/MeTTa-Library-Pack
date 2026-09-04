@@ -87,17 +87,28 @@ special_form_head(Head) :- metta_special_form_head(Head).
 %  prolog / python   the tier that CLAIMED the name, from
 %                    metta_function_origin/3, which the same registration
 %                    refuses a second claim on
+%  specialization    the ENGINE wrote this equation, not the program: the
+%                    specializer stores a generated clause under a name like
+%                    twice_Spec_[inc], and those atoms save and digest like
+%                    any other, so a tool showing a program what it holds was
+%                    presenting engine bookkeeping as source. 19 of the 238
+%                    example programs hold them, 40 of ch08/15-roman.metta's
+%                    85 atoms among them. Above `equation` because a
+%                    specialization IS one and the tier says who authored it
 %  equation          everything else that is a function: its clauses live in
 %                    a space's module, which fun_in/2 already records, so no
 %                    fact has to be asserted per compiled equation for this
 %
-%The detail is the source file for a Prolog registration and the dispatch kind
-%for a Python one [tested: lib_reflect_origin].
+%The detail is the source file for a Prolog registration, the dispatch kind
+%for a Python one, and the name it specializes for a specialization, which is
+%what a reader wants next [tested: lib_reflect_origin].
 'engine-origin'(Name, Origin) :-
     (   builtin_fun(Name)
     ->  Origin = [builtin]
     ;   metta_function_origin(Name, Tier, Detail)
     ->  Origin = [Tier, Detail]
+    ;   specializer:ho_specialization(_, Base, Name)
+    ->  Origin = [specialization, Base]
     ;   fun(Name)
     ->  ( fun_in(Module, Name) -> Origin = [equation, Module] ; Origin = [equation] )
     ;   special_form_head(Name)

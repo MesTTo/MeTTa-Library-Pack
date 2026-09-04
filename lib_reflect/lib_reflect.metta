@@ -52,9 +52,17 @@
 (= (knows? $name) (engine-knows $name))
 
 ;Where a name came from: (builtin), (special-form), (prolog "file.pl"),
-;(python det), or (equation <module>). A flat list of function names cannot
-;tell an equation from a registered Prolog predicate, which is the question a
-;collision raises and the one a library asks to verify its own installation.
+;(python det), (specialization <name>), or (equation <module>). A flat list of
+;function names cannot tell an equation from a registered Prolog predicate,
+;which is the question a collision raises and the one a library asks to verify
+;its own installation.
+;
+;(specialization <name>) is the one the ENGINE wrote. Evaluating a
+;higher-order call stores a generated equation under a name like
+;twice_Spec_[inc], and those atoms save and digest like any other, so a tool
+;showing a program what it holds had no way to tell them from source and
+;presented engine bookkeeping as the program. The detail is the name being
+;specialized, which is what a reader wants next.
 (: origin-of (-> %Undefined% Expression))
 (= (origin-of $name) (engine-origin $name))
 
