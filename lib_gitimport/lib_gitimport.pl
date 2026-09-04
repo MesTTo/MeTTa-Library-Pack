@@ -43,6 +43,10 @@
     'git-import!'(Url, Build, './repos', _).
 'git-import!'(Url0, Build0, Base0, true) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
+    %The revision needs no such check: git_validate_sha/3 already
+    %requires exactly 40 hexadecimal characters, which no hyphen passes.
+    git_refuse_option_like(url, Url),
+    git_refuse_option_like(build, Build),
     acquire_unpinned_repository('git-import!', Url, Build, Base,
                                 Name, LocalDir),
     register_git_library_path(Name, LocalDir).
@@ -58,6 +62,10 @@
 %[tested: tests/shell/test_git_import.sh].
 'git-import!'(Url0, Build0, Base0, Rev0, true) :-
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
+    %The revision needs no such check: git_validate_sha/3 already
+    %requires exactly 40 hexadecimal characters, which no hyphen passes.
+    git_refuse_option_like(url, Url),
+    git_refuse_option_like(build, Build),
     git_validate_sha('git-import!', Rev0, Rev),
     acquire_pinned_repository('git-import!', Url, Build, Base, Rev,
                               Name, LocalDir),
@@ -75,6 +83,10 @@ acquire_git_declaration([Url, Rev, Build]) :- !,
     acquire_git_declaration([Url, Rev, Build, "./repos"]).
 acquire_git_declaration([Url0, Rev0, Build0, Base0]) :- !,
     maplist(git_atom, [Url0, Build0, Base0], [Url, Build, Base]),
+    %The revision needs no such check: git_validate_sha/3 already
+    %requires exactly 40 hexadecimal characters, which no hyphen passes.
+    git_refuse_option_like(url, Url),
+    git_refuse_option_like(build, Build),
     git_validate_sha('git-dependency', Rev0, Rev),
     acquire_git_dependency(Url, Rev, Build, Base).
 acquire_git_declaration(Args) :-
@@ -157,7 +169,7 @@ acquire_unpinned_locked(Context, Url, Build, Base, Name, LocalDir) :-
          setup_call_cleanup(
              true,
              ( git_process(Context, 'clone repository', path(git),
-                           [clone, '--depth', '1', Url, StagingDir], []),
+                           [clone, '--depth', '1', '--', Url, StagingDir], []),
                git_output(Context, 'resolve current HEAD', StagingDir,
                           ['rev-parse', '--verify', 'HEAD^{commit}'], Head),
                ensure_git_build(Context, StagingDir, Head, Build),
@@ -195,7 +207,7 @@ acquire_pinned_locked(Context, Url, Build, Base, Name, LocalDir, Rev) :-
          setup_call_cleanup(
              true,
              ( git_process(Context, 'clone repository', path(git),
-                           [clone, '--no-checkout', Url, StagingDir], []),
+                           [clone, '--no-checkout', '--', Url, StagingDir], []),
                fetch_git_commit(Context, StagingDir, Rev),
                checkout_git_commit(Context, StagingDir, Rev),
                verify_git_head(Context, StagingDir, Rev),
@@ -229,6 +241,31 @@ git_hex_code(Code) :- between(0'A, 0'F, Code).
 git_atom(Value, Atom) :- atom(Value), !, Atom = Value.
 git_atom(Value, Atom) :- string(Value), !, atom_string(Atom, Value).
 git_atom(Value, _) :- throw(error(type_error(text, Value), none)).
+
+%A value beginning with `-` is parsed by git as an OPTION rather than as the
+%repository or revision it stands in for. Measured against git's own parser:
+%`git clone --depth 1 --no-such-option d` answers "unknown option", and fetch,
+%checkout and cat-file answer the same for a dash-leading positional.
+%
+%The `--` terminator is the documented remedy and it is applied below where git
+%accepts it, in `clone` and `fetch`, but it CANNOT be the whole answer: for
+%`git checkout` the same token introduces PATHS rather than ending options, so
+%adding it there would change what the command means. Refusing the leading dash
+%covers every subcommand and does not depend on which of them terminates.
+%
+%Nothing legitimate is excluded. A repository URL is a scheme, a host or a
+%path; a revision is a hash, a ref or a name; a build script is a filename.
+%None of the three begins with a hyphen.
+git_refuse_option_like(Position, Value) :-
+    (   atom(Value),
+        atom_concat('-', _, Value)
+    ->  throw(error(domain_error(git_option_like_argument, Value),
+                    context(Position,
+                            'a leading hyphen makes this parse as a git \c
+                             option rather than as the value; give the value \c
+                             without it, or write ./NAME for a local path')))
+    ;   true
+    ).
 
 create_staging_directory(_Context, Base, Name, StagingRoot) :-
     between(1, 100, _),
@@ -283,7 +320,7 @@ ensure_tracked_checkout_clean(Context, LocalDir) :-
 
 fetch_git_commit(Context, LocalDir, Rev) :-
     git_process(Context, 'fetch requested commit', path(git),
-                [fetch, '--no-tags', origin, Rev], [cwd(LocalDir)]),
+                [fetch, '--no-tags', '--', origin, Rev], [cwd(LocalDir)]),
     atom_concat(Rev, '^{commit}', CommitObject),
     git_process(Context, 'resolve requested commit object', path(git),
                 ['cat-file', '-e', CommitObject], [cwd(LocalDir)]).
