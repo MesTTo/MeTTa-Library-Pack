@@ -1023,9 +1023,18 @@ get_freq(Fun, Module, Arity, AVs, Freq) :-
         ; Freq = 0 )
         ).
 
+%ensure_cms FIRST, as record_miss already does. Without it a thread that only
+%ever HITS never built a sketch, so this fell to the `; true` arm and recorded
+%nothing, for ever. That thread is not hypothetical: metta_memo_entry/6 is
+%`dynamic` and therefore SHARED across threads, while the sketch lives in
+%nb_setval and is THREAD-LOCAL, so a worker reading a cache another thread
+%warmed hits constantly and misses never. Measured before this line existed:
+%main thread 1 miss and 20 hits reported frequency 21, while a worker doing 20
+%hits on the same key in the same shared cache reported 0.
 record_hit(Fun, Module, Arity, AVs) :-
     with_cms_mutex(
-        ( catch(nb_current('$metta_memo_cms', CMS), _, fail)
+        ( ensure_cms,
+          catch(nb_current('$metta_memo_cms', CMS), _, fail)
         -> ( catch(nb_current('$metta_memo_cms_size', SketchSize), _, fail)
             -> true
             ; functor(CMS, _, SketchSize) ),
