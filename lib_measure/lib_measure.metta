@@ -37,12 +37,40 @@
 
 ;Softmax with a temperature: scores become a distribution. Low temperature
 ;sharpens toward the best pair, high temperature flattens toward uniform.
+;
+;THE PEAK IS SUBTRACTED BEFORE EXPONENTIATING, which is what makes this
+;usable on scores a network produced rather than only on a hand-written
+;table. Softmax is invariant to a constant shift, so no answer in the safe
+;range moves; outside it, exponentiating directly broke at BOTH ends, and
+;the two failures look nothing alike:
+;
+;  (ws-softmax ((1000.0 a) (1001.0 b)) 1.0)     ((NaN a) (NaN b))
+;  (ws-softmax ((-1000.0 a) (-1001.0 b)) 1.0)   (Error ... "nonzero total mass")
+;
+;Both are the same one-unit gap that answers (0.2689 0.7311) at small
+;scores. After the shift the largest term is exp(0) exactly, so the mass is
+;never zero and never overflows [measured 2026-09-04; the standard remedy,
+;the one scipy.special.softmax and every array library apply].
+;
+;The shift is taken AFTER the division, on the scaled scores, so it holds
+;for a negative temperature too: what has to be bounded is the exponent, and
+;dividing by a negative temperature reverses which score produces the
+;largest one.
+(= (ws-peak $ps)
+   (let ($h $t) (decons-atom $ps)
+     (index-atom (foldl-atom $t $h ws-pickmax) 0)))
 (= (ws-softmax $ps $temp)
    (if (<= (abs-math $temp) 0.0)
        (Error $ps "ws-softmax requires a nonzero temperature")
-       (ws-normalize
-         (map-atom $ps (|-> ($p) ((exp-math (/ (index-atom $p 0) $temp))
-                                  (index-atom $p 1)))))))
+       (if (== $ps ())
+           ()
+           (let $scaled (map-atom $ps (|-> ($p) ((/ (index-atom $p 0) $temp)
+                                                 (index-atom $p 1))))
+             (let $peak (ws-peak $scaled)
+               (ws-normalize
+                 (map-atom $scaled
+                   (|-> ($p) ((exp-math (- (index-atom $p 0) $peak))
+                              (index-atom $p 1))))))))))
 
 ;The pair with more weight, then the best value; the temperature-zero limit:
 (= (ws-pickmax $a $b) (if (>= (index-atom $a 0) (index-atom $b 0)) $a $b))
