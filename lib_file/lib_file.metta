@@ -1,5 +1,5 @@
 ; Purpose: expose text files, directories, lexical paths and standard streams.
-; [tested: lib_file_surface; commit=WORKTREE]
+; [tested: lib_file_surface; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 ;Files. The handle-based half is MeTTa HE's surface exactly, names, argument
 ;order and option letters, because HE already specified it.
 ;

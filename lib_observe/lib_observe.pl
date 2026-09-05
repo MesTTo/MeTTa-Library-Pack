@@ -2,7 +2,7 @@
 % Owns resources: the result space belongs to the caller; a failed publication
 %   releases its space before propagating the failure.
 % Guarantees: trace-source records selected functions before applying recording
-%   bounds [tested: lib_observe:filtered_events_are_queryable; commit=WORKTREE].
+%   bounds [tested: lib_observe:filtered_events_are_queryable; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce].
 
 :- use_module('../../engine/tracer', [metta_trace_source/6]).
 :- use_module('../../engine/spaces', [metta_add_atoms/2, metta_release_space/1]).

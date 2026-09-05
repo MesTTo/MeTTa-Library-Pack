@@ -261,7 +261,7 @@ entry_to_string(Name, Text) :- atom_string(Name, Text).
 
 % Path operations use SWI's lexical POSIX path convention. No filesystem
 % lookup occurs, including for nonexistent paths and dot components.
-% [tested: lib_file_surface:lexical_paths; commit=WORKTREE]
+% [tested: lib_file_surface:lexical_paths; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 'path-join'(Directory, Name, Path) :-
     metta_text(Directory, DirectoryText),
     metta_text(Name, NameText),
@@ -301,7 +301,7 @@ entry_to_string(Name, Text) :- atom_string(Name, Text).
 % tmp_file/2 supplies a name only; no guessed filename is opened for writing.
 % The destination changes only after both binary streams close successfully.
 % [tested: lib_file_surface:copy_is_binary_and_replaces_only_after_success,
-% lib_file_surface:failed_copy_preserves_destination; commit=WORKTREE]
+% lib_file_surface:failed_copy_preserves_destination; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 'copy-file!'(Source, Destination, true) :-
     metta_text(Source, From),
     metta_text(Destination, To),
@@ -336,7 +336,7 @@ metta_copy_bytes(From, Stage) :-
 
 % Read all metadata before allocating the snapshot. A failed stat never
 % leaves a partly populated space behind.
-% [tested: lib_file_surface:metadata_is_queryable; commit=WORKTREE]
+% [tested: lib_file_surface:metadata_is_queryable; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 'file-metadata!'(Path, Space) :-
     metta_text(Path, Text),
     catch(metta_file_metadata(Text, Rows), Error,
@@ -355,7 +355,7 @@ metta_file_metadata(Path, Rows) :-
 
 % Standard stream aliases follow the host's redirections and remain owned
 % by the process. These operations never close them.
-% [tested: test_standard_streams_and_explicit_exit; commit=WORKTREE]
+% [tested: test_standard_streams_and_explicit_exit; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 'stderr!'(Content, true) :-
     metta_text(Content, Text),
     catch((write(user_error, Text), flush_output(user_error)), Error,
@@ -367,7 +367,7 @@ metta_file_metadata(Path, Rows) :-
 
 % This is process termination, including when embedded. SWI halt's unwind
 % cannot be used as a catchable application-level return protocol.
-% [tested: test_exit_is_process_termination_even_inside_catch; commit=WORKTREE]
+% [tested: test_exit_is_process_termination_even_inside_catch; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 'exit!'(Status, _) :-
     (   integer(Status), between(0, 255, Status)
     ->  halt(Status)

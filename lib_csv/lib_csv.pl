@@ -2,14 +2,14 @@
 % Assumes: lib_csv.metta imports this file into the engine's owning module.
 % Guarantees: each scan streams records, preserves field text, and refuses
 % malformed records with their logical record number and a remedy.
-% [tested: lib_csv; commit=WORKTREE]
+% [tested: lib_csv; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 % Owns resources: each scan owns one stream, released on exhaustion, cut, or
 % exception by setup_call_cleanup/3; a space descriptor owns no resource.
-% [tested: lib_csv:cut_and_error_release_the_stream; commit=WORKTREE]
+% [tested: lib_csv:cut_and_error_release_the_stream; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 % Guarded by: no mutable registry; each enumeration has independent state.
 % Decides: comma separator, UTF-8, quoted fields, literal field text, and
 % equal row widths; the first record is data, including a header if present.
-% [tested: lib_csv:text_and_quoting, lib_csv:ragged_rows; commit=WORKTREE]
+% [tested: lib_csv:text_and_quoting, lib_csv:ragged_rows; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 
 :- use_module(library(csv)).
 :- use_module(library(error)).
