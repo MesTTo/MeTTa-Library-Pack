@@ -35,10 +35,10 @@
   (file-open! file-read-to-string! file-read-exact! file-write!
    file-seek! file-get-size! file-close!
    read-file! write-file! append-file! file-lines! file-space!
-   delete-file! temp-path! list-dir! file-exists dir-exists
+   delete-file! temp-path! temp-dir! list-dir! file-exists dir-exists
    make-dir! delete-dir! copy-file! file-metadata!
    path-join path-parent path-name path-extension
-   stderr! stdin-to-string! exit!))
+   stdin stdout stderr stderr! stdin-to-string! exit!))
 
 ; make-dir! creates missing parents. delete-dir! removes an empty directory.
 ; copy-file! copies bytes to a destination filename, replacing an existing
@@ -47,8 +47,17 @@
 ; file-metadata! creates a snapshot space with (kind file|directory),
 ; (modified UnixSeconds), and (size Bytes) for files.
 ; path operations are lexical and follow SWI's POSIX path conventions.
+; temp-dir! mints a fresh directory the way temp-path! mints a fresh file, so
+; a caller who needs somewhere to put files does not derive one from a
+; temporary FILE name. A prefix names the directory and may not contain a
+; separator.
 ; stderr! writes exactly the supplied text. stdin-to-string! consumes stdin
 ; through EOF. Neither closes the process-owned standard stream.
+; (stdin), (stdout) and (stderr) are the same three streams as HANDLES, POSIX's
+; numbers 0, 1 and 2, so every handle operation reaches them: file-write! on
+; (stdout) writes without a newline, and (file-read-to-string! (stdin)) is the
+; longhand stdin-to-string! is the short spelling of. They are a spelling, not
+; a second mechanism. file-close! refuses all three; the process owns them.
 ; exit! terminates the ENTIRE PROCESS with status 0 through 255, including
 ; an embedding host. MeTTa catch does not turn exit into a local return.
 
@@ -60,6 +69,10 @@
 (@doc path-parent (@desc "Lexical parent directory; a bare filename has parent dot") (@params ((@param "path"))) (@return "String"))
 (@doc path-name (@desc "Lexical final path component") (@params ((@param "path"))) (@return "String"))
 (@doc path-extension (@desc "Text after the final dot in the filename, without the dot; empty when absent") (@params ((@param "path"))) (@return "String"))
+(@doc temp-dir! (@desc "A unique fresh directory in the system temporary directory, created exclusively so concurrent runners cannot mint the same name; the caller owns it and removes it with delete-dir!") (@params ((@param "a name prefix, which may not contain a path separator"))) (@return "String"))
+(@doc stdin (@desc "The handle for standard input, which is 0; every handle operation takes it, so (file-read-to-string! (stdin)) reads standard input through EOF") (@return "Number"))
+(@doc stdout (@desc "The handle for standard output, which is 1; (file-write! (stdout) $text) writes without a newline") (@return "Number"))
+(@doc stderr (@desc "The handle for standard error, which is 2; (file-write! (stderr) $text) is stderr! reached through the handle surface") (@return "Number"))
 (@doc stderr! (@desc "Write text to stderr and flush, without adding a newline") (@params ((@param "text"))) (@return "Bool"))
 (@doc stdin-to-string! (@desc "Consume standard input through EOF as UTF-8 text") (@return "String"))
 (@doc exit! (@desc "Terminate the entire process with integer status 0 through 255; not an application-level return") (@params ((@param "process status"))))

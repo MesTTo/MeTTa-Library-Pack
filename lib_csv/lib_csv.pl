@@ -22,11 +22,58 @@
 'csv-space'(Path, Space) :-
     must_be(text, Path),
     catch(absolute_file_name(Path, Absolute, [access(none), file_errors(error)]),
-          Error, csv_file_error(Path, Error)),
+          Error, csv_file_error('csv-space', Path, Error)),
     % Opening checks permissions and rejects directories now. No descriptor
     % survives the validation call, and each later scan reopens the path.
-    setup_call_cleanup(csv_open(Absolute, Stream), true, close(Stream)),
+    setup_call_cleanup(csv_open('csv-space', Absolute, Stream), true, close(Stream)),
     atom_concat('&csv:', Absolute, Space).
+
+% The snapshot door. csv-space is a live VIEW: it holds no rows, every query
+% reopens and reparses the file, and later queries see later contents. This
+% reads the file ONCE into a native space, so repeated queries pay one parse
+% between them and the rows do not move underneath a program.
+%
+% The record NUMBER comes with the snapshot rather than being a second choice.
+% A space is unordered, so without it a space of rows can neither say which
+% record came first nor skip a header; and a number is only an IDENTITY once
+% the rows are fixed, which is exactly what a snapshot fixes. That pairing is
+% file-space!'s, whose (line Number Text) atoms are the same shape one level
+% down.
+%
+% csv-space's (row Field...) is left alone. Its shape is a shipped semantics
+% with an example, a suite and a reference page reading (row $id $amount) as a
+% relation, and a leading number would put a $_ in every one of those queries.
+'csv-snapshot!'(Path, Space) :-
+    must_be(text, Path),
+    catch(absolute_file_name(Path, Absolute, [access(none), file_errors(error)]),
+          Error, csv_file_error('csv-snapshot!', Path, Error)),
+    csv_options(Options, [convert(false)]),
+    setup_call_cleanup(csv_open('csv-snapshot!', Absolute, Stream),
+                       csv_snapshot_rows(Stream, Absolute, Options, 1, Rows),
+                       close(Stream)),
+    'new-space'(Space),
+    catch(spaces:metta_add_atoms(Space, Rows), AddError,
+          ( spaces:metta_release_space(Space), throw(AddError) )).
+
+% One pass, the same reader csv_atoms/5 pulls with and the same refusals, with
+% the record number kept rather than only counted. Reading the whole file with
+% csv_read_file/3 would parse it once too, but a malformed record would raise
+% without the number that names it.
+csv_snapshot_rows(Stream, Path, Options, Number, Rows) :-
+    catch(( csv_read_row(Stream, Row, Options)
+          -> true
+          ;  throw(error(csv_malformed_row(Path, Number, invalid_quoting),
+                         context('csv-snapshot!',
+                                 'close quoted fields and double embedded quotes'))) ),
+          Error, csv_row_error('csv-snapshot!', Path, Number, Error)),
+    (   Row == end_of_file
+    ->  Rows = []
+    ;   Row =.. [row|Fields],
+        maplist(atom_string, Fields, Strings),
+        Rows = [[row, Number | Strings] | Rest],
+        Next is Number + 1,
+        csv_snapshot_rows(Stream, Path, Options, Next, Rest)
+    ).
 
 csv_owns_space(Space) :-
     atom(Space),
@@ -49,13 +96,13 @@ seam:foreign_atoms(Space, Atom) :-
     % https://github.com/SWI-Prolog/swipl-devel/blob/V10.0.0/library/csv.pl
     % One compiled options record retains the first row's width across pulls.
     csv_options(Options, [convert(false)]),
-    setup_call_cleanup(csv_open(Path, Stream),
+    setup_call_cleanup(csv_open('csv-space', Path, Stream),
                        csv_atoms(Stream, Path, Options, 1, Atom),
                        close(Stream)).
 
-csv_open(Path, Stream) :-
+csv_open(Caller, Path, Stream) :-
     catch(open(Path, read, Stream, [encoding(utf8)]),
-          Error, csv_file_error(Path, Error)).
+          Error, csv_file_error(Caller, Path, Error)).
 
 csv_atoms(Stream, Path, Options, Number, Atom) :-
     catch(( csv_read_row(Stream, Row, Options)
@@ -63,7 +110,7 @@ csv_atoms(Stream, Path, Options, Number, Atom) :-
           ;  throw(error(csv_malformed_row(Path, Number, invalid_quoting),
                          context('csv-space',
                                  'close quoted fields and double embedded quotes'))) ),
-          Error, csv_row_error(Path, Number, Error)),
+          Error, csv_row_error('csv-space', Path, Number, Error)),
     Row \== end_of_file,
     (   Row =.. [row|Fields],
         maplist(atom_string, Fields, Strings),
@@ -72,26 +119,28 @@ csv_atoms(Stream, Path, Options, Number, Atom) :-
         csv_atoms(Stream, Path, Options, Next, Atom)
     ).
 
-csv_row_error(Path, Number, error(domain_error(row_arity(Expected), Actual), _)) :-
+% Both funnels carry the CALLER, so a refusal names the door the program used.
+% Every csv-space call site passes 'csv-space', so its messages are unchanged.
+csv_row_error(Caller, Path, Number, error(domain_error(row_arity(Expected), Actual), _)) :-
     !,
     throw(error(csv_malformed_row(Path, Number, width(Expected, Actual)),
-                context('csv-space',
+                context(Caller,
                         'make every record contain the same number of fields as the first'))).
-csv_row_error(Path, _, Error) :- csv_file_error(Path, Error).
+csv_row_error(Caller, Path, _, Error) :- csv_file_error(Caller, Path, Error).
 
-csv_file_error(Path, error(existence_error(_, _), _)) :-
+csv_file_error(Caller, Path, error(existence_error(_, _), _)) :-
     !,
     throw(error(csv_file_missing(Path),
-                context('csv-space', 'create the CSV file or correct its path'))).
-csv_file_error(Path, error(permission_error(_, _, _), _)) :-
+                context(Caller, 'create the CSV file or correct its path'))).
+csv_file_error(Caller, Path, error(permission_error(_, _, _), _)) :-
     !,
     throw(error(csv_permission_denied(Path),
-                context('csv-space', 'grant read permission to a regular CSV file and search permission to its directories'))).
-csv_file_error(Path, error(io_error(Action, _), _)) :-
+                context(Caller, 'grant read permission to a regular CSV file and search permission to its directories'))).
+csv_file_error(Caller, Path, error(io_error(Action, _), _)) :-
     !,
     throw(error(csv_io_error(Path, Action),
-                context('csv-space', 'check the file and storage device, then retry the query'))).
-csv_file_error(_, Error) :- throw(Error).
+                context(Caller, 'check the file and storage device, then retry the query'))).
+csv_file_error(_, _, Error) :- throw(Error).
 
 :- multifile prolog:error_message//1.
 prolog:error_message(csv_file_missing(Path)) -->

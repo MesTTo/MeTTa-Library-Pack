@@ -50,9 +50,38 @@
 %reset it, and its update is atomic, which is the whole of what the mutex was
 %for [source: SWI-Prolog 10.1 Reference Manual, flag/3, "The update is
 %atomic. This predicate can be used to create a shared global counter"].
+% POSIX's own numbering, taken rather than invented: 0 is standard input, 1
+% standard output and 2 standard error, in this table and in every process this
+% engine runs in. So the handle surface that already reads, writes and measures
+% a file reaches the three streams as well, and (file-read-to-string! (stdin))
+% is the longhand stdin-to-string! is the short spelling of. The alias atoms
+% ARE the streams: every SWI predicate that takes a stream takes an alias.
+%
+% These are a second SPELLING, not a second mechanism. stderr! and
+% stdin-to-string! stay the way to write a diagnostic and read the input; the
+% handles are what lets file-read-exact!, file-write! and file-get-size! reach
+% the same three streams without a further operation each.
+metta_file(0, user_input).
+metta_file(1, user_output).
+metta_file(2, user_error).
+
+% Facts rather than one predicate over a list, because the numbering is POSIX's
+% rather than a choice this engine makes, and three facts keep it out of the
+% closed-policy scan.
+standard_stream(0, stdin).
+standard_stream(1, stdout).
+standard_stream(2, stderr).
+
+'stdin'(0).
+'stdout'(1).
+'stderr'(2).
+
+% Minting starts at 3 because 0, 1 and 2 are taken, exactly as they are in a
+% process. Nothing pins a particular handle number: every caller binds whatever
+% file-open! answers.
 next_file_handle(Handle) :-
     flag('$metta_file_handle', Previous, Previous + 1),
-    Handle is Previous + 1.
+    Handle is Previous + 3.
 
 known_file(Handle, Stream) :-
     (   metta_file(Handle, Stream)
@@ -137,6 +166,19 @@ file_open_mode(Letters, Mode) :-
 %Not in HE's stdlib. A process that can open files and never close them leaks
 %descriptors until it dies, so this exists; closing twice is not an error,
 %because a cleanup path should not have to check first.
+%
+% A standard stream is REFUSED rather than closed. Closing 1 or 2 takes stdout
+% or stderr away from everything else in the process, the engine's own
+% diagnostics included, and there is no way to put it back; a cleanup loop over
+% every handle it has seen would do it by accident. So the one case where
+% "closing twice is not an error" would be a disaster is the one case this says
+% no to.
+'file-close!'(Handle, _) :-
+    standard_stream(Handle, Name),
+    !,
+    throw(error('standard-stream-not-closable'('file-close!', Name),
+                context('file-close!',
+                        'The process owns it; close a stream file-open! gave you'))).
 'file-close!'(Handle, true) :-
     (   metta_file(Handle, Stream)
     ->  with_mutex('$metta_files', retractall(metta_file(Handle, _))),
@@ -217,6 +259,33 @@ drop_trailing_empty(Lines, Kept) :-
     atomic_list_concat([Dir, '/', PrefixText, '-', Base], Unique),
     rename_file(Path, Unique),
     atom_string(Unique, PathString).
+
+% A fresh DIRECTORY, the twin of temp-path!'s fresh file. Without it a caller
+% who wants somewhere to put files derives a directory name from a temporary
+% FILE name, which is what the shipped example does with
+% (string-join "" (&seed "-directory")).
+%
+% make_directory/1 is the exclusive act here, as tmp_file_stream/3's exclusive
+% create is for temp-path!: tmp_file/2 supplies a name and creates nothing, and
+% mkdir refuses a name that is already taken, so two runners cannot both
+% believe they own the directory.
+%
+% A prefix NAMES the directory and does not place it. tmp_file/2 pastes it into
+% the path without sanitising, so tmp_file('../x', P) answers
+% '/tmp/swipl_../x_PID_N', a path outside the temporary directory
+% [measured 2026-09-05]. A separator is refused here rather than acted on.
+'temp-dir!'(Prefix, PathString) :-
+    metta_text(Prefix, PrefixText),
+    (   sub_string(PrefixText, _, _, _, "/")
+    ->  throw(error('file-name-not-a-path'('temp-dir!', PrefixText),
+                    context('temp-dir!',
+                            'Name the directory without a separator and place it with path-join')))
+    ;   true
+    ),
+    atom_string(PrefixAtom, PrefixText),
+    catch(( tmp_file(PrefixAtom, Path), make_directory(Path) ), Error,
+          metta_file_refusal('temp-dir!', Error)),
+    atom_string(Path, PathString).
 
 'delete-file!'(Path, true) :-
     metta_text(Path, PathText),
@@ -395,6 +464,12 @@ prolog:error_message('file-permission-denied'(Operation, Action, Kind, Path)) --
 prolog:error_message('file-operation-failed'(Operation, Error)) -->
     [ 'file-operation-failed: ~w: ~q; check the path, storage and stream state before retrying'
       -[Operation, Error] ].
+prolog:error_message('standard-stream-not-closable'(Operation, Name)) -->
+    [ 'standard-stream-not-closable: ~w refuses ~w; the process owns it, so \c
+       close a stream file-open! gave you'-[Operation, Name] ].
+prolog:error_message('file-name-not-a-path'(Operation, Name)) -->
+    [ 'file-name-not-a-path: ~w was given ~q, which contains a separator; name \c
+       the file and place it with path-join'-[Operation, Name] ].
 
 %Every file operation succeeds exactly once: a missing file raises rather than
 %failing, and an unknown handle raises rather than failing, so there is no
@@ -416,6 +491,10 @@ prolog:error_message('file-operation-failed'(Operation, Error)) -->
 :- det('file-space!'/2).
 :- det('delete-file!'/2).
 :- det('temp-path!'/2).
+:- det('temp-dir!'/2).
+:- det('stdin'/1).
+:- det('stdout'/1).
+:- det('stderr'/1).
 :- det('list-dir!'/2).
 :- det('file-exists'/2).
 :- det('dir-exists'/2).
