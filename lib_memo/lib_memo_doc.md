@@ -7,8 +7,10 @@ non-ground calls by variant, and caches every answer rather than the first.
 Pure recursive definitions are considered automatically. A recursive strongly
 connected component is selected when one equation body calls that component at
 least twice; a single recursive call has no repeated subproblem and stays
-uncached. The effect walk remains a hard gate, so a function that writes state,
-prints, or reads a space is never selected automatically.
+uncached. Choosing a cache nobody asked for is the one place this library
+judges a body for itself, so a function that writes state, prints, or reads a
+space is not selected automatically. A written declaration is a different
+thing and is never judged.
 
 ```metta
 (= (fib-shape $n)
@@ -35,9 +37,13 @@ Overrides are catalog declarations in `&metta`, not process flags:
 !(add-atom &metta (cache branching-search refuse))
 ```
 
-`force` bypasses only the repeated-call profitability rule. It cannot make an
-impure function cacheable. `refuse` disables an automatic choice. Remove the
-declaration to return to the automatic rule:
+`force` is the developer answering the question the automatic rule was asking,
+so it overrides both halves of it: the repeated-call profitability rule and the
+effect analysis, including a `volatile` export, an impure body and a body that
+reads a space. It does not open the two grounds that are not about the body at
+all, an existing SWI table on the predicate and a bounded-search body, because
+neither is a cache this library can build on anyone's word. `refuse` disables
+an automatic choice. Remove the declaration to return to the automatic rule:
 
 ```metta
 !(remove-atom &metta (cache branching-search refuse))
@@ -53,19 +59,21 @@ substrates never stack on one function.
 !(memoize fib)
 !(memoize fib 1) ; only memoize fib with one input argument
 ```
-An annotated arrow is also an author declaration about cache admission.
-`(: w (-[det,writesState]-> Number Number))` refuses memoization even if the
-body returns its argument. An explicit effect above `pureStructural` also
-outranks `(cache w unchecked)`. `nondet` in an arrow raises the effect to at
-least `nondeterministicReadOnly`, so that explicit product refuses caching too.
-Plain definitions retain the existing body analysis and answer-bag memoization.
-A late annotation that conflicts with an enabled cache is refused, naming the
-cached function. Remove that definition before loading the annotation;
+`!(memoize f)` is honoured as written, whatever `f` does. A body that prints,
+writes a space, reads a space, calls a `writesState` operation or carries an
+annotated arrow such as `(: w (-[det,writesState]-> Number Number))` is
+memoized on the declaration alone; there is no second atom to add and no
+analysis to satisfy. Whether the cache belongs there is the program's own
+decision, and one put in the wrong place is a bug in the program that put it
+there. An annotation arriving after the cache is live does not withdraw it, and
 `clear-memoize` clears entries but keeps memoization enabled. Removing the last
 equation retires that space's memoization, including when another space still
 defines the same name.
-Forward memo declarations are validated when their bodies compile. A caller
-cannot suppress an annotated dependency by declaring its cache unchecked.
+
+Two things `memoize` still refuses, and neither is about the body: a name no
+function answers to (there are no equations to recompile), and any name where
+the mechanism cannot be built. `(cache f refuse)` is separate again: it is the
+program declining the automatic cache, not this library declining a request.
 
 ### Check status
 ```metta
