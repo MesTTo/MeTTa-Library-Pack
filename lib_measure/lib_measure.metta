@@ -29,7 +29,7 @@
 ;Math applies those same validity checks before normalizing an enumerated PMF;
 ;equal outcomes are additionally collapsed here because this representation is
 ;the PMF itself, not a separate list of samples.
-;[source: https://github.com/apache/commons-math/blob/7bc81e97e91d3a988e4e569e31b77909af884be1/commons-math-legacy/src/main/java/org/apache/commons/math4/legacy/distribution/EnumeratedDistribution.java#L66-L102; commit=WORKTREE]
+;[source: https://github.com/apache/commons-math/blob/7bc81e97e91d3a988e4e569e31b77909af884be1/commons-math-legacy/src/main/java/org/apache/commons/math4/legacy/distribution/EnumeratedDistribution.java#L66-L102; commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6]
 ;
 ;Collapse retains the first occurrence of each value. Zero-weight rows carry no
 ;support and are removed. A mass already equal to one is returned without a

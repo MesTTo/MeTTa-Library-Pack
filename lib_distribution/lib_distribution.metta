@@ -9,7 +9,7 @@
 ;   test_independent_marginals_and_a_correlated_joint_are_not_interchangeable,
 ;   test_operations_preserve_the_normalization_refusal,
 ;   examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/12-distribution.metta;
-;   commit=WORKTREE].
+;   commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6].
 ; Fails when: an input is empty, has a negative or nonfinite weight, or has no
 ;   positive mass; each refusal names a remedy.
 ; Decides: "at least" is inclusive, comparison means strict independent win
@@ -39,13 +39,13 @@
 ;The push-forward of the product of TWO INDEPENDENT distributions. NumPy's
 ;convolution contract identifies the same construction for addition: the sum
 ;of independent random variables has the convolution of their distributions.
-;[source: https://github.com/numpy/numpy/blob/2f7fe64b8b6d7591dd208942f1cc74473d5db4cb/numpy/_core/numeric.py#L793-L801; commit=WORKTREE]
+;[source: https://github.com/numpy/numpy/blob/2f7fe64b8b6d7591dd208942f1cc74473d5db4cb/numpy/_core/numeric.py#L793-L801; commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6]
 ;ProbLog's probability semiring and Scallop's add-multiply probability
 ;provenance both add alternative weights and multiply combined weights.
-;[source: https://github.com/ML-KULeuven/problog/blob/168f0399543f32506253fd9f7774dd8aa1222be8/problog/evaluator.py#L184-L209 and https://github.com/scallop-lang/scallop/blob/668bfb6d45ce302fd4ffa7f29916baf3c7ce36ef/core/src/runtime/provenance/probabilistic/add_mult_prob.rs#L48-L62; commit=WORKTREE]
+;[source: https://github.com/ML-KULeuven/problog/blob/168f0399543f32506253fd9f7774dd8aa1222be8/problog/evaluator.py#L184-L209 and https://github.com/scallop-lang/scallop/blob/668bfb6d45ce302fd4ffa7f29916baf3c7ce36ef/core/src/runtime/provenance/probabilistic/add_mult_prob.rs#L48-L62; commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6]
 ;PRISM makes the preconditions explicit: product is for independent switch
 ;instances, while sum is for mutually exclusive explanations.
-;[source: https://rjida.meijo-u.ac.jp/prism/download/prism23.pdf, PDF page 20, sha256=7998dda53cdcfb713228dff497eaef59e7cc4608a712a42683aa83a9cb6b36e3; commit=WORKTREE]
+;[source: https://rjida.meijo-u.ac.jp/prism/download/prism23.pdf, PDF page 20, sha256=7998dda53cdcfb713228dff497eaef59e7cc4608a712a42683aa83a9cb6b36e3; commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6]
 ;
 ;The name carries the assumption because marginals cannot reveal correlation.
 ;Rows are visited left-major, then right-major, and equal outputs merge at the
@@ -78,7 +78,7 @@
 ;named for its meaning rather than "compare": stochastic dominance compares
 ;all thresholds, total variation is a symmetric distance, and expectation
 ;ordering discards the rest of each distribution.
-;[source: https://github.com/rTreutlein/PeTTaChainer/blob/b0e24f9b9d7106ccabf51917f1703abf3ab8c570/pettachainer/metta/dist_formulas.metta#L296-L310; commit=WORKTREE]
+;[source: https://github.com/rTreutlein/PeTTaChainer/blob/b0e24f9b9d7106ccabf51917f1703abf3ab8c570/pettachainer/metta/dist_formulas.metta#L296-L310; commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6]
 (= (ws-prob-gt-independent $left $right)
    (ws-expect
      (ws-map2-independent
@@ -124,7 +124,7 @@
 ;derivation weights are deliberately not accepted here. PeTTaChainer uses the
 ;same two-branch additive update, but derives p from an STV; this surface keeps
 ;those questions separate.
-;[source: https://github.com/rTreutlein/PeTTaChainer/blob/b0e24f9b9d7106ccabf51917f1703abf3ab8c570/pettachainer/metta/dist_formulas.metta#L423-L452; commit=WORKTREE]
+;[source: https://github.com/rTreutlein/PeTTaChainer/blob/b0e24f9b9d7106ccabf51917f1703abf3ab8c570/pettachainer/metta/dist_formulas.metta#L423-L452; commit=f99382c5b4127b49de6e0a6e355d50eda39c5df6]
 (= (ws-add-bernoulli-independent $ps $p)
    (if (or (isnan-math $p)
            (or (isinf-math $p) (or (< $p 0.0) (> $p 1.0))))
