@@ -519,6 +519,18 @@ memo_automatic_reconcile_dirty :-
 %Compute every dirty module before changing any dispatch. Then publish the
 %whole new state before recompiling a name, so mutually recursive members see
 %one another enabled whichever component order Tarjan returned.
+%
+%The recompile follows the MODULE whose decision moved, and the plan already
+%knows it: memo_automatic_enabled/2 is per module and per name, and a call
+%site reads the decision of the module its callee resolves in
+%(memo_owner_module/4), so a sibling space's clauses of the same name compile
+%to exactly what they already are. Recompiling the name everywhere instead
+%priced a first evaluation by how many other live spaces defined the same
+%head: 17,457 inferences for !(fib 12) in the first of six such spaces and
+%29,084 in the sixth, +2,325 a space, against 15,369 to 15,437 across the same
+%six here [measured 2026-09-05]
+%[tested: test_a_first_evaluation_costs_the_same_in_every_space,
+%test_every_space_defining_a_shared_head_still_memoizes_it].
 memo_automatic_reconcile_modules(Modules) :-
     maplist(memo_automatic_module_plan, Modules, Plans),
     maplist(memo_automatic_apply_plan, Plans, ChangedLists),
@@ -526,8 +538,8 @@ memo_automatic_reconcile_modules(Modules) :-
     sort(Changed0, Changed),
     memo_refresh_dispatch_handler,
     memo_refresh_function_removed_handler,
-    forall(member(Fun, Changed),
-           ( recompile_function_impl(Fun),
+    forall(member(Module-Fun, Changed),
+           ( recompile_function_impl_in(Module, Fun),
              forall(support_memo_take_change(_, Fun), true) )).
 
 memo_automatic_module_plan(Module, plan(Module, Decisions)) :-
@@ -648,12 +660,16 @@ memo_automatic_arity_unsafe(Fun, Module, Arity, Reason) :-
         Reason = ['space-read', Reads]
     ).
 
-memo_automatic_apply_plan(plan(Module, Decisions), Changed) :-
+%Answers the changed names PAIRED with the module they changed in, because
+%that is what the caller has to recompile and the plan is the only place that
+%still knows it.
+memo_automatic_apply_plan(plan(Module, Decisions), Moved) :-
     findall(Fun, memo_automatic_enabled(Fun, Module), OldEnabled0),
     sort(OldEnabled0, OldEnabled),
     findall(Fun, member(decision(Fun, true, _, _), Decisions), NewEnabled0),
     sort(NewEnabled0, NewEnabled),
     ord_symdiff(OldEnabled, NewEnabled, Changed),
+    maplist(memo_moved_in(Module), Changed, Moved),
     transaction(
         ( retractall(memo_automatic_enabled(_, Module)),
           retractall(memo_automatic_decision(_, Module, _, _)),
@@ -670,6 +686,8 @@ memo_automatic_apply_plan(plan(Module, Decisions), Changed) :-
              \+ memo_manual_enabled(Fun, Module) ),
            ( cache_invalidate(Fun, Module),
              forget_memo_supports(Fun, Module) )).
+
+memo_moved_in(Module, Fun, Module-Fun).
 
 memo_automatic_record_sources(Fun, Module) :-
     memo_state_arities(Fun, Module, Arities),
