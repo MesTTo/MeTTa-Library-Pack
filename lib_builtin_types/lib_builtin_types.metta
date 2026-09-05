@@ -88,11 +88,15 @@
 
 ;; pragma! is UNDECLARED, and the absence is the answer: the official corelib
 ;; block for it reads `Type %Undefined%`, which is the gradual default rather
-;; than a type, so `!(get-type pragma!)` answers `%Undefined%` on both engines
-;; even when the program has written `(: pragma! Number)` into the space
-;; [source: LeaTTa wiki/Hyperon-Divergences.md, the grounded-operation-type
-;; row, measured 2026-08-16; tests/semantics/types-basic/
-;; 20-undefined-stdlib-operation.metta, STATUS conforms]. It answers the UNIT
+;; than a type, so `!(get-type pragma!)` answers `%Undefined%`. Upstream
+;; declares nothing for the name either, and answers the same
+;; [source: PeTTa@43705f5d src/metta.pl, which registers no pragma! and
+;; carries no (: pragma! ...) row; measured 2026-09-05 against
+;; PeTTa@43705f5d: `!(get-type pragma!)` is `%Undefined%` on both engines].
+;; A program that writes `(: pragma! Number)` into the space DOES change the
+;; answer to Number, on both engines, because the declaration is read from the
+;; space; the row here is what is absent, not the lookup
+;; [measured 2026-09-05 against PeTTa@43705f5d]. It answers the UNIT
 ;; value, for the reason add-atom does.
 
 ;; HE's metta/3: interpret an atom in a named space. The Type argument is
@@ -432,11 +436,18 @@
 ;; and copy_term/2 copies what its argument evaluated to. Writing `Expression`
 ;; or `Atom` in those positions describes the caller's text instead, and once
 ;; the evaluation mask reached written calls those declarations stopped the
-;; evaluation the predicate needs [source: LeaTTa
-;; MettaHyperonFull/Minimal/Stdlib.lean:4156-4183, which records the same
-;; correction for `first-from-pair`: "The earlier (-> Expression Atom) invented
-;; an Expression first parameter ... which is exactly the instruction not to
-;; evaluate the pair"].
+;; evaluation the predicate needs. Upstream registers the same predicates and
+;; declares none of them, so nothing masks there either and the two engines
+;; answer alike: `!(length (cdr-atom (a b c)))` is 2,
+;; `!(reverse (cdr-atom (a b c)))` is `(c b)` and
+;; `!(append (cdr-atom (a b)) (c))` is `(b c)` on both
+;; [source: PeTTa@43705f5d src/metta.pl:330-344, the register_fun roster,
+;; against lib/lib_builtin_types.metta which declares 36 names and none of
+;; these; measured 2026-09-05 against PeTTa@43705f5d]. LeaTTa records the same
+;; correction for `first-from-pair` [source: LeaTTa
+;; MettaHyperonFull/Minimal/Stdlib.lean:4156-4183, "The earlier
+;; (-> Expression Atom) invented an Expression first parameter ... which is
+;; exactly the instruction not to evaluate the pair"].
 (: append (-> %Undefined% %Undefined% %Undefined%))
 (: length (-> %Undefined% Number))
 (: reverse (-> %Undefined% Expression))
