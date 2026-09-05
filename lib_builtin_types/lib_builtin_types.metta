@@ -286,6 +286,10 @@
 ;; cons is what keeps a rebuild linear, per the note below.
 (: cons-atom (-> %Undefined% %Undefined% Atom))
 (: decons-atom (-> %Undefined% Atom))
+;; Inspect the written expression and binders; evaluate only the selected branch.
+;; Plain Expression eagerly evaluated (+ 1 2), selecting fallback instead of
+;; exposing its tail (1 2) [tested: if_decons_expr:the_operand_is_inspected_without_evaluation; commit=9958c72363d2fbc640d2ae39ee6f0670ecfbff67].
+(: if-decons-expr (-> (:Atom Expression) (:Atom Variable) (:Atom Variable) Atom Atom %Undefined%))
 (: size-atom (-> Expression Number))
 (: index-atom (-> %Undefined% Number Atom))
 ;; atom-subst replaces one variable inside a template, all three operands
