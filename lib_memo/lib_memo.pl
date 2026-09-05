@@ -68,7 +68,9 @@
 % Owns resources: exact_memo_specialization/5 owns one generated replay
 %   predicate, mode-directed table predicate and its answer tries per cached
 %   function arity. Invalidation abolishes its answers; function removal
-%   untables and abolishes both generated predicates.
+%   untables and abolishes both generated predicates. memo_dispatch_installed/2
+%   and memo_function_removed_installed/2 retain exact seam clause references;
+%   retiring their last owner erases those references.
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -210,7 +212,7 @@ memo_equation(Fun, Module, Arities, Term) :-
 
 :- multifile seam:dispatch_call/4.
 :- dynamic seam:dispatch_call/4.
-:- dynamic memo_dispatch_installed/1.
+:- dynamic memo_dispatch_installed/2.
 
 memo_dispatch_call(Fun, Args, Out, Goal) :-
     memo_name_enabled(Fun),
@@ -273,23 +275,27 @@ memo_enabled_name(Fun) :- memo_automatic_enabled(Fun, _).
 memo_refresh_dispatch_handler :-
     findall(Fun, memo_enabled_name(Fun), Needed0),
     sort(Needed0, Needed),
-    findall(Fun, memo_dispatch_installed(Fun), Installed0),
+    findall(Fun, memo_dispatch_installed(Fun, _), Installed0),
     sort(Installed0, Installed),
     ord_subtract(Needed, Installed, Add),
     ord_subtract(Installed, Needed, Remove),
     maplist(memo_install_dispatch_handler, Add),
     maplist(memo_remove_dispatch_handler, Remove).
 
-memo_install_dispatch_handler(Fun) :- memo_dispatch_installed(Fun), !.
+memo_install_dispatch_handler(Fun) :- memo_dispatch_installed(Fun, _), !.
 memo_install_dispatch_handler(Fun) :-
     assertz(seam:(dispatch_call(Fun, Args, Out, Goal) :-
-                      lib_memo:memo_dispatch_call(Fun, Args, Out, Goal))),
-    assertz(memo_dispatch_installed(Fun)).
+                      lib_memo:memo_dispatch_call(Fun, Args, Out, Goal)), Ref),
+    assertz(memo_dispatch_installed(Fun, Ref)).
 
+%Stored hook bodies acquire module qualification. Match their retained clause
+%references when retiring them, just as annotated arrows own their catalog rows.
+%SWI erase/1 fails if a reference has already been erased, which is an already
+%completed release rather than a failure of this cleanup.
+%[source: engine/spaces/arrow_products.pl:metta_erase_arrow_product/1;
+%commit=WORKTREE].
 memo_remove_dispatch_handler(Fun) :-
-    retractall(seam:(dispatch_call(Fun, Args, Out, Goal) :-
-                         lib_memo:memo_dispatch_call(Fun, Args, Out, Goal))),
-    retractall(memo_dispatch_installed(Fun)).
+    forall(retract(memo_dispatch_installed(Fun, Ref)), ignore(erase(Ref))).
 
 %Only a changed source-call graph can move an SCC decision. The support graph
 %filters unrelated equations before announcing this event; source batches run
@@ -404,7 +410,7 @@ seam:automatic_cache_explanation(Fun, Choice, Reason) :-
 %[source: engine/spaces.pl, metta_remove_atom/3], so the disable is global.
 :- multifile seam:function_removed/1.
 :- dynamic seam:function_removed/1.
-:- dynamic memo_function_removed_installed/1.
+:- dynamic memo_function_removed_installed/2.
 
 memo_function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
@@ -420,7 +426,7 @@ memo_function_removed(Fun) :-
 memo_refresh_function_removed_handler :-
     findall(Fun, memo_lifecycle_state(Fun), Needed0),
     sort(Needed0, Needed),
-    findall(Fun, memo_function_removed_installed(Fun), Installed0),
+    findall(Fun, memo_function_removed_installed(Fun, _), Installed0),
     sort(Installed0, Installed),
     ord_subtract(Needed, Installed, Add),
     ord_subtract(Installed, Needed, Remove),
@@ -433,25 +439,21 @@ memo_lifecycle_state(Fun) :- memo_automatic_enabled(Fun, _).
 memo_lifecycle_state(Fun) :- memo_automatic_decision(Fun, _, _, _).
 
 memo_install_function_removed_handler(Fun) :-
-    memo_function_removed_installed(Fun),
+    memo_function_removed_installed(Fun, _),
     !.
 memo_install_function_removed_handler(Fun) :-
     assertz(seam:(function_clauses_changed(Fun) :-
-                      lib_memo:memo_refuse_compiled_arrow_effect(Fun))),
+                      lib_memo:memo_refuse_compiled_arrow_effect(Fun)), ChangedRef),
     assertz(seam:(atom_removed(Space, [=, [Fun|_], _]) :-
-                      lib_memo:memo_withdraw_removed_definition(Space, Fun))),
+                      lib_memo:memo_withdraw_removed_definition(Space, Fun)), AtomRef),
     assertz(seam:(function_removed(Fun) :-
-                      lib_memo:memo_function_removed(Fun))),
-    assertz(memo_function_removed_installed(Fun)).
+                      lib_memo:memo_function_removed(Fun)), RemovedRef),
+    assertz(memo_function_removed_installed(Fun,
+                                          [ChangedRef, AtomRef, RemovedRef])).
 
 memo_remove_function_removed_handler(Fun) :-
-    retractall(seam:(function_clauses_changed(Fun) :-
-                        lib_memo:memo_refuse_compiled_arrow_effect(Fun))),
-    retractall(seam:(atom_removed(Space, [=, [Fun|_], _]) :-
-                        lib_memo:memo_withdraw_removed_definition(Space, Fun))),
-    retractall(seam:(function_removed(Fun) :-
-                         lib_memo:memo_function_removed(Fun))),
-    retractall(memo_function_removed_installed(Fun)).
+    forall(retract(memo_function_removed_installed(Fun, Refs)),
+           forall(member(Ref, Refs), ignore(erase(Ref)))).
 
 %The global removal event waits until no space defines a name. A cache's owner
 %can lose its last equation sooner. The removal event identifies that owner;
