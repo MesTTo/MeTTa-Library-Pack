@@ -145,7 +145,7 @@
 %Home \== CallModule holds exactly where imported_from/1 answers, over all
 %7,949 module/name pairs of a booted image and across an import chain
 %[source: /usr/lib/swi-prolog/boot/syspred.pl, property_predicate/2;
-%measured 2026-09-06; commit=WORKTREE]. It guards rather than replaces so the
+%measured 2026-09-06; commit=693b1bdb6ed06cd0ba01e901a8a6d774bc733d19]. It guards rather than replaces so the
 %owner is still the module imported_from/1 names, autoload included.
 memo_owner_module(Fun, CallModule, PredArity, Module) :-
     functor(Head, Fun, PredArity),
