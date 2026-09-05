@@ -3,7 +3,7 @@
 % Guarantees: annotated effects refuse cache admission and incompatible late
 %   declarations; removing a cache owner retires its metadata and any remaining
 %   table [tested: extensions/python/tests/ch11_python_as_a_notation/test_arrow_products.py;
-%   commit=WORKTREE].
+%   commit=bbb512316280110a747e31c26adfc31e8c5104be].
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -293,7 +293,7 @@ memo_install_dispatch_handler(Fun) :-
 %SWI erase/1 fails if a reference has already been erased, which is an already
 %completed release rather than a failure of this cleanup.
 %[source: engine/spaces/arrow_products.pl:metta_erase_arrow_product/1;
-%commit=WORKTREE].
+%commit=bbb512316280110a747e31c26adfc31e8c5104be].
 memo_remove_dispatch_handler(Fun) :-
     forall(retract(memo_dispatch_installed(Fun, Ref)), ignore(erase(Ref))).
 
