@@ -4,7 +4,7 @@
 % Guarantees: trace-source records selected functions before applying recording
 %   bounds [tested: lib_observe:filtered_events_are_queryable; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce].
 % Guarantees: observe-source returns diagnostic atoms in a caller-owned space
-%   [tested: test_error_frames_point_to_the_failing_subterm_and_its_caller; commit=WORKTREE].
+%   [tested: test_error_frames_point_to_the_failing_subterm_and_its_caller; commit=df1367c75148ca6c7262134a8736b237e1150383].
 
 :- use_module('../../engine/tracer', [metta_trace_source/6]).
 :- use_module('../../engine/spaces', [metta_add_atoms/2, metta_release_space/1]).
