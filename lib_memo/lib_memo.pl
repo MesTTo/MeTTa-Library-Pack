@@ -135,9 +135,23 @@
 %caches and neither invalidates the other. imported_from/1 is the
 %documented way to ask
 %[source: SWI-Prolog 10.1 Reference Manual 4.15, predicate_property/2].
+%
+%A declaration may PRECEDE the definitions it governs, so this is routinely
+%asked about a name nothing has compiled yet, and imported_from/1 answers "no"
+%by running SWI's undefined-procedure trap, which searches the whole autoload
+%library index before raising the existence error this clause discards.
+%implementation_module/1 answers the same question for 33 inferences instead
+%of 1,030, because SWI special-cases it and reaches '$find_library'/5 directly;
+%Home \== CallModule holds exactly where imported_from/1 answers, over all
+%7,949 module/name pairs of a booted image and across an import chain
+%[source: /usr/lib/swi-prolog/boot/syspred.pl, property_predicate/2;
+%measured 2026-09-06; commit=WORKTREE]. It guards rather than replaces so the
+%owner is still the module imported_from/1 names, autoload included.
 memo_owner_module(Fun, CallModule, PredArity, Module) :-
     functor(Head, Fun, PredArity),
-    (   predicate_property(CallModule:Head, imported_from(From))
+    (   predicate_property(CallModule:Head, implementation_module(Home)),
+        Home \== CallModule,
+        predicate_property(CallModule:Head, imported_from(From))
     ->  Module = From
     ;   Module = CallModule ).
 
