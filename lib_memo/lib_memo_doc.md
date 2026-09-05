@@ -53,6 +53,20 @@ substrates never stack on one function.
 !(memoize fib)
 !(memoize fib 1) ; only memoize fib with one input argument
 ```
+An annotated arrow is also an author declaration about cache admission.
+`(: w (-[det,writesState]-> Number Number))` refuses memoization even if the
+body returns its argument. An explicit effect above `pureStructural` also
+outranks `(cache w unchecked)`. `nondet` in an arrow raises the effect to at
+least `nondeterministicReadOnly`, so that explicit product refuses caching too.
+Plain definitions retain the existing body analysis and answer-bag memoization.
+A late annotation that conflicts with an enabled cache is refused, naming the
+cached function. Remove that definition before loading the annotation;
+`clear-memoize` clears entries but keeps memoization enabled. Removing the last
+equation retires that space's memoization, including when another space still
+defines the same name.
+Forward memo declarations are validated when their bodies compile. A caller
+cannot suppress an annotated dependency by declaring its cache unchecked.
+
 ### Check status
 ```metta
 !(is-memoized fib)  ; Returns: true or false

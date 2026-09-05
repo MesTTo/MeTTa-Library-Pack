@@ -1,5 +1,9 @@
 % Purpose: memoize MeTTa function calls with C-trie exact bags or bounded
 %   LRU/WTinyLFU storage and dependency-based invalidation.
+% Guarantees: annotated effects refuse cache admission and incompatible late
+%   declarations; removing a cache owner retires its metadata and any remaining
+%   table [tested: extensions/python/tests/ch11_python_as_a_notation/test_arrow_products.py;
+%   commit=bbb512316280110a747e31c26adfc31e8c5104be].
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -64,7 +68,9 @@
 % Owns resources: exact_memo_specialization/5 owns one generated replay
 %   predicate, mode-directed table predicate and its answer tries per cached
 %   function arity. Invalidation abolishes its answers; function removal
-%   untables and abolishes both generated predicates.
+%   untables and abolishes both generated predicates. memo_dispatch_installed/2
+%   and memo_function_removed_installed/2 retain exact seam clause references;
+%   retiring their last owner erases those references.
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
@@ -206,7 +212,7 @@ memo_equation(Fun, Module, Arities, Term) :-
 
 :- multifile seam:dispatch_call/4.
 :- dynamic seam:dispatch_call/4.
-:- dynamic memo_dispatch_installed/1.
+:- dynamic memo_dispatch_installed/2.
 
 memo_dispatch_call(Fun, Args, Out, Goal) :-
     memo_name_enabled(Fun),
@@ -269,23 +275,27 @@ memo_enabled_name(Fun) :- memo_automatic_enabled(Fun, _).
 memo_refresh_dispatch_handler :-
     findall(Fun, memo_enabled_name(Fun), Needed0),
     sort(Needed0, Needed),
-    findall(Fun, memo_dispatch_installed(Fun), Installed0),
+    findall(Fun, memo_dispatch_installed(Fun, _), Installed0),
     sort(Installed0, Installed),
     ord_subtract(Needed, Installed, Add),
     ord_subtract(Installed, Needed, Remove),
     maplist(memo_install_dispatch_handler, Add),
     maplist(memo_remove_dispatch_handler, Remove).
 
-memo_install_dispatch_handler(Fun) :- memo_dispatch_installed(Fun), !.
+memo_install_dispatch_handler(Fun) :- memo_dispatch_installed(Fun, _), !.
 memo_install_dispatch_handler(Fun) :-
     assertz(seam:(dispatch_call(Fun, Args, Out, Goal) :-
-                      lib_memo:memo_dispatch_call(Fun, Args, Out, Goal))),
-    assertz(memo_dispatch_installed(Fun)).
+                      lib_memo:memo_dispatch_call(Fun, Args, Out, Goal)), Ref),
+    assertz(memo_dispatch_installed(Fun, Ref)).
 
+%Stored hook bodies acquire module qualification. Match their retained clause
+%references when retiring them, just as annotated arrows own their catalog rows.
+%SWI erase/1 fails if a reference has already been erased, which is an already
+%completed release rather than a failure of this cleanup.
+%[source: engine/spaces/arrow_products.pl:metta_erase_arrow_product/1;
+%commit=bbb512316280110a747e31c26adfc31e8c5104be].
 memo_remove_dispatch_handler(Fun) :-
-    retractall(seam:(dispatch_call(Fun, Args, Out, Goal) :-
-                         lib_memo:memo_dispatch_call(Fun, Args, Out, Goal))),
-    retractall(memo_dispatch_installed(Fun)).
+    forall(retract(memo_dispatch_installed(Fun, Ref)), ignore(erase(Ref))).
 
 %Only a changed source-call graph can move an SCC decision. The support graph
 %filters unrelated equations before announcing this event; source batches run
@@ -325,8 +335,57 @@ seam:source_program_compiled :-
 
 :- multifile seam:cache_policy_changed/1.
 seam:cache_policy_changed(Fun) :-
+    memo_refuse_conflicting_arrow(Fun),
     memo_automatic_mark_policy_changed(Fun),
     memo_automatic_reconcile_dirty.
+
+%The annotation writer runs this event inside its transaction before storing
+%the type or repairing callers. Refuse a late author assertion that an existing
+%cache would suppress, including a cache in another space or on a caller.
+memo_refuse_conflicting_arrow(Fun) :-
+    metta_annotated_operation_effect(Fun, Effect),
+    Effect \== pureStructural,
+    memo_enabled_name(Cached),
+    memo_state_modules(Cached, Modules),
+    member(Module, Modules),
+    ( memo_manual_enabled(Cached, Module) ; memo_automatic_enabled(Cached, Module) ),
+    memo_compiled_operation(Module, Cached, Fun),
+    !,
+    throw(error(permission_error(declare, effect_with_live_cache, Fun),
+                context(metta_add_atom/3, cached(Module, Cached, Effect)))).
+memo_refuse_conflicting_arrow(_).
+
+%A forward memo declaration has no body to check at admission. The compiled
+%event closes that gap before its first call; retained source tells the effect
+%planner which terms are calls. An unchecked caller cannot override an explicit
+%author annotation on a dependency.
+memo_refuse_compiled_arrow_effect(Cached) :-
+    metta_annotated_operation_effect(_, _),
+    memo_state_modules(Cached, Modules),
+    member(Module, Modules),
+    ( memo_manual_enabled(Cached, Module) ; memo_automatic_enabled(Cached, Module) ),
+    memo_compiled_operation(Module, Cached, Fun),
+    metta_annotated_operation_effect(Fun, Effect),
+    Effect \== pureStructural,
+    !,
+    throw(error(metta_memo_annotated_effect(Cached, Fun, Effect),
+                context('memoize', 'a compiled dependency carries an author effect'))).
+memo_refuse_compiled_arrow_effect(_).
+
+memo_compiled_operation(Module, Cached, Fun) :-
+    memo_state_arities(Cached, Module, Arities),
+    member(Arity, Arities),
+    functor(Goal, Cached, Arity),
+    metta_host_goal_effect_plan(Module, Goal, Operations, _),
+    member([Fun, _], Operations).
+
+prolog:error_message(metta_memo_annotated_effect(Cached, Fun, Effect)) -->
+    [ 'cannot memoize ~w: ~w declares ~w, above pureStructural; \c
+       an unchecked cache cannot override an annotated effect'-[Cached, Fun, Effect] ].
+
+prolog:error_message(permission_error(declare, effect_with_live_cache, Name)) -->
+    [ 'cannot honour the annotated effect for ~w while a dependent cache is live; \c
+       remove the cached definition before adding the declaration'-[Name] ].
 
 :- multifile seam:automatic_cache_explanation/3.
 seam:automatic_cache_explanation(Fun, Choice, Reason) :-
@@ -351,7 +410,7 @@ seam:automatic_cache_explanation(Fun, Choice, Reason) :-
 %[source: engine/spaces.pl, metta_remove_atom/3], so the disable is global.
 :- multifile seam:function_removed/1.
 :- dynamic seam:function_removed/1.
-:- dynamic memo_function_removed_installed/1.
+:- dynamic memo_function_removed_installed/2.
 
 memo_function_removed(Fun) :-
     memo_state_modules(Fun, Modules),
@@ -367,7 +426,7 @@ memo_function_removed(Fun) :-
 memo_refresh_function_removed_handler :-
     findall(Fun, memo_lifecycle_state(Fun), Needed0),
     sort(Needed0, Needed),
-    findall(Fun, memo_function_removed_installed(Fun), Installed0),
+    findall(Fun, memo_function_removed_installed(Fun, _), Installed0),
     sort(Installed0, Installed),
     ord_subtract(Needed, Installed, Add),
     ord_subtract(Installed, Needed, Remove),
@@ -380,17 +439,39 @@ memo_lifecycle_state(Fun) :- memo_automatic_enabled(Fun, _).
 memo_lifecycle_state(Fun) :- memo_automatic_decision(Fun, _, _, _).
 
 memo_install_function_removed_handler(Fun) :-
-    memo_function_removed_installed(Fun),
+    memo_function_removed_installed(Fun, _),
     !.
 memo_install_function_removed_handler(Fun) :-
+    assertz(seam:(function_clauses_changed(Fun) :-
+                      lib_memo:memo_refuse_compiled_arrow_effect(Fun)), ChangedRef),
+    assertz(seam:(atom_removed(Space, [=, [Fun|_], _]) :-
+                      lib_memo:memo_withdraw_removed_definition(Space, Fun)), AtomRef),
     assertz(seam:(function_removed(Fun) :-
-                      lib_memo:memo_function_removed(Fun))),
-    assertz(memo_function_removed_installed(Fun)).
+                      lib_memo:memo_function_removed(Fun)), RemovedRef),
+    assertz(memo_function_removed_installed(Fun,
+                                          [ChangedRef, AtomRef, RemovedRef])).
 
 memo_remove_function_removed_handler(Fun) :-
-    retractall(seam:(function_removed(Fun) :-
-                         lib_memo:memo_function_removed(Fun))),
-    retractall(memo_function_removed_installed(Fun)).
+    forall(retract(memo_function_removed_installed(Fun, Refs)),
+           forall(member(Ref, Refs), ignore(erase(Ref)))).
+
+%The global removal event waits until no space defines a name. A cache's owner
+%can lose its last equation sooner. The removal event identifies that owner;
+%the change event also fires for arrivals, before deferred equations compile.
+%Stored equations preserve forward memo declarations and deferred alternatives.
+memo_withdraw_removed_definition(Space, Fun) :-
+    metta_module_space(Module, Space),
+    ( once(metta_host_stored(Space, [=, [Fun|_], _]))
+    -> true
+    ; cache_invalidate(Fun, Module),
+      forget_memo_supports(Fun, Module),
+      remove_exact_memo_specializations(Fun, Module),
+      retractall(memo_enabled(Fun, Module)),
+      retractall(memo_enabled(Fun, Module, _)),
+      retractall(memo_automatic_enabled(Fun, Module)),
+      retractall(memo_automatic_decision(Fun, Module, _, _)) ),
+    memo_refresh_dispatch_handler,
+    memo_refresh_function_removed_handler.
 
 memo_state_modules(Fun, Modules) :-
     findall(M,
@@ -893,10 +974,16 @@ forget_memo_supports(Fun, Module) :-
 reset_exact_memo_table(Module, TableName, Arity) :-
     TableArity is Arity + 2,
     functor(ModeGoal, TableName, TableArity),
-    '$tbl_implementation'(Module:ModeGoal,
-                          TableModule:Implementation),
-    TableModule:'$table_mode'(Implementation, TableGoal, _Moded),
-    abolish_table_subgoals(TableModule:TableGoal).
+    %Space teardown untables before removing equations. Once that owner has
+    %released the table, invalidation has nothing left to clear; failing here
+    %would interrupt the equation-removal event and strand memo metadata.
+    (   predicate_property(Module:ModeGoal, tabled)
+    ->  '$tbl_implementation'(Module:ModeGoal,
+                              TableModule:Implementation),
+        TableModule:'$table_mode'(Implementation, TableGoal, _Moded),
+        abolish_table_subgoals(TableModule:TableGoal)
+    ;   true
+    ).
 
 abolish_exact_memo_tables(Fun, Module, Arity) :-
     forall(exact_memo_specialization(_ReplayName, TableName,
@@ -1680,15 +1767,12 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
 %not: a declared effect class is the AUTHOR's no and outranks the caller's
 %insistence, which is the rule metta_cache_unchecked's own comment states.
 memo_refuse_operation_effect(Fun, Context) :-
-    %A REGISTERED OPERATION only, which is a catalog op row: a compiled
-    %definition has equations and the body walk below judges those. Asking
-    %the effect class alone refused every generator definition, because a
-    %generator is LIFTED to nondeterministicReadOnly and that lift is about
-    %answer COUNT rather than about observing anything -- and a
-    %multiplicity-preserving memo over a generator is the whole point of the
-    %exact variant [measured 2026-08-31].
-    metta_catalog_row([op, Fun, _, _]),
-    metta_operation_effect(Fun, Effect),
+    %An annotated effect on a definition is the same author's refusal as one
+    %on a registered operation. Inferred generator multiplicity alone remains
+    %cacheable because exact memoization preserves the complete answer bag.
+    ( metta_catalog_row([op, Fun, _, _])
+    -> metta_operation_effect(Fun, Effect)
+    ; metta_annotated_operation_effect(Fun, Effect) ),
     metta_effect_rank(Effect, Rank),
     metta_effect_rank(pureStructural, PureRank),
     Rank > PureRank,
@@ -1723,13 +1807,12 @@ memo_refuse_uncacheable_arity(Fun, Module, Arity, Context) :-
 
 :- multifile prolog:error_message//1.
 prolog:error_message(permission_error(memoize, impure_operation, Name)) -->
-    [ '~w IS an operation declared above pureStructural, so a cached answer \c
+    [ '~w has a declared effect above pureStructural, so a cached answer \c
        would hide what it observes. pureStructural is the only class \c
        memoization admits without an explicit policy. (cache ~w unchecked) \c
        does NOT open this, because a declared effect class is the author\'s \c
-       answer and outranks the caller\'s; declare the operation \c
-       (effect ~w pureStructural) if it really inspects its arguments \c
-       without observing mutable state'-[Name, Name, Name] ].
+       answer and outranks the caller\'s. Correct the declaration of ~w \c
+       only when it inspects its arguments without observing mutable state'-[Name, Name, Name] ].
 prolog:error_message(permission_error(memoize, impure_function, Name)) -->
     [ '~w calls an operation that is not classified pureStructural, so a \c
        cached answer would hide its effect. Declare that operation with \c
