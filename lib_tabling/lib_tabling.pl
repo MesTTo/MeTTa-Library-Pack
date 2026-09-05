@@ -46,7 +46,7 @@
 %   - A body whose effects the walk cannot classify is tabled PLAIN rather than
 %     refused: the declaration is the developer's and this library builds the
 %     strongest table it admits [tested: an_effectful_body_tables_plain,
-%     a_higher_order_body_tables_plain; commit=WORKTREE].
+%     a_higher_order_body_tables_plain; commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 % Fails when:
 %   - the caller depends on the ORDER of a function's answers. Tabling
 %     changes it. An untabled MeTTa function answers in clause order, and a

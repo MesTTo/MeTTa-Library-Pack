@@ -4,7 +4,7 @@
 %   or its arrows say, and no annotation arriving later withdraws it; removing
 %   a cache owner retires its metadata and any remaining table [tested:
 %   extensions/python/tests/ch11_python_as_a_notation/test_arrow_products.py;
-%   commit=WORKTREE].
+%   commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -35,7 +35,7 @@
 %     test_a_doubly_branching_recursion_is_tabled_automatically_and_a_tail_recursion_is_not,
 %     test_an_impure_function_is_never_cached_automatically,
 %     test_a_forced_impure_function_is_cached_on_the_declaration,
-%     test_automatic_cache_force_and_refuse_overrides; commit=WORKTREE].
+%     test_automatic_cache_force_and_refuse_overrides; commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 %   - Automatic caching preserves answer bags beyond memo_answer_limit/1,
 %     ignores manual aggregation and keys floats exactly; bounded search and an
 %     existing SWI table are the two grounds force does not open, because
@@ -45,7 +45,7 @@
 %     test_automatic_caching_preserves_multiplicity_and_answer_limit,
 %     test_bounded_left_recursive_search_is_not_cached_automatically,
 %     test_explicit_tabling_takes_precedence_over_automatic_memoization;
-%     commit=WORKTREE].
+%     commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 %   - get-memoize-stats/2 reports one function's live entry and answer counts,
 %     preserving duplicate answer occurrences in the latter [tested:
 %     lib_memo_stats:a_function_report_counts_answer_occurrences;
