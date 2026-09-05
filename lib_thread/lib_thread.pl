@@ -367,10 +367,12 @@ race_queues_destroy(Start, Results) :-
 %is created here rather than by whoever writes to it first. All four callers
 %mint a fresh handle and hand it straight to a caller; the storage used to
 %appear only on the first answer, so in between the caller held a handle to
-%nothing: (get-metatype &future-1) answered Symbol, metta_space_names/1 omitted
-%it, and a host codec asking the engine what species the atom is was told a
-%symbol, so !(spawn (+ 1 2)) reached Python as a Symbol rather than a
-%FutureSpace [measured 2026-08-27]. The timer path below already said this in
+%nothing: metta_space_operand/1 was false for &future-1, metta_space_names/1
+%omitted it, and a host codec asking the engine what species the atom is was
+%told a symbol, so !(spawn (+ 1 2)) reached Python as a Symbol rather than a
+%FutureSpace [measured 2026-08-27, when get-metatype still answered the
+%species question too; it answers upstream PeTTa's name question since
+%2026-09-05 and the codec asks metta_space_operand/1 directly]. The timer path below already said this in
 %prose. ensure_native_storage_module/2 is idempotent, so the first write is a
 %cache hit.
 future_space_name(Number, Space) :-

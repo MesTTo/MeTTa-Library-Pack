@@ -64,9 +64,10 @@
 ;spelling cost 322,179 inferences against 98,135 where the pattern
 ;mismatches at position 0, and 1,001,407 against 189,341 where it matches.
 ;The walk's own early stop is the other half of that number: min may stop
-;at 0.0 because no later position can raise it, and 98,135 against 189,341
-;is what stopping buys, 1.93x. A mean walks every position, having nothing
-;to stop on. Adding a third aggregation is these two clauses again.
+;at 0.0 because no later position can raise it, and the probe below derives
+;what stopping buys rather than carrying a quotient. A mean walks every
+;position, having nothing to stop on. Adding a third aggregation is these two
+;clauses again.
 ;
 ;The name must NOT reach them as an Atom, because an Atom parameter takes
 ;its operand AS WRITTEN: declared that way,
@@ -74,33 +75,38 @@
 ;it answers, and the walk had no clause for it. A symbol evaluates to
 ;itself, so an evaluated parameter is the right one.
 ;
-;It says Symbol, which is what the name actually is. It said %Undefined% for
-;one day, because a metatype parameter was checked through the typing-rule
-;registry on every call and on this fold that is two checks per position. The
-;check now tries the shape before the registry, and the tax that remains is
-;measured rather than remembered, both arms in one run:
+;IT SAID Symbol UNTIL 2026-09-05, and it cannot any more. `min` is the default
+;aggregation and it is also one of the engine's own arithmetic operations, and
+;since the metatype rule became upstream PeTTa's -- a name is Grounded when
+;this engine holds a function for it [source: PeTTa@43705f5d
+;src/metta.pl:202] -- `(get-metatype min)` is Grounded, so a Symbol parameter
+;REFUSED the library's own default with
+;(Error (soft-score-by min ...) (BadArgType 1 Symbol (-> Number Number
+;Number))) [measured 2026-09-05]. Renaming the aggregation would only postpone
+;it: any name a caller picks may be one the engine holds a function for, `max`
+;included, so the domain of this parameter is not a metatype at all. There is
+;no union of Symbol and Grounded to declare, and Atom is the one that breaks
+;the public spelling above, which leaves the gradual declaration.
 ;
-;  mismatch at position 0   Symbol   162,971   %Undefined%   299,377   1.84x
-;  match at position 0      Symbol   410,183   %Undefined%   798,599   1.95x
+;What it costs is measured rather than remembered, and on the shipped spelling
+;rather than on a choice that no longer exists:
 ;
-;It is NOT free and the number is here rather than hidden. The declaration
-;stays because a cost tax on the honest spelling is an engine defect to keep
-;fixing, not a reason to teach the dishonest one.
+;  mismatch at position 0    90,044
+;  match at position 0      186,050    early stop buys 2.07x
 ;
-;The figures this replaces, 99,369 and 150,971 for a 1.52x tax, DID NOT
-;REPRODUCE. The probe they named lived in ai-tmp, which is gitignored, and the
-;file now there reads 163,892 at 82167e07, the very commit the claim describes,
-;and 163,892 at HEAD, so the engine did not drift under them and the probe must
-;have. That is the argument for citing a tracked artifact: an untracked one
-;makes a measured claim unfalsifiable the moment it changes. The probe is now
-;extensions/python/benchmarks/soft_match_cost.py, it swaps the declaration
-;itself so the ratio is derived rather than carried, and three samples agreed
-;exactly [measured 2026-09-05, three identical samples at loadavg 28.8,
-;0.0000% spread; command=$CHECK_PY
-;extensions/python/benchmarks/soft_match_cost.py; fixture=400 six-position
-;candidates, main checkout; commit=6c7db55ba23900172d7481dd47923aca13b84433].
-(: soft-fold (-> Symbol Atom Atom Number))
-(: soft-walk (-> Symbol Atom Atom Number Number))
+;[measured 2026-09-05, three identical samples at loadavg 59.7, 0.0000%
+;spread; command=$CHECK_PY extensions/python/benchmarks/soft_match_cost.py;
+;fixture=400 six-position candidates; commit=WORKTREE]. Both are LOWER than
+;the 162,971 and 410,183 this comment carried for the Symbol arm before the
+;rule changed, but that is not a controlled comparison and is not claimed as
+;one [assumed: the old arm swapped soft-fold's declaration alone while all
+;three are gradual now, and the Symbol arm cannot be re-measured because it
+;refuses `min`; commit=WORKTREE]. The probe is tracked and derives the
+;early-stop ratio above rather than leaving it to be remembered: an untracked
+;one makes a measured claim unfalsifiable the moment it changes, which is how
+;an earlier pair of figures here stopped reproducing.
+(: soft-fold (-> %Undefined% Atom Atom Number))
+(: soft-walk (-> %Undefined% Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
 (= (soft-walk min $ps $as $acc)
    (if (or (== $ps ()) (== $acc 0.0))
@@ -147,7 +153,7 @@
 (= (soft-score $p $a) (soft-score-by (soft-aggregation) $p $a))
 
 ;The same, under a named aggregation rather than the space's declared one.
-(: soft-score-by (-> Symbol Atom Atom Number))
+(: soft-score-by (-> %Undefined% Atom Atom Number))
 (= (soft-score-by $agg $p $a)
    (if (== (get-metatype $p) Variable)
        (let $p $a 1.0)
