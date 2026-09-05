@@ -96,12 +96,12 @@
 ;
 ;[measured 2026-09-05, three identical samples at loadavg 59.7, 0.0000%
 ;spread; command=$CHECK_PY extensions/python/benchmarks/soft_match_cost.py;
-;fixture=400 six-position candidates; commit=WORKTREE]. Both are LOWER than
+;fixture=400 six-position candidates; commit=7bc8e2ac2a2adfa252d5251ee123f320c2dd5ce7]. Both are LOWER than
 ;the 162,971 and 410,183 this comment carried for the Symbol arm before the
 ;rule changed, but that is not a controlled comparison and is not claimed as
 ;one [assumed: the old arm swapped soft-fold's declaration alone while all
 ;three are gradual now, and the Symbol arm cannot be re-measured because it
-;refuses `min`; commit=WORKTREE]. The probe is tracked and derives the
+;refuses `min`; commit=7bc8e2ac2a2adfa252d5251ee123f320c2dd5ce7]. The probe is tracked and derives the
 ;early-stop ratio above rather than leaving it to be remembered: an untracked
 ;one makes a measured claim unfalsifiable the moment it changes, which is how
 ;an earlier pair of figures here stopped reproducing.
