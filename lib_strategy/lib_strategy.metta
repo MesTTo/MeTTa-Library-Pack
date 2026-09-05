@@ -146,17 +146,24 @@
                                               $term))
                                  $result
                                  (return $result))
-                               ; A Symbol denotes a user strategy equation. Compound
-                               ; plans not recognized above fail instead of becoming a
+                               ; A NAME denotes a user strategy equation, and it is
+                               ; either metatype: since 2026-09-05 a name this engine
+                               ; holds a function for answers Grounded, and DEFINING the
+                               ; strategy is what gives it one, so a Symbol-only test
+                               ; stopped recognizing every strategy that had been
+                               ; defined. Compound plans not recognized above, and an
+                               ; unbound strategy, fail instead of becoming a
                                ; variable-headed call.
                                (chain (eval (get-metatype $strategy)) $kind
-                                 (unify $kind Symbol
-                                   (chain (context-space) $space
-                                     (chain (metta ($strategy $term)
-                                                   %Undefined% $space)
-                                       $result
-                                       (return $result)))
-                                   (empty))))))))))))))))))
+                                 (unify $kind Expression
+                                   (empty)
+                                   (unify $kind Variable
+                                     (empty)
+                                     (chain (context-space) $space
+                                       (chain (metta ($strategy $term)
+                                                     %Undefined% $space)
+                                         $result
+                                         (return $result)))))))))))))))))))))
 
 ; strategy-apply is the only lowering door. Its expansion is another atom, so
 ; the runtime plan remains language data and no Python or Prolog callback is

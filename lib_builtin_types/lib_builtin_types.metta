@@ -118,12 +118,15 @@
 ;; the reference governed.
 ;; One vocabulary translation was needed: HE's unit
 ;; result `(->)` is MeTTa's `Bool`, because every one of these answers `true`.
-;; `SpaceType` is written as itself, because a space handle answers `Grounded`
-;; here as it does there and carries that type
+;; `SpaceType` is written as itself, because a space handle carries that type
+;; and every path that needs the species reads it
 ;; [tested: spaces:space_handle_type]. It was written `Symbol` until
-;; 2026-08-20, when `(get-metatype &self)` still answered `Symbol` here, and
-;; the two disagreed the moment the handle gained its own type: every one of
-;; these declarations then REFUSED a space handle as a first argument.
+;; 2026-08-20 and that was a metatype claim, which broke when the handle
+;; gained a type of its own: every one of these declarations then REFUSED a
+;; space handle as a first argument. Writing the TYPE rather than a metatype
+;; is what has kept them working through both metatype rules since, the
+;; 2026-09-05 move to upstream PeTTa's included, where `(get-metatype &self)`
+;; became `Symbol` again while `(get-type &self)` did not move.
 ;; Divergences from the dump are marked where they occur.
 ;;
 ;; THIS FILE HAS TWO ROLES AND THEY DIFFER. The engine reads it at boot into
