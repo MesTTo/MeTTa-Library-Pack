@@ -36,6 +36,7 @@
 %     section 2.4.
 
 :- use_module(library(lists)).
+:- use_module(library(filesex)).
 
 :- dynamic metta_file/2.            % Handle, Stream
 %The counter is a FLAG rather than a dynamic fact, and the difference is a
@@ -258,6 +259,143 @@ entry_to_string(Name, Text) :- atom_string(Name, Text).
     metta_text(Path, PathText),
     ( exists_directory(PathText) -> Answer = true ; Answer = false ).
 
+% Path operations use SWI's lexical POSIX path convention. No filesystem
+% lookup occurs, including for nonexistent paths and dot components.
+% [tested: lib_file_surface:lexical_paths; commit=WORKTREE]
+'path-join'(Directory, Name, Path) :-
+    metta_text(Directory, DirectoryText),
+    metta_text(Name, NameText),
+    atom_string(Dir, DirectoryText),
+    atom_string(Base, NameText),
+    directory_file_path(Dir, Base, Joined),
+    atom_string(Joined, Path).
+
+'path-parent'(Path, Parent) :-
+    metta_text(Path, Text),
+    file_directory_name(Text, Directory),
+    atom_string(Directory, Parent).
+
+'path-name'(Path, Name) :-
+    metta_text(Path, Text),
+    file_base_name(Text, Base),
+    atom_string(Base, Name).
+
+'path-extension'(Path, Extension) :-
+    metta_text(Path, Text),
+    file_base_name(Text, Base),
+    file_name_extension(_, Ext, Base),
+    atom_string(Ext, Extension).
+
+'make-dir!'(Path, true) :-
+    metta_text(Path, Text),
+    atom_string(Directory, Text),
+    catch(make_directory_path(Directory), Error,
+          metta_file_refusal('make-dir!', Error)).
+
+'delete-dir!'(Path, true) :-
+    metta_text(Path, Text),
+    catch(delete_directory(Text), Error,
+          metta_file_refusal('delete-dir!', Error)).
+
+% Acquire the staging directory with mkdir, which refuses an existing name.
+% tmp_file/2 supplies a name only; no guessed filename is opened for writing.
+% The destination changes only after both binary streams close successfully.
+% [tested: lib_file_surface:copy_is_binary_and_replaces_only_after_success,
+% lib_file_surface:failed_copy_preserves_destination; commit=WORKTREE]
+'copy-file!'(Source, Destination, true) :-
+    metta_text(Source, From),
+    metta_text(Destination, To),
+    catch(metta_copy_file(From, To), Error,
+          metta_file_refusal('copy-file!', Error)).
+
+metta_copy_file(From, To) :-
+    (   exists_file(To), same_file(From, To)
+    ->  throw(error(permission_error(copy, same_file, To),
+                    context('copy-file!', 'Choose a different destination')))
+    ;   true
+    ),
+    file_directory_name(To, Parent),
+    tmp_file(metta_copy, Temp),
+    file_base_name(Temp, Base),
+    directory_file_path(Parent, Base, StageDirectory),
+    setup_call_cleanup(
+        make_directory(StageDirectory),
+        ( directory_file_path(StageDirectory, contents, Stage),
+          metta_copy_bytes(From, Stage),
+          rename_file(Stage, To) ),
+        delete_directory_and_contents(StageDirectory)).
+
+metta_copy_bytes(From, Stage) :-
+    setup_call_cleanup(
+        open(From, read, Input, [type(binary)]),
+        setup_call_cleanup(
+            open(Stage, write, Output, [type(binary)]),
+            copy_stream_data(Input, Output),
+            close(Output)),
+        close(Input)).
+
+% Read all metadata before allocating the snapshot. A failed stat never
+% leaves a partly populated space behind.
+% [tested: lib_file_surface:metadata_is_queryable; commit=WORKTREE]
+'file-metadata!'(Path, Space) :-
+    metta_text(Path, Text),
+    catch(metta_file_metadata(Text, Rows), Error,
+          metta_file_refusal('file-metadata!', Error)),
+    'new-space'(Space),
+    catch(spaces:metta_add_atoms(Space, Rows), Error,
+          (spaces:metta_release_space(Space), throw(Error))).
+
+metta_file_metadata(Path, Rows) :-
+    time_file(Path, Modified),
+    (   exists_directory(Path)
+    ->  Rows = [[kind, directory], [modified, Modified]]
+    ;   size_file(Path, Size),
+        Rows = [[kind, file], [size, Size], [modified, Modified]]
+    ).
+
+% Standard stream aliases follow the host's redirections and remain owned
+% by the process. These operations never close them.
+% [tested: test_standard_streams_and_explicit_exit; commit=WORKTREE]
+'stderr!'(Content, true) :-
+    metta_text(Content, Text),
+    catch((write(user_error, Text), flush_output(user_error)), Error,
+          metta_file_refusal('stderr!', Error)).
+
+'stdin-to-string!'(Content) :-
+    catch(read_string(user_input, _, Content), Error,
+          metta_file_refusal('stdin-to-string!', Error)).
+
+% This is process termination, including when embedded. SWI halt's unwind
+% cannot be used as a catchable application-level return protocol.
+% [tested: test_exit_is_process_termination_even_inside_catch; commit=WORKTREE]
+'exit!'(Status, _) :-
+    (   integer(Status), between(0, 255, Status)
+    ->  halt(Status)
+    ;   throw(error(domain_error(exit_status, Status),
+                    context('exit!', 'Use an integer exit status from 0 to 255')))
+    ).
+
+metta_file_refusal(Operation, error(existence_error(Kind, Path), _)) :- !,
+    throw(error('file-not-found'(Operation, Kind, Path),
+                context(Operation, 'Create the missing path or correct its spelling'))).
+metta_file_refusal(Operation, error(permission_error(Action, Kind, Path), _)) :- !,
+    throw(error('file-permission-denied'(Operation, Action, Kind, Path),
+                context(Operation, 'Check access permissions and choose a valid source or destination'))).
+metta_file_refusal(Operation, Error) :-
+    throw(error('file-operation-failed'(Operation, Error),
+                context(Operation, 'Check the path, available storage and stream state before retrying'))).
+
+:- multifile prolog:error_message//1.
+prolog:error_message('file-not-found'(Operation, Kind, Path)) -->
+    [ 'file-not-found: ~w could not find ~w ~q; create the path or correct its spelling'
+      -[Operation, Kind, Path] ].
+prolog:error_message('file-permission-denied'(Operation, Action, Kind, Path)) -->
+    [ 'file-permission-denied: ~w cannot ~w ~w ~q; check permissions and choose a valid source or destination'
+      -[Operation, Action, Kind, Path] ].
+prolog:error_message('file-operation-failed'(Operation, Error)) -->
+    [ 'file-operation-failed: ~w: ~q; check the path, storage and stream state before retrying'
+      -[Operation, Error] ].
+
 %Every file operation succeeds exactly once: a missing file raises rather than
 %failing, and an unknown handle raises rather than failing, so there is no
 %semidet case among them. det/1 turns that from a comment into a check.
@@ -281,6 +419,16 @@ entry_to_string(Name, Text) :- atom_string(Name, Text).
 :- det('list-dir!'/2).
 :- det('file-exists'/2).
 :- det('dir-exists'/2).
+:- det('path-join'/3).
+:- det('path-parent'/2).
+:- det('path-name'/2).
+:- det('path-extension'/2).
+:- det('make-dir!'/2).
+:- det('delete-dir!'/2).
+:- det('copy-file!'/3).
+:- det('file-metadata!'/2).
+:- det('stderr!'/2).
+:- det('stdin-to-string!'/1).
 :- det(next_file_handle/1).
 :- det(file_open_mode/2).
 :- det(drop_trailing_empty/2).
