@@ -1,9 +1,10 @@
 % Purpose: memoize MeTTa function calls with C-trie exact bags or bounded
 %   LRU/WTinyLFU storage and dependency-based invalidation.
-% Guarantees: annotated effects refuse cache admission and incompatible late
-%   declarations; removing a cache owner retires its metadata and any remaining
-%   table [tested: extensions/python/tests/ch11_python_as_a_notation/test_arrow_products.py;
-%   commit=bbb512316280110a747e31c26adfc31e8c5104be].
+% Guarantees: a written declaration is honoured as written, whatever the body
+%   or its arrows say, and no annotation arriving later withdraws it; removing
+%   a cache owner retires its metadata and any remaining table [tested:
+%   extensions/python/tests/ch11_python_as_a_notation/test_arrow_products.py;
+%   commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -28,20 +29,23 @@
 %     support_graph:test_a_derived_fact_is_invalidated_forward_from_what_it_supports;
 %     commit=7ade2b90e2631451fd6ffc23d22dd8c2d4a7a7aa].
 %   - A pure recursive SCC is enabled automatically only when one retained RHS
-%     calls that SCC at least twice; force/refuse catalog declarations override
-%     profitability without weakening purity [tested:
+%     calls that SCC at least twice; (cache Fun force) overrides profitability
+%     AND every effect ground the library judged for a function nobody
+%     declared, because the declaration is the developer's answer [tested:
 %     test_a_doubly_branching_recursion_is_tabled_automatically_and_a_tail_recursion_is_not,
 %     test_an_impure_function_is_never_cached_automatically,
-%     test_automatic_cache_force_and_refuse_overrides; commit=9e7d5dc2cad810940e5386d52636ac6946df279d].
+%     test_a_forced_impure_function_is_cached_on_the_declaration,
+%     test_automatic_cache_force_and_refuse_overrides; commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 %   - Automatic caching preserves answer bags beyond memo_answer_limit/1,
-%     ignores manual aggregation and keys floats exactly; bounded search is a
-%     hard safety refusal because eager bag collection would change its
-%     left-recursive control; an explicit SWI table takes precedence rather
-%     than stacking both cache substrates [tested:
+%     ignores manual aggregation and keys floats exactly; bounded search and an
+%     existing SWI table are the two grounds force does not open, because
+%     neither judges the body: eager bag collection would change a bounded
+%     search's left-recursive control, and a second cache substrate would stack
+%     on the predicate the first one owns [tested:
 %     test_automatic_caching_preserves_multiplicity_and_answer_limit,
 %     test_bounded_left_recursive_search_is_not_cached_automatically,
 %     test_explicit_tabling_takes_precedence_over_automatic_memoization;
-%     commit=9e7d5dc2cad810940e5386d52636ac6946df279d].
+%     commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 %   - get-memoize-stats/2 reports one function's live entry and answer counts,
 %     preserving duplicate answer occurrences in the latter [tested:
 %     lib_memo_stats:a_function_report_counts_answer_occurrences;
@@ -262,12 +266,6 @@ seam:effect_operation_name(Goal, Fun, Arity) :-
     exact_memo_specialization(ReplayName, _TableName,
                               Fun, _Module, Arity).
 
-:- multifile prolog:error_message//1.
-prolog:error_message(permission_error(memoize, volatile_function, Name)) -->
-    [ '~w is declared volatile, so its answers are not reproducible and a \c
-       cache would skip whatever the call does. Ask the library that \c
-       registered it, or memoize a wrapper whose answers are.'-[Name] ].
-
 %The guard that runs before anything else: this hook is consulted for every
 %reduced call and every compiled call site, and reading the module, then
 %resolving the owner, is work wasted whenever nothing by this name is
@@ -349,57 +347,8 @@ seam:source_program_compiled :-
 
 :- multifile seam:cache_policy_changed/1.
 seam:cache_policy_changed(Fun) :-
-    memo_refuse_conflicting_arrow(Fun),
     memo_automatic_mark_policy_changed(Fun),
     memo_automatic_reconcile_dirty.
-
-%The annotation writer runs this event inside its transaction before storing
-%the type or repairing callers. Refuse a late author assertion that an existing
-%cache would suppress, including a cache in another space or on a caller.
-memo_refuse_conflicting_arrow(Fun) :-
-    metta_annotated_operation_effect(Fun, Effect),
-    Effect \== pureStructural,
-    memo_enabled_name(Cached),
-    memo_state_modules(Cached, Modules),
-    member(Module, Modules),
-    ( memo_manual_enabled(Cached, Module) ; memo_automatic_enabled(Cached, Module) ),
-    memo_compiled_operation(Module, Cached, Fun),
-    !,
-    throw(error(permission_error(declare, effect_with_live_cache, Fun),
-                context(metta_add_atom/3, cached(Module, Cached, Effect)))).
-memo_refuse_conflicting_arrow(_).
-
-%A forward memo declaration has no body to check at admission. The compiled
-%event closes that gap before its first call; retained source tells the effect
-%planner which terms are calls. An unchecked caller cannot override an explicit
-%author annotation on a dependency.
-memo_refuse_compiled_arrow_effect(Cached) :-
-    metta_annotated_operation_effect(_, _),
-    memo_state_modules(Cached, Modules),
-    member(Module, Modules),
-    ( memo_manual_enabled(Cached, Module) ; memo_automatic_enabled(Cached, Module) ),
-    memo_compiled_operation(Module, Cached, Fun),
-    metta_annotated_operation_effect(Fun, Effect),
-    Effect \== pureStructural,
-    !,
-    throw(error(metta_memo_annotated_effect(Cached, Fun, Effect),
-                context('memoize', 'a compiled dependency carries an author effect'))).
-memo_refuse_compiled_arrow_effect(_).
-
-memo_compiled_operation(Module, Cached, Fun) :-
-    memo_state_arities(Cached, Module, Arities),
-    member(Arity, Arities),
-    functor(Goal, Cached, Arity),
-    metta_host_goal_effect_plan(Module, Goal, Operations, _),
-    member([Fun, _], Operations).
-
-prolog:error_message(metta_memo_annotated_effect(Cached, Fun, Effect)) -->
-    [ 'cannot memoize ~w: ~w declares ~w, above pureStructural; \c
-       an unchecked cache cannot override an annotated effect'-[Cached, Fun, Effect] ].
-
-prolog:error_message(permission_error(declare, effect_with_live_cache, Name)) -->
-    [ 'cannot honour the annotated effect for ~w while a dependent cache is live; \c
-       remove the cached definition before adding the declaration'-[Name] ].
 
 :- multifile seam:automatic_cache_explanation/3.
 seam:automatic_cache_explanation(Fun, Choice, Reason) :-
@@ -456,14 +405,11 @@ memo_install_function_removed_handler(Fun) :-
     memo_function_removed_installed(Fun, _),
     !.
 memo_install_function_removed_handler(Fun) :-
-    assertz(seam:(function_clauses_changed(Fun) :-
-                      lib_memo:memo_refuse_compiled_arrow_effect(Fun)), ChangedRef),
     assertz(seam:(atom_removed(Space, [=, [Fun|_], _]) :-
                       lib_memo:memo_withdraw_removed_definition(Space, Fun)), AtomRef),
     assertz(seam:(function_removed(Fun) :-
                       lib_memo:memo_function_removed(Fun)), RemovedRef),
-    assertz(memo_function_removed_installed(Fun,
-                                          [ChangedRef, AtomRef, RemovedRef])).
+    assertz(memo_function_removed_installed(Fun, [AtomRef, RemovedRef])).
 
 memo_remove_function_removed_handler(Fun) :-
     forall(retract(memo_function_removed_installed(Fun, Refs)),
@@ -632,8 +578,23 @@ memo_automatic_candidate(_, memo_scc(_, true, MaxCalls)) :- MaxCalls >= 2.
 memo_cache_override(Fun, Mode) :-
     metta_contract_fact([cache, Fun, Mode]).
 
+%The analysis for a function NOBODY declared, and only for that function.
+%Automatic caching is the library choosing on its own, so it has to answer the
+%effect question itself; a written (cache Fun force) is the developer answering
+%it, and the two effect grounds below carry `\+ memo_cache_override(Fun,
+%force)` for that reason. The two grounds in between are not judgements about
+%the body and force does not open them: a second cache substrate would stack on
+%the predicate SWI's own table already owns, and eager bag collection would
+%change a bounded search's left-recursive control, so neither is something the
+%library could do on anyone's word.
+%
+%Each force lookup is placed so the ordinary function pays nothing for it. Here
+%the volatility test is one indexed lookup that fails for every name no library
+%declared, so it leads; below, the walk over the body is what the lookup can
+%save, so it follows.
 memo_automatic_unsafe_reason(Fun, _, [volatile, Fun]) :-
     \+ metta_function_cacheable(Fun),
+    \+ memo_cache_override(Fun, force),
     !.
 memo_automatic_unsafe_reason(Fun, Module, 'explicit-tabling') :-
     current_predicate(Module:Fun/Arity),
@@ -650,6 +611,7 @@ memo_automatic_unsafe_reason(Fun, Module, ['bounded-search', Control]) :-
     memberchk(Control, [once, take, top]),
     !.
 memo_automatic_unsafe_reason(Fun, Module, Reason) :-
+    \+ memo_cache_override(Fun, force),
     findall(Arity,
             ( memo_equation(Fun, Module, any, [=, [_|Args], _]),
               length(Args, InputArity),
@@ -1756,115 +1718,33 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
     ; throw(error(domain_error(function_symbol, Fun), Context))
     ),
     %Every declaration door resolves its target here, and each of them reads
-    %the COMPILED state: the purity walk that refuses an impure body walks
-    %compiled clauses, so a deferred definition read as pure and (memoize f)
-    %accepted a function it must refuse
-    %[measured 2026-08-24: tests/test_contract.py, an unchecked declaration].
+    %the COMPILED state: memo_scope_module/2 picks the space by asking which
+    %module holds the equations, and the recompile below has to find those
+    %equations to put them back. A deferred definition has neither until it is
+    %forced [tested: test_forward_memoization_preserves_deferred_answer_aggregation].
     metta_ensure_compiled(Fun),
-    %A library may declare that its function must not be cached, with
-    %(volatility name volatile) in its export block. Caching a function whose
-    %answers are not reproducible skips its effect on the second call, and
-    %before this nothing recorded whether that was sound: the review's own
-    %probe cached a side-effecting registered predicate and watched the effect
-    %disappear. An undeclared function is still cacheable, because
-    %memoization is opt-in by the caller and refusing silence would break
-    %every existing (memoize f).
-    ( metta_function_cacheable(Fun)
-    -> true
-    ; throw(error(permission_error(memoize, volatile_function, Fun),
-                  context(Context,
-                          'the library that registered this declared it volatile')))
-    ),
     memo_scope_module(Fun, Module),
-    memo_refuse_operation_effect(Fun, Context),
-    memo_refuse_uncacheable(Fun, Module, Context),
     metta_module_space(Module, Space),
     findall(Term, memo_equation(Fun, Module, Arities, Term), RawTerms),
     sort(RawTerms, Terms).
 
-%The BODY, not only the declaration above it. Opting in is the CALLER saying
-%they want the cache; it is not the caller establishing that the function is
-%safe to cache, and nothing was establishing that: `(memoize viapy)` was
-%accepted, `is-memoized` answered true, and mutating the data the Python
-%operation reads left the cache answering the old value
-%[source: ai-metta-python-seams.md item 1].
+%WHAT THIS DOOR NO LONGER ASKS, and why. `memoize`, `memoize-exact` and
+%`(cache Fun force)` are the developer's own word about their own program, and
+%this library used to answer back: a (volatility Name volatile) export, a
+%declared or annotated effect class above pureStructural, an effect walk over
+%the compiled body, a space read anywhere in it, and a late annotation arriving
+%while a cache was live were five separate refusals. All five judged whether
+%the developer SHOULD have asked, which is not a library's question to ask; a
+%cache put in the wrong place is a bug in the program that put it there
+%(user ruling, 2026-09-06). The one refusal left above is the one this library
+%cannot do anything about: a name that is no function has no equations to
+%recompile and no predicate to dispatch
+%[tested: a_name_that_is_not_a_function_is_still_refused].
 %
-%The walk is the engine's, the same one tabling uses, so one judgement covers
-%both. The criterion here is STRICTER, and the reason is what each does after
-%caching: tabling resolves every space read to its storage predicate and
-%carries the incremental property against it, so a read is something it can
-%invalidate on. Memoization invalidates on an equation change and on nothing
-%else, so a read it cannot see change is a cache that goes stale in silence.
-%The TARGET itself, not only what its body calls. The walk below examines
-%compiled CLAUSES, and a registered operation has none, so an oracleIO
-%operation passed it and memoized in silence: caching a clock answers the
-%first reading forever. One host's decorator used to refuse this with a
-%blanket ban on wrapping an operation at all, which served that host and no
-%other; the rule belongs here, where every seat reaches it, and it is the law
-%already written down -- pureStructural is the only class memoization admits
-%without an explicit policy [measured 2026-08-31].
-%NOT skipped by (cache Name unchecked), the same way the volatility gate is
-%not: a declared effect class is the AUTHOR's no and outranks the caller's
-%insistence, which is the rule metta_cache_unchecked's own comment states.
-memo_refuse_operation_effect(Fun, Context) :-
-    %An annotated effect on a definition is the same author's refusal as one
-    %on a registered operation. Inferred generator multiplicity alone remains
-    %cacheable because exact memoization preserves the complete answer bag.
-    ( metta_catalog_row([op, Fun, _, _])
-    -> metta_operation_effect(Fun, Effect)
-    ; metta_annotated_operation_effect(Fun, Effect) ),
-    metta_effect_rank(Effect, Rank),
-    metta_effect_rank(pureStructural, PureRank),
-    Rank > PureRank,
-    !,
-    throw(error(permission_error(memoize, impure_operation, Fun),
-                context(Context, Effect))).
-memo_refuse_operation_effect(_, _).
-
-memo_refuse_uncacheable(Fun, Module, Context) :-
-    findall(Arity, current_predicate(Module:Fun/Arity), Arities),
-    forall(member(Arity, Arities),
-           memo_refuse_uncacheable_arity(Fun, Module, Arity, Context)).
-
-%(cache Fun unchecked) in &metta is the caller's declared acceptance of
-%staleness, so the walk is skipped for this function. The volatility gate is
-%NOT skipped: it runs before this predicate is reached, and a library's
-%explicit volatile keeps refusing whatever the caller declares
-%[tested: an_unchecked_declaration_memoizes_an_impure_body].
-memo_refuse_uncacheable_arity(Fun, _Module, _Arity, _Context) :-
-    metta_cache_unchecked(Fun),
-    !.
-memo_refuse_uncacheable_arity(Fun, Module, Arity, Context) :-
-    catch(metta_effect_walk(Module, [Fun/Arity], Reads),
-          error(metta_impure_goal(Goal), _),
-          throw(error(permission_error(memoize, impure_function, Fun),
-                      context(Context, Goal)))),
-    (   Reads == []
-    ->  true
-    ;   throw(error(permission_error(memoize, space_reading_function, Fun),
-                    context(Context, Reads)))
-    ).
-
-:- multifile prolog:error_message//1.
-prolog:error_message(permission_error(memoize, impure_operation, Name)) -->
-    [ '~w has a declared effect above pureStructural, so a cached answer \c
-       would hide what it observes. pureStructural is the only class \c
-       memoization admits without an explicit policy. (cache ~w unchecked) \c
-       does NOT open this, because a declared effect class is the author\'s \c
-       answer and outranks the caller\'s. Correct the declaration of ~w \c
-       only when it inspects its arguments without observing mutable state'-[Name, Name, Name] ].
-prolog:error_message(permission_error(memoize, impure_function, Name)) -->
-    [ '~w calls an operation that is not classified pureStructural, so a \c
-       cached answer would hide its effect. Declare that operation with \c
-       (effect <operation> pureStructural) only when it inspects its \c
-       arguments without observing mutable state, or declare \c
-       (cache ~w unchecked) to memoize it on your word and accept the stale \c
-       answers that follow'-[Name, Name] ].
-prolog:error_message(permission_error(memoize, space_reading_function, Name)) -->
-    [ '~w reads a space, and memoization invalidates on an equation change \c
-       and on nothing else, so the cache would outlive the atoms it was \c
-       computed from. Table it instead: tabling resolves the read and \c
-       invalidates on it'-[Name] ].
+%The analysis itself is not gone. memo_automatic_unsafe_reason/3 still runs it
+%for a function nobody declared, where the library is the one choosing, and
+%invalidation, generations and the support graph are unchanged: keeping a cache
+%it enabled correct is this library's job, and deciding to enable one is not.
 
 %Recompiling is what makes memoization take effect: the translator bakes
 %the dispatch into every compiled call site, so equations already compiled

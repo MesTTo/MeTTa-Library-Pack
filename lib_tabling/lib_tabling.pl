@@ -43,6 +43,10 @@
 %     its canonical storage module [tested:
 %     test_two_instances_of_a_parametric_space_answer_independently;
 %     commit=3c7bcde6a0670ec5c563584b26977b41cc727580].
+%   - A body whose effects the walk cannot classify is tabled PLAIN rather than
+%     refused: the declaration is the developer's and this library builds the
+%     strongest table it admits [tested: an_effectful_body_tables_plain,
+%     a_higher_order_body_tables_plain; commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
 % Fails when:
 %   - the caller depends on the ORDER of a function's answers. Tabling
 %     changes it. An untabled MeTTa function answers in clause order, and a
@@ -271,19 +275,46 @@ metta_tabling_declare(Module, Name, CompiledArity, Head) :-
     metta_tabling_reflection_ensure(Fact),
     metta_tabling_register(Name, Module, CompiledArity).
 
+%A `(tabled ...)` declaration is the developer's, and this predicate's job is
+%to build the strongest table their body admits rather than to decide whether
+%they should have asked. Two outcomes, and the difference between them is what
+%the reads BUY, not what the body is allowed to do:
+%
+%  reads(Reads)  the walk resolved every read to a storage predicate, so those
+%                predicates carry the incremental property and SWI invalidates
+%                this table when one of them changes. That resolution is what
+%                makes a table over a space correct and it stays.
+%  unclassified  the walk could not classify the body's effects at all, so
+%                there is nothing to hang the incremental property ON. The
+%                table is PLAIN, which is what the old `(cache Name unchecked)`
+%                branch built for exactly this case, and it is now what an
+%                effectful body gets without anyone having to say a word
+%                [tested: an_effectful_body_tables_plain].
 metta_tabling_install_table(Module, Name, CompiledArity) :-
-    (   metta_cache_unchecked(Name)
-    ->  %The caller accepted staleness by declaration, so the purity walk is
-        %skipped and the table is PLAIN: with reads unresolved there is
-        %nothing sound to hang the incremental property on, and a stale
-        %answer is exactly what (cache Name unchecked) accepts
-        %[tested: an_unchecked_declaration_tables_an_impure_body].
-        table(Module:Name/CompiledArity as shared)
-    ;   metta_tabling_reads(Module, Name, CompiledArity, Reads),
-        forall(member(Storage:Predicate, Reads),
+    metta_tabling_incremental_reads(Module, Name, CompiledArity, Outcome),
+    (   Outcome = reads(Reads)
+    ->  forall(member(Storage:Predicate, Reads),
                dynamic(Storage:Predicate as incremental)),
         table(Module:Name/CompiledArity as (incremental, shared))
+    ;   table(Module:Name/CompiledArity as shared)
     ).
+
+%The engine walk raises two balls when it cannot classify a body, and lib
+%tabling's own read resolution raises two more. Only the first pair is a
+%judgement about the developer's body; the second pair says this library cannot
+%build what it promised, so those keep raising
+%[tested: tabling_refuses_unresolvable_reads].
+metta_tabling_incremental_reads(Module, Name, CompiledArity, Outcome) :-
+    catch(( metta_tabling_reads(Module, Name, CompiledArity, Reads),
+            Outcome = reads(Reads) ),
+          Error,
+          (   metta_tabling_unclassified_body(Error)
+          ->  Outcome = unclassified
+          ;   throw(Error)
+          )).
+
+metta_tabling_unclassified_body(error(metta_impure_goal(_), _)).
+metta_tabling_unclassified_body(error(metta_higher_order_goal(_), _)).
 
 metta_tabling_rollback_new_table(true, _, _, _) :- !.
 metta_tabling_rollback_new_table(false, Module, Name, CompiledArity) :-
@@ -312,13 +343,13 @@ metta_tabling_reads(Module, Name, CompiledArity, Reads) :-
     foldl(metta_tabling_resolve, Found, [], Raw),
     sort(Raw, Reads).
 
-%The walk is the ENGINE's, metta_effect_walk/3, and so is the refusal for a
-%goal nothing declares pure. What stays here is what tabling does with the
-%reads it reports, which is the half that is genuinely tabling's: resolve each
-%to the storage predicates that answer it, so the table can carry the
-%incremental property against them. Memoization calls the same walk and does
-%the opposite with the same reads, because it has no invalidation to hang on
-%them [source: engine/metta.pl, metta_effect_walk/3].
+%The walk is the ENGINE's, metta_effect_walk/3. What stays here is what tabling
+%does with the reads it reports, which is the half that is genuinely tabling's:
+%resolve each to the storage predicates that answer it, so the table can carry
+%the incremental property against them. A read that will not resolve is refused
+%by metta_tabling_read/4 below, and that refusal is this library saying it
+%cannot build the table it promises, not a judgement about the body
+%[source: engine/metta.pl, metta_effect_walk/3].
 metta_tabling_resolve(read(Operation, Space, Pattern), Reads0, Reads) :-
     metta_tabling_read(Operation, Space, Pattern, Found),
     append(Found, Reads0, Reads).
