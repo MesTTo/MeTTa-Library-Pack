@@ -147,6 +147,64 @@
 :- dynamic metta_scheduler_deadline/2. % Token, suspended scheduler task
 :- dynamic metta_async_future/4.    % Token, operation name, space, DoneQueue
 
+%THE ONLY WAY THIS LIBRARY JOINS A THREAD. thread_join/2 on its own is unsafe
+%against any thread that can be inside engine_create/3 or engine_destroy/1,
+%which every thread that runs MeTTa can be.
+%
+%PL_set_engine's detach_engine() memsets the CALLING thread's own
+%PL_thread_info_t.tid to zero and restores it on the way out, and thread_join/2
+%reads that field once, with no has_tid test, and hands it to
+%pthread_timedjoin_np. A join landing in that window calls
+%pthread_timedjoin_np(0, ...) and glibc dereferences a null struct pthread
+%[source: SWI-Prolog 10.1.13 src/pl-thread.c:7038 detach_engine, :7056
+%PL_set_engine by its line :7077, :4083 '$engine_create'/3 whose PL_set_engine
+%pair is :4134 and :4148, :4164 destroy_interactor whose pair is :4168 and
+%:4170, :2898 thread_join reading .tid at :2927;
+%commit=2421d06e697daffb0797c307a798131616ebdd8e].
+%
+%The window is not this library's to avoid at the other end. A merged match
+%opens one engine per space and destroys them all when it is done
+%[source: engine/spaces/bounded_matching.pl, metta_match_engine/4 and
+%metta_engine_done/1; commit=2421d06e697daffb0797c307a798131616ebdd8e], so any
+%worker evaluating an ordinary
+%query passes through it, and race_stop_/1 and cancel_future_worker_/4 join
+%exactly such workers, straight after a thread_signal(_, abort) that a thread
+%inside engine_create/3 does not survive cleanly either.
+%
+%A thread whose status has left `running` has finished its goal, and SWI runs
+%no further Prolog on it, so its pthread_t is valid and stays valid: start_thread
+%calls set_thread_completion BEFORE the cleanup that ends the thread, and
+%nothing after that point calls PL_set_engine on it
+%[source: SWI-Prolog 10.1.13 src/pl-thread.c:2167 start_thread, :2139
+%set_thread_completion; commit=2421d06e697daffb0797c307a798131616ebdd8e].
+%Waiting for that is what makes the
+%join safe, and it is the whole of the difference.
+%
+%The wait POLLS, because SWI publishes thread completion only through
+%thread_property/2 and the blocking wait for it IS thread_join/2, the call that
+%is unsafe. It backs off from half a millisecond to 32, so a worker that was
+%just aborted is joined inside a millisecond and one that runs for minutes
+%costs about thirty wakeups a second; SWI's own thread_join/2 polls at 250ms
+%for its signal handling [source: SWI-Prolog 10.1.13 src/pl-thread.c:2873
+%pthread_join_interruptible; commit=2421d06e697daffb0797c307a798131616ebdd8e].
+%[tested: lib_thread:a_joined_worker_survives_engine_churn_on_its_thread,
+%lib_thread:a_joined_worker_survives_a_merged_match_on_its_thread;
+%commit=2421d06e697daffb0797c307a798131616ebdd8e]
+metta_thread_join_settled(Thread, Status) :-
+    metta_thread_settled_(Thread, 0.0005),
+    thread_join(Thread, Status).
+
+%A thread that has gone entirely counts as settled: thread_join/2 then reports
+%the existence error, which is what every caller here already catches.
+metta_thread_settled_(Thread, Delay) :-
+    (   catch(thread_property(Thread, status(Status)), _, Status = gone),
+        Status \== running
+    ->  true
+    ;   sleep(Delay),
+        Next is min(Delay * 2, 0.032),
+        metta_thread_settled_(Thread, Next)
+    ).
+
 %Handles are small integers rather than blobs so they print, compare and
 %cross the Python boundary as ordinary MeTTa values.
 %The counter is a FLAG rather than a dynamic fact, and the difference is a
@@ -345,7 +403,7 @@ race_stop_(Threads) :-
     forall(member(Thread, Threads),
            catch(thread_signal(Thread, abort), _, true)),
     forall(member(Thread, Threads),
-           catch(thread_join(Thread, _), _, true)).
+           catch(metta_thread_join_settled(Thread, _), _, true)).
 
 race_queues_destroy(Start, Results) :-
     catch(message_queue_destroy(Start), _, true),
@@ -1025,7 +1083,8 @@ future_record_received_(Space, Received, Outcome) :-
 future_join_(scheduler(_)) :- !.
 future_join_(async(_)) :- !.
 future_join_(none) :- !.
-future_join_(ThreadId) :- catch(thread_join(ThreadId, _), _, true).
+future_join_(ThreadId) :-
+    catch(metta_thread_join_settled(ThreadId, _), _, true).
 
 known_future_(Space, ThreadId, Done) :-
     (   metta_future(Space, ThreadId, Done)
@@ -1101,7 +1160,7 @@ cancel_future_worker_(async(Token), _, _, Answer) :- !,
 cancel_future_worker_(none, _, _, false) :- !.
 cancel_future_worker_(ThreadId, Space, Done, Answer) :-
     catch(thread_signal(ThreadId, abort), _, true),
-    catch(thread_join(ThreadId, Status), _, Status = unknown),
+    catch(metta_thread_join_settled(ThreadId, Status), _, Status = unknown),
     future_mutex_(Space, Mutex),
     with_mutex(Mutex, future_cancel_probe_(Space, AfterJoin)),
     (   AfterJoin = terminal(_)
@@ -1115,7 +1174,7 @@ cancel_future_worker_(ThreadId, Space, Done, Answer) :-
 cancel_repeating_worker_(none) :- !.
 cancel_repeating_worker_(ThreadId) :-
     catch(thread_signal(ThreadId, abort), _, true),
-    catch(thread_join(ThreadId, _), _, true).
+    catch(metta_thread_join_settled(ThreadId, _), _, true).
 
 % ----------------------------------------------------------------- channels
 
@@ -1462,7 +1521,7 @@ timer_dispatch_worker_(Pool, Space, Module, Expr, Repeat, Context, Done) :-
             timer_dispatch_start_(Start) ),
           Error,
           ( catch(thread_signal(ThreadId, abort), _, true),
-            catch(thread_join(ThreadId, _), _, true),
+            catch(metta_thread_join_settled(ThreadId, _), _, true),
             timer_dispatch_start_destroy_(Start),
             throw(Error) )).
 
