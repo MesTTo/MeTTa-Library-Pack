@@ -15,7 +15,7 @@
 %   lib_memo_reach:a_body_that_writes_its_own_space_is_not_duplicated_by_memoize,
 %   test_memoizing_an_operation_caches_its_calls,
 %   test_memoizing_a_body_that_writes_its_own_space_runs_it_once;
-%   commit=WORKTREE].
+%   commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -204,7 +204,7 @@ memo_owner_module(Fun, CallModule, PredArity, Module) :-
 %inherited function were both admitted and then never read: `is-memoized`
 %answered true and the function ran uncached on every call
 %[tested: lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it,
-%test_memoizing_an_operation_caches_its_calls; commit=WORKTREE].
+%test_memoizing_an_operation_caches_its_calls; commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
 memo_scope_module(Fun, Module) :-
     current_metta_module(CallModule),
     metta_self_module(Self),
@@ -230,7 +230,7 @@ memo_scope_module(Fun, Module) :-
 %copy to key on, so that module is where its calls look from everywhere
 %[tested: memo_space_isolation:a_declaration_lands_in_the_module_that_is_speaking,
 %lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it;
-%commit=WORKTREE].
+%commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
 %
 %The arities come from the ENGINE's own record rather than from the speaking
 %module's import table. current_predicate/2 answers nothing for a registered
@@ -1822,7 +1822,7 @@ memo_target(Fun, Arities, Context, Module, Terms) :-
 %copy in, and a one-clause function became a two-clause one -- two writes and a
 %doubled answer bag on the first call
 %[tested: a_body_that_writes_its_own_space_is_not_duplicated_by_memoize,
-%test_memoizing_a_body_that_writes_its_own_space_runs_it_once; commit=WORKTREE].
+%test_memoizing_a_body_that_writes_its_own_space_runs_it_once; commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
 memo_recompile(Module, Fun, Enable) :-
     call(Enable),
     memo_recompile_reach(Module, Fun).
