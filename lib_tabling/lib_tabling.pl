@@ -63,18 +63,18 @@
 %     costs 4,776 [measured 2026-09-07; command=swipl -q ai-tmp/cp/probe17.pl
 %     in docs/journal/2026-09-06-cache-policies-are-the-engines-own-options.md;
 %     tested: a_monotonic_table_takes_a_new_fact_without_re_evaluation,
-%     test_a_monotonic_table_propagates_an_add_at_delta_cost; commit=WORKTREE]
+%     test_a_monotonic_table_propagates_an_add_at_delta_cost; commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 %   - A (lattice Join) policy tables the head with Module:Join/3 in the
 %     answer position, one aggregated answer per input variant, private and
 %     watching nothing, because on SWI-Prolog 10.1.13 a shared moded table
 %     raises type_error(trie, ...) on its second call and an incremental or
 %     monotonic one re-evaluates to a wrong table [measured 2026-09-07;
-%     tested: a_lattice_table_answers_the_minimum_over_a_cycle; commit=WORKTREE]
+%     tested: a_lattice_table_answers_the_minimum_over_a_cycle; commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 %   - A subsumptive policy reuses a completed general table for a specific
 %     call, and is refused with a watch, whose re-evaluation raises
 %     existence_error(reset, ...) on this SWI [measured 2026-09-07; tested:
 %     a_subsumptive_table_answers_a_specific_call_from_the_general_one,
-%     a_watched_subsumptive_policy_is_refused; commit=WORKTREE]
+%     a_watched_subsumptive_policy_is_refused; commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 %   - A restraint stops the evaluation with metta_control_signal(restraint,
 %     [Word, Bound, Call]) rather than answering a partial table: the two size
 %     restraints through SWI's tripwire, max-answers through call_delays/2 on
@@ -83,7 +83,7 @@
 %     tested: a_max_answers_restraint_signals_when_it_trips,
 %     a_subgoal_abstract_restraint_signals_through_the_tripwire,
 %     test_a_tripped_restraint_reaches_python_as_a_restraint_error;
-%     commit=WORKTREE]
+%     commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 %   - A policy the engine cannot honour for a head is refused naming the
 %     remedy and the row does not stand: an unclassifiable body under a watch,
 %     a foreign read under a watch, a storage predicate already carrying the
@@ -92,11 +92,11 @@
 %     a_watched_policy_over_an_impure_body_is_refused,
 %     one_storage_predicate_carries_one_watch,
 %     a_refused_row_does_not_stand, test_the_refusals_name_their_remedy;
-%     commit=WORKTREE]
+%     commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 %   - table-stats answers (policy Words) beside its five counters, the words
 %     in force after compilation, and the storage watch is released when the
 %     last table reading a predicate under it is dropped [tested:
-%     the_policy_in_force_is_reported_and_released; commit=WORKTREE]
+%     the_policy_in_force_is_reported_and_released; commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 % Fails when:
 %   - the caller depends on the ORDER of a function's answers. Tabling
 %     changes it. An untabled MeTTa function answers in clause order, and a
