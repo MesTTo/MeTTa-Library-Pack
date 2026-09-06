@@ -9,7 +9,7 @@
 % Purpose: expose import records and undo alongside static data and Prolog imports.
 % Guarantees: imports/2 enumerates committed (import Path) atoms and
 %   'unimport!'/3 withdraws native source ownership through metta_unimport/2
-%   [tested: lib_import_lifecycle; commit=WORKTREE].
+%   [tested: lib_import_lifecycle; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
 % Owns resources: an imports descriptor owns no handle or copied rows.
 % Guarded by: metta_unimport/2 serializes source changes with metta_loader.
 

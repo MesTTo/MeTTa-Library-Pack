@@ -1,6 +1,6 @@
 ; Purpose: load Prolog support and expose source imports as queryable data.
 ; Guarantees: imports and unimport! share the engine's source ownership journal
-; [tested: lib_import_lifecycle; commit=WORKTREE].
+; [tested: lib_import_lifecycle; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
 ;
 ; (match (imports &space) (import $path) $path) lists canonical source paths.
 ; The read-only view follows committed imports without adding payload atoms.

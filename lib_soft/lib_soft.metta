@@ -1,7 +1,7 @@
 ; Purpose: score written terms using symbol similarity and structural recursion.
 ; Guarantees: a function-naming symbol retains its similarity; grounded values
 ;   compare crisply [tested: sh engine/test.sh suites/libraries/lib_soft.plt;
-;   commit=WORKTREE].
+;   commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
 
 ;Soft structural unification: match quality as a measure over terms.
 ;
@@ -110,7 +110,7 @@
 ;  match at position 0       183,661    early stop buys 2.10x
 ;
 ;[measured: inference counts above; command=python extensions/python/benchmarks/soft_match_cost.py;
-;fixture=400 candidates with six arguments, Python 3.14.4 with Janus; commit=WORKTREE].
+;fixture=400 candidates with six arguments, Python 3.14.4 with Janus; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
 (: soft-fold (-> %Undefined% Atom Atom Number))
 (: soft-walk (-> %Undefined% Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
