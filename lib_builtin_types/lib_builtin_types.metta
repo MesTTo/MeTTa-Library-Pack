@@ -433,7 +433,7 @@
 ;; that calls it: the mask index for a BUILTIN call site is derived from this
 ;; file, in load_builtin_type_surface/0, and the prelude compiles after that,
 ;; so a prelude-only declaration would arrive too late to hold anything
-;; [source: engine/metta.pl:1435-1451 and :1718; commit=WORKTREE].
+;; [source: engine/metta.pl:1435-1451 and :1718; commit=71de27a76dd16684941e3e090de0d17299d96493].
 (: assert-answers (-> %Undefined% Atom Atom Atom (->)))
 (: exists_file (-> %Undefined% Bool))
 (: argv (-> Number %Undefined%))
