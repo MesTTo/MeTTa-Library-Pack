@@ -107,10 +107,10 @@
 ;docs/journal/2026-09-05-get-metatype-follows-fun.md.
 ;
 ;  mismatch at position 0     87,657
-;  match at position 0       183,661    early stop buys 2.10x
+;  match at position 0       183,663    early stop buys 2.10x
 ;
-;[measured: inference counts above; command=python extensions/python/benchmarks/soft_match_cost.py;
-;fixture=400 candidates with six arguments, Python 3.14.4 with Janus; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
+;[measured 2026-09-06: inference counts above; command=python extensions/python/benchmarks/soft_match_cost.py;
+;fixture=400 candidates with six arguments, Python 3.14.4 with Janus; commit=d58b26a9e64131bcfd7996646c08dfca2a074508].
 (: soft-fold (-> %Undefined% Atom Atom Number))
 (: soft-walk (-> %Undefined% Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
