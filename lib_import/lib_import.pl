@@ -6,6 +6,37 @@
 % environment from a small allowlist carrying no locale.
 :- encoding(utf8).
 
+% Purpose: expose import records and undo alongside static data and Prolog imports.
+% Guarantees: imports/2 enumerates committed (import Path) atoms and
+%   'unimport!'/3 withdraws native source ownership through metta_unimport/2
+%   [tested: lib_import_lifecycle; commit=WORKTREE].
+% Owns resources: an imports descriptor owns no handle or copied rows.
+% Guarded by: metta_unimport/2 serializes source changes with metta_loader.
+
+:- multifile seam:foreign_space/1, seam:foreign_capability/2,
+             seam:foreign_atoms/2, seam:foreign_refuse/2.
+
+imports(Space, View) :-
+    must_be(ground, Space),
+    format(atom(Encoded), '~k', [Space]),
+    atom_concat('&imports:', Encoded, View).
+
+import_view_space(View, Space) :-
+    atom(View), atom_concat('&imports:', Encoded, View),
+    catch(read_term_from_atom(Encoded, Space, [syntax_errors(error)]), _, fail),
+    ground(Space).
+
+seam:foreign_space(View) :- import_view_space(View, _).
+seam:foreign_capability(View, enumerate) :- import_view_space(View, _).
+seam:foreign_atoms(View, [import, Path]) :-
+    import_view_space(View, Space), metta_import_record(Space, Path).
+seam:foreign_refuse(View, Capability) :-
+    import_view_space(View, Space),
+    throw(error(permission_error(Capability, import_records, Space),
+                context(imports, 'import records are read-only; use import! or unimport!'))).
+
+'unimport!'(Space, File, true) :- metta_unimport(Space, File).
+
 %Translate a MeTTa S-expression file (no code, no bangs) to Prolog facts.
 %
 %Through the engine's own reader, not line by line. The line-based converter
