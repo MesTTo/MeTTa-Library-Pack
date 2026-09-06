@@ -60,8 +60,8 @@
 %     the next read 415, where the incremental table re-evaluates at 2,350;
 %     the storage predicate is NOT also marked incremental, because that
 %     invalidates the monotonic table on every write and its next read then
-%     costs 4,776 [measured 2026-09-07; command=swipl -q ai-tmp/cp/probe17.pl
-%     in docs/journal/2026-09-06-cache-policies-are-the-engines-own-options.md;
+%     costs 4,776 [measured 2026-09-07; command=the probe17 program recorded in
+%     docs/journal/2026-09-06-cache-policies-are-the-engines-own-options.md;
 %     tested: a_monotonic_table_takes_a_new_fact_without_re_evaluation,
 %     test_a_monotonic_table_propagates_an_add_at_delta_cost; commit=eb6b4de8ea70a6b2fe8312a1a23d0593fa764d54]
 %   - A (lattice Join) policy tables the head with Module:Join/3 in the
@@ -131,7 +131,7 @@
 %     call, exactly as in the eager one, and the table is marked invalid until
 %     that call re-validates it at 545 inferences against 415; lazy is
 %     compiled as written and reported, and buys nothing measurable here
-%     [measured 2026-09-07; command=swipl -q ai-tmp/cp/probe17.pl in the same
+%     [measured 2026-09-07; command=the probe17 program recorded in the same
 %     journal thread].
 % Decides: the default watch is incremental for a variant table over a body
 %   the walk classifies and plain otherwise; a lattice or subsumptive table
