@@ -10,7 +10,7 @@
 %   observe-source pays nothing for the observer
 %   [tested: source_observation:the_observer_holds_no_hook_outside_an_observation;
 %   measured 2026-09-05: engine boot 536,337 with the boot load against 532,641
-%   without; commit=WORKTREE].
+%   without; commit=b96e1a15260b7538a8e42be613bcc5dd0dddd136].
 
 :- use_module('../../engine/tracer', [metta_trace_source/6]).
 :- use_module('../../engine/spaces', [metta_add_atoms/2, metta_release_space/1]).
