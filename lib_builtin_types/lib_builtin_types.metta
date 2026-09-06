@@ -107,8 +107,9 @@
 ;; The rest of the engine's surface: 117 names that answered %Undefined%.
 ;;
 ;; The types were SOURCED from the reference corelib dump wherever it had one,
-;; because a type MeTTa does not already have is additive [source: LeaTTa
-;; stdlib.md, 146 typed entries; 39 of these names are in it]. What GOVERNS is
+;; because a type MeTTa does not already have is additive [assumed: taken from
+;; a reference corelib dump of 146 typed entries, 39 of these names among them;
+;; not re-measured against upstream PeTTa]. What GOVERNS is
 ;; upstream PeTTa, which became this branch's arbiter with the alignment: where
 ;; both declare a name, upstream's arrow wins. Nothing is in dispute today --
 ;; upstream declares 36 names, every one of them is declared here, and all 36
@@ -216,10 +217,11 @@
 
 ;; --- Special forms: collections ---
 ;; Each has TWO arrows, the binder spelling and the closure spelling, and both
-;; are LeaTTa's own rows byte for byte
-;; [source: LeaTTa MettaHyperonFull/Minimal/Stdlib.lean, the (: map-atom ...),
-;; (: filter-atom ...) and (: foldl-atom ...) lines of preludeSrc; measured
-;; 2026-08-24 on LeaTTa 9ea9f9d, !(get-type map-atom) answers both].
+;; are the reference's own rows byte for byte
+;; [assumed 2026-08-24: the (: map-atom ...), (: filter-atom ...) and
+;; (: foldl-atom ...) rows and `!(get-type map-atom)` answering both were
+;; measured against an earlier reference corpus at that date, not re-measured
+;; against upstream PeTTa].
 ;; The list is Expression and so arrives AS WRITTEN in either spelling:
 ;; !(map-atom (cdr-atom (a b)) $y (q $y)) is ((q cdr-atom) (q (a b))) there,
 ;; mapping over the two parts of the unrun call. foldl-atom's seed is Atom and
@@ -314,9 +316,9 @@
 ;;
 ;; Their RESULT is `Atom`, matching the suffixed rows two lines up, and the
 ;; result type is not decoration: `Atom` says the answer is final while every
-;; other result re-enters evaluation
-;; [source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean:3786-3799,
-;; `returnsAtom`]. Written `Expression` here, each cons re-walked the list it
+;; other result re-enters evaluation [assumed: the `returnsAtom` rule was
+;; adopted from an earlier reference semantics, not re-measured against
+;; upstream PeTTa]. Written `Expression` here, each cons re-walked the list it
 ;; had just built and a million-element `range` went from linear to quadratic
 ;; [measured 2026-08-24: 20,000 elements, 0.30s to 7.01s, and the shipped
 ;; million-element holbenchmark kernel stopped finishing at all].
@@ -328,10 +330,9 @@
 ;; `Type %Undefined%`, which is the gradual default rather than a type, so
 ;; get-type answers %Undefined% and a wrong-arity call stays unreduced instead
 ;; of being refused by an arity the declaration invented
-;; [source: LeaTTa wiki/Hyperon-Divergences.md, the undeclared-helpers row,
-;; measured 2026-08-15; tests/semantics/types-basic/
-;; 61-undeclared-type-helpers-surface.metta and eval-core/
-;; empty-argument-arity.metta].
+;; [assumed 2026-08-15: the undeclared-helpers reading was measured against an
+;; earlier reference corpus at that date, not re-measured against upstream
+;; PeTTa].
 (: second-from-pair (-> %Undefined% Atom))
 
 ;; --- Checked on import: set and list operations ---
@@ -346,8 +347,8 @@
 ;; `(format-args n ())` into `(BadArgType 1 String Number)` and
 ;; `(sort-strings s)` into `(BadArgType 1 Expression String)`, where an
 ;; argument the type does not decide earns the operation's own words instead
-;; [source: LeaTTa MettaHyperonFull/Minimal/Stdlib.lean, the corelib blocks;
-;; tests/semantics/grounded/07-partial-core.metta].
+;; [assumed: the two arrows were adopted from an earlier reference semantics,
+;; not re-measured against upstream PeTTa].
 (: format-args (-> String Expression String))
 (: sort-strings (-> Expression Expression))
 (: exclude-item (-> %Undefined% %Undefined% Expression))
@@ -382,12 +383,12 @@
 (: import! (-> Atom Atom Bool))
 ;; include pastes a module's source into the space that included it and
 ;; answers its LAST directive's answers, so its result type is open where
-;; import!'s is unit [source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean,
-;; the include corelib block].
+;; import!'s is unit [assumed: adopted from an earlier reference semantics, not
+;; re-measured against upstream PeTTa, which has no include].
 (: include (-> Atom %Undefined%))
 ;; The cell is a VALUE and its type is parametric in what it holds, which is
-;; the upstream signature [source: LeaTTa
-;; tests/semantics/grounded/25-state-rendering.metta]. A cell is a handle atom
+;; the upstream signature [assumed: measured against an earlier reference
+;; corpus, not re-measured against upstream PeTTa]. A cell is a handle atom
 ;; here, so a plain symbol still names one and the older named spelling keeps
 ;; working; what changed is that (new-state V) answers a cell rather than only
 ;; being readable inside bind!. change-state! answers `true` like the rest of
@@ -446,11 +447,11 @@
 ;; `!(append (cdr-atom (a b)) (c))` is `(b c)` on both
 ;; [source: PeTTa@43705f5d src/metta.pl:330-344, the register_fun roster,
 ;; against lib/lib_builtin_types.metta which declares 36 names and none of
-;; these; measured 2026-09-05 against PeTTa@43705f5d]. LeaTTa records the same
-;; correction for `first-from-pair` [source: LeaTTa
-;; MettaHyperonFull/Minimal/Stdlib.lean:4156-4183, "The earlier
-;; (-> Expression Atom) invented an Expression first parameter ... which is
-;; exactly the instruction not to evaluate the pair"].
+;; these; measured 2026-09-05 against PeTTa@43705f5d]. The same correction was
+;; recorded for `first-from-pair`: the earlier (-> Expression Atom) invented an
+;; Expression first parameter, which is exactly the instruction not to evaluate
+;; the pair [assumed: read from an earlier reference semantics, not re-measured
+;; against upstream PeTTa].
 (: append (-> %Undefined% %Undefined% %Undefined%))
 (: length (-> %Undefined% Number))
 (: reverse (-> %Undefined% Expression))

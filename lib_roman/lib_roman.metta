@@ -8,9 +8,9 @@
 ;un-suffixed spelling and its tail parameter is declared `Expression`, so the
 ;operation receives that operand AS WRITTEN; a `let` names the mapped tail
 ;first and hands the value over, which is how the reference's own stdlib
-;writes every list rebuild [source: LeaTTa MettaHyperonFull/Minimal/
-;Stdlib.lean:2701-2709, `map-atom`, whose recursive call is bound by a `chain`
-;before `cons-atom` sees it].
+;writes every list rebuild, binding the recursive call with a `chain` before
+;`cons-atom` sees it [assumed: read from an earlier reference semantics, not
+;re-measured against upstream PeTTa].
 (= (map-flat $f (cons $x $xs))
    (let $head ($f $x)
      (let $rest (map-flat $f $xs) (cons $head $rest))))

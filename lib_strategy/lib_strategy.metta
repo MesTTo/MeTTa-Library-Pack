@@ -13,10 +13,10 @@
 ;   callback [tested: sh test.sh examples/ch20-extending-the-engine/20-02-metta-written-in-metta/11-strategy.metta; commit=0d37dd6b24fe916e44cdbfb4efc6a1d5ffaf74aa]
 ; Fails when: a strategy used under repeat keeps succeeding forever, including an
 ;   identity success. Stratego's repeat has the same progress obligation.
-; Decides: choice is left-biased over result bags. stratego-one follows LeaTTa by
-;   returning every successful immediate-child position rather than committing
-;   to the first. Written expression heads count as children, as they do in
-;   LeaTTa's flat MeTTa term model.
+; Decides: choice is left-biased over result bags. stratego-one returns every
+;   successful immediate-child position rather than committing to the first.
+;   Written expression heads count as children, which is what MeTTa's flat term
+;   model makes them.
 ;
 ; The controlling laws come from the Stratego library at immutable commit
 ; 35009963ebc99c4fa8c93cae064309186a877d0e:
@@ -111,7 +111,7 @@
                  (unify (all $inner) $strategy
                    (chain (eval (strategy-all $inner $term)) $result
                      (return $result))
-                   ; stratego-all is the public LeaTTa spelling of all.
+                   ; stratego-all is the public prefixed spelling of all.
                    (unify (stratego-all $inner) $strategy
                      (chain (eval (strategy-all $inner $term)) $result
                        (return $result))
@@ -119,7 +119,7 @@
                      (unify (one $inner) $strategy
                        (chain (eval (strategy-one $inner $term)) $result
                          (return $result))
-                       ; stratego-one is the public LeaTTa spelling of one.
+                       ; stratego-one is the public prefixed spelling of one.
                        (unify (stratego-one $inner) $strategy
                          (chain (eval (strategy-one $inner $term)) $result
                            (return $result))
@@ -190,7 +190,7 @@
 (: try (-> Atom Atom %Undefined%))
 (= (try $strategy $term) (strategy-apply (try $strategy) $term))
 
-; gtry is LeaTTa's generic binary try spelling. Its law is try(s)(t).
+; gtry is the generic binary try spelling. Its law is try(s)(t).
 (: gtry (-> Atom Atom Atom))
 (= (gtry $strategy $term)
    (function

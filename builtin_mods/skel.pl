@@ -11,7 +11,7 @@
 
 %The grounded twin of the module's equation, and deliberately the same answer:
 %what the corpus reads from the pair is that a built-in module carries both
-%tiers, not that they differ [source: LeaTTa
-%tests/semantics/grounded/28-builtin-module-skel.metta, whose two calls answer
-%`(Pair b a)` alike].
+%tiers, not that they differ [assumed: the two calls answering `(Pair b a)`
+%alike came from an earlier reference corpus, not re-measured against upstream
+%PeTTa].
 'skel-swap-pair-native'(['Pair', A, B], ['Pair', B, A]).

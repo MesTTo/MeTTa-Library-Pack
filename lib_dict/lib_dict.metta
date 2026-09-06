@@ -28,8 +28,8 @@
 ;wants the view or the state cell.
 ;
 ;THE ARBITER IS SILENT. Upstream PeTTa ships no dict library and declares no
-;dict name, and LeaTTa's stdlib.md carries no dict entry and its semantics
-;corpus no dict program, so nothing here is a divergence from a ruling: it is
+;dict name, and no reference corelib dump or semantics corpus this engine has
+;read carries one, so nothing here is a divergence from a ruling: it is
 ;vocabulary in the space the arbiter leaves open, the way the kernel's
 ;performance builtins are. The question filed for it is whether a
 ;dict's KEY ORDER is observable; this library answers get-keys in the space's

@@ -77,10 +77,12 @@ metta_function_loop(Body, _Current, 0, Out) :- !,
 %form without a return still earns the specification's NoReturn.
 %
 %Reporting the dead branch as NoReturn turns a pruned traversal into an error
-%atom: `!(collapse (stratego-all some-only-a (h a b)))` is `()` on LeaTTa,
-%because a child the strategy declines removes the branch, and it was the whole
-%`(Error (chain ...) NoReturn)` term here [measured 2026-08-24 against LeaTTa
-%9ea9f9d, running the reference's own strategy basis].
+%atom: `!(collapse (stratego-all some-only-a (h a b)))` is `()` for the
+%reference, because a child the strategy declines removes the branch, and it
+%was the whole `(Error (chain ...) NoReturn)` term here
+%[assumed 2026-08-24: measured against an earlier reference corpus at that
+%date, running its own strategy basis, and not re-measured against upstream
+%PeTTa].
 %
 %Every evaluation answer is a separate function branch.  Committing to the
 %first step erased equation multiplicity: two identical `(= (mt-dup) mt-red)`
@@ -111,17 +113,16 @@ metta_return_value(Term, Value) :-
 %the Python version could not see them and reconstructed them by collapsing a
 %probe expression that mentioned the atom and its own free variables.
 %
-%The shape is LeaTTa's: one expression holding every surfaced alternative
-%paired with its encoded bindings, and each binding entry (<- name value)
-%[source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean, collapseBindStep,
-%`atoms.map fun p => Atom.expr [p.1, encodeUnified p.2]`, and Core/SeqRuntime
-%.lean encodeUnified, `Atom.expr [Atom.sym "<-", Atom.var p.1, p.2.toSurface]`].
+%The shape is the reference's: one expression holding every surfaced
+%alternative paired with its encoded bindings, and each binding entry
+%(<- name value) [assumed: adopted from an earlier reference semantics, not
+%re-measured against upstream PeTTa].
 %
 %The left of each (<- var value) entry is THE CALLER'S OWN VARIABLE, not a
 %name for it, and that is what makes superpose-bind able to do its job. The
 %specification's whole point for this pair of instructions is that
 %"superpose-bind applied to the result of collapse-bind will restore the value
-%of this variable in each context" [source: LeaTTa minimal_metta.md, the
+%of this variable in each context" [source: minimal_metta.md, the
 %collapse-bind and superpose-bind section], and a name cannot restore anything
 %in Prolog: unifying is what restores.
 %
@@ -136,10 +137,8 @@ metta_return_value(Term, Value) :-
 %match here. The parser resolves $x to a plain Prolog variable and keeps the
 %name only inside the parse [source: engine/parser.pl, var_symbol//3 threads a
 %Name-Var environment that sread/2 does not return], so no name reaches
-%runtime. LeaTTa renders $a because its atoms carry the name [source:
-%Core/SeqRuntime.lean, encodeUnified,
-%`Atom.expr [Atom.sym "<-", Atom.var p.1, p.2.toSurface]`]. Cosmetic: the
-%restore works on identity, not spelling.
+%runtime. The reference renders $a because its atoms carry the name. Cosmetic:
+%the restore works on identity, not spelling.
 'collapse-bind'(Atom, Out) :-
     term_variables(Atom, Variables),
     findall(Value-Variables, eval(Atom, Value), Rows),
@@ -165,18 +164,17 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %every entry is a (<- <variable> <value>) triple. One that does not decode is
 %malformed program data and is REFUSED by name rather than ignored. Answering
 %the value anyway is what this did before, and it made
-%`(superpose-bind ((42 ()) (43 ())))` answer 42 and 43 where LeaTTa
+%`(superpose-bind ((42 ()) (43 ())))` answer 42 and 43 where the reference
 %answers one error per malformed row; the row shapes that are NOT two-element
-%pairs keep their old readings, because those are the shapes LeaTTa also
+%pairs keep their old readings, because those are the shapes the reference also
 %passes through
-%[source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean, superposeItems, and
-%its own --min door, which answers
+%[assumed: read from an earlier reference semantics and its own --min door,
+%which answers
 %`(Error (superpose-bind ((42 ()) (43 ()))) "superpose-bind: expected an
 %encoded bindings value")` per malformed row and `[42, 43]` for the same rows
-%carrying `(bindings)`;
-%tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta,
-%builtin_input_guards:every_builtin_refuses_an_unbound_input_by_name and
-%test_the_presented_core_agrees_with_the_engine_on_the_shared_fragment;
+%carrying `(bindings)`]
+%[tested: examples/ch20-extending-the-engine/20-02-metta-written-in-metta/04-minimal_metta.metta
+%and every_builtin_refuses_an_unbound_input_by_name;
 %commit=57f21ba9edf94bcf28cde11f938bce2c241a3709].
 'superpose-bind'(Rows, _) :- var(Rows), !,
                             refuse_unbound_input('superpose-bind', 1).
@@ -196,14 +194,15 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
     ).
 
 %The carrier collapse-bind emits, and nothing else. The head must be the symbol
-%`bindings`, and every entry one of the three shapes LeaTTa's decoder takes
-%-- an ordinary term binding, a SEGMENT binding, or a bare segment name. The
-%last two belong to the sequence-variable extension, which this engine does not
-%produce; they are accepted anyway because a program may WRITE a carrier and
-%LeaTTa accepts them, and refusing what it accepts is as much a divergence
-%as accepting what it refuses
-%[source: LeaTTa MettaHyperonFull/Core/SeqRuntime.lean, decodeUnified, whose
-%three entry cases these are, checked against its --min door:
+%`bindings`, and every entry one of the three shapes the reference's decoder
+%takes -- an ordinary term binding, a SEGMENT binding, or a bare segment name.
+%The last two belong to the sequence-variable extension, which this engine
+%does not produce; they are accepted anyway because a program may WRITE a
+%carrier and
+%the reference accepts them, and refusing what it accepts is as much a
+%divergence as accepting what it refuses
+%[assumed: the three entry cases were read from an earlier reference semantics
+%and checked against its --min door:
 %`(bindings (seq $n))` and `(bindings (<- (:seg $n) (a b)))` answer the value
 %while `(bindings (seq x))` and `(bindings (<- (:seg $n) a))` are refused,
 %because a segment name is a VARIABLE and a segment run is an EXPRESSION;
@@ -237,8 +236,9 @@ metta_restore_binding([Arrow, Variable, Value]) :-
     Variable = Value.
 metta_restore_binding(_).
 
-%unify extended with the two things the specification names as open and LeaTTa
-%resolved: (:= x) matches by equality, so a free variable is not Empty, and
+%unify extended with the two things the specification names as open and an
+%earlier reference resolved: (:= x) matches by equality, so a free variable is
+%not Empty, and
 %... matches any number of atoms, so (A ... D ...) matches (A B C D E).
 'unify-mod'(Atom, Pattern, Then, Else, Out) :-
     (   metta_mm_match(Pattern, Atom)
