@@ -424,6 +424,17 @@
 ;; reached it instead of answering a partial application
 ;; [tested: test_an_underapplied_operation_answers_instead_of_aborting].
 (: assert (-> %Undefined% (->)))
+;; assert with the two answer bags carried, so a failed comparison over
+;; answers can report which answers differed. The verdict is the caller's and
+;; is evaluated; the call to report and the two bags are held, because a
+;; reported form must be what the program wrote and a collapsed tuple
+;; evaluated again is an APPLICATION of its first answer to the rest.
+;; DECLARED HERE rather than in engine/prelude.metta, beside the assert family
+;; that calls it: the mask index for a BUILTIN call site is derived from this
+;; file, in load_builtin_type_surface/0, and the prelude compiles after that,
+;; so a prelude-only declaration would arrive too late to hold anything
+;; [source: engine/metta.pl:1435-1451 and :1718; commit=WORKTREE].
+(: assert-answers (-> %Undefined% Atom Atom Atom (->)))
 (: exists_file (-> %Undefined% Bool))
 (: argv (-> Number %Undefined%))
 
