@@ -25,7 +25,15 @@
 (: DontEvalType Type)
 
 ;; Type definitions of arithmetic operators
+;;
+;; The (cost ...) rows below are claims the cost-rows lane measures and fails.
+;; Addition's hole sits at a Number parameter, so the lane sizes it by the
+;; VALUE of $n and holds the call constant over the ladder: arithmetic that
+;; started scanning its operand would fail here. Every other row on this page
+;; holds an Expression parameter, whose size is its LENGTH, and the floor for
+;; those is linear, because the call evaluates the expression it is handed.
 (: + (-> Number Number Number))
+(cost (+ $n 1) constant)
 (: - (-> Number Number Number))
 (: * (-> Number Number Number))
 (: / (-> Number Number Number))
@@ -284,7 +292,9 @@
 ;; car-atom's result is %Undefined% in the dump and stays so: the head of an
 ;; expression is whatever that expression holds.
 (: car-atom (-> Expression %Undefined%))
+(cost (car-atom $n) linear)
 (: cdr-atom (-> Expression Expression))
+(cost (cdr-atom $n) linear)
 ;; Both operands EVALUATE. Upstream ships cons-atom, cons, decons-atom,
 ;; decons, index-atom and the three set operations as bare Prolog predicates
 ;; with no declaration at all, so their arguments are ordinary evaluated
@@ -300,6 +310,7 @@
 ;; exposing its tail (1 2) [tested: if_decons_expr:the_operand_is_inspected_without_evaluation; commit=9958c72363d2fbc640d2ae39ee6f0670ecfbff67].
 (: if-decons-expr (-> (:Atom Expression) (:Atom Variable) (:Atom Variable) Atom Atom %Undefined%))
 (: size-atom (-> Expression Number))
+(cost (size-atom $n) linear)
 (: index-atom (-> %Undefined% Number Atom))
 ;; atom-subst replaces one variable inside a template, all three operands
 ;; as written and the result as produced.
@@ -337,8 +348,24 @@
 
 ;; --- Checked on import: set and list operations ---
 (: union-atom (-> %Undefined% %Undefined% Atom))
+(cost (union-atom $n $n) linear)
+;; The contrast worth knowing: union-atom is append/3, while intersection-atom
+;; builds an association tree of its right operand and looks every element of
+;; its left one up in it, so the second costs a log factor more than the first.
+;; Both rows were measured on the engine's inferences AND on retired
+;; instructions, and the two counters agree on both.
 (: intersection-atom (-> %Undefined% %Undefined% Atom))
+(cost (intersection-atom $n $n) linearithmic)
 (: subtraction-atom (-> %Undefined% %Undefined% Atom))
+;; Neither of these two carries a (cost ...) row, and the reason is the
+;; counter. unique-atom is SWI's list_to_set/2, which sorts in C: the engine
+;; retires one inference for the whole call, so its inference curve is the
+;; ARGUMENT arriving and reads linear, while retired instructions read 1.057
+;; and say linearithmic. A row would state the cheaper of the two readings.
+;; alpha-unique-atom has no such gap, its association tree being Prolog's, and
+;; it is the row alpha-unique carries in engine/prelude.metta
+;; [measured 2026-09-07: `python -m benchmarks.costs --paired`, unique-atom
+;; 0.978 against 1.057 and alpha-unique-atom 1.076 against 1.079].
 (: unique-atom (-> Expression Atom))
 (: alpha-unique-atom (-> Expression Atom))
 (: sort-atom (-> %Undefined% Expression))
