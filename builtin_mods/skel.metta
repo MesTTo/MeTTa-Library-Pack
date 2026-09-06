@@ -3,7 +3,7 @@
 ;operation, so a single import exercises every tier at once.
 ;
 ;Transcribed from `builtin_mods/skel.metta` and `skel.rs` at
-;hyperon-experimental@3f76dc4, by way of the arbiter's own transcription
+;hyperon-experimental@3f76dc4, by way of LeaTTa's own transcription
 ;[source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean, skelBuiltin;
 ;tests/semantics/grounded/28-builtin-module-skel.metta, STATUS conforms].
 ;The native operation's type is the one skel.rs gives its

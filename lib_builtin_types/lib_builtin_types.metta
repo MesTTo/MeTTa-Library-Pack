@@ -216,7 +216,7 @@
 
 ;; --- Special forms: collections ---
 ;; Each has TWO arrows, the binder spelling and the closure spelling, and both
-;; are the arbiter's own rows byte for byte
+;; are LeaTTa's own rows byte for byte
 ;; [source: LeaTTa MettaHyperonFull/Minimal/Stdlib.lean, the (: map-atom ...),
 ;; (: filter-atom ...) and (: foldl-atom ...) lines of preludeSrc; measured
 ;; 2026-08-24 on LeaTTa 9ea9f9d, !(get-type map-atom) answers both].

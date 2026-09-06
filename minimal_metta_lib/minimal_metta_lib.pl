@@ -77,7 +77,7 @@ metta_function_loop(Body, _Current, 0, Out) :- !,
 %form without a return still earns the specification's NoReturn.
 %
 %Reporting the dead branch as NoReturn turns a pruned traversal into an error
-%atom: `!(collapse (stratego-all some-only-a (h a b)))` is `()` on the arbiter,
+%atom: `!(collapse (stratego-all some-only-a (h a b)))` is `()` on LeaTTa,
 %because a child the strategy declines removes the branch, and it was the whole
 %`(Error (chain ...) NoReturn)` term here [measured 2026-08-24 against LeaTTa
 %9ea9f9d, running the reference's own strategy basis].
@@ -165,9 +165,9 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
 %every entry is a (<- <variable> <value>) triple. One that does not decode is
 %malformed program data and is REFUSED by name rather than ignored. Answering
 %the value anyway is what this did before, and it made
-%`(superpose-bind ((42 ()) (43 ())))` answer 42 and 43 where the oracle
+%`(superpose-bind ((42 ()) (43 ())))` answer 42 and 43 where LeaTTa
 %answers one error per malformed row; the row shapes that are NOT two-element
-%pairs keep their old readings, because those are the shapes the oracle also
+%pairs keep their old readings, because those are the shapes LeaTTa also
 %passes through
 %[source: LeaTTa MettaHyperonFull/Minimal/Interpreter.lean, superposeItems, and
 %its own --min door, which answers
@@ -196,11 +196,11 @@ metta_binding_pair(Variable, Value, ['<-', Variable, Value]).
     ).
 
 %The carrier collapse-bind emits, and nothing else. The head must be the symbol
-%`bindings`, and every entry one of the three shapes the oracle's decoder takes
+%`bindings`, and every entry one of the three shapes LeaTTa's decoder takes
 %-- an ordinary term binding, a SEGMENT binding, or a bare segment name. The
 %last two belong to the sequence-variable extension, which this engine does not
 %produce; they are accepted anyway because a program may WRITE a carrier and
-%the oracle accepts them, and refusing what it accepts is as much a divergence
+%LeaTTa accepts them, and refusing what it accepts is as much a divergence
 %as accepting what it refuses
 %[source: LeaTTa MettaHyperonFull/Core/SeqRuntime.lean, decodeUnified, whose
 %three entry cases these are, checked against its --min door:

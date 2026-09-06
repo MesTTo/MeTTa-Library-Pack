@@ -10,8 +10,8 @@
 ; unify is an engine special form, for the reason recorded when it moved:
 ; bindings flow from the match into the selected branch, numbers compare
 ; promoted, a space operand queries through every context kind, and
-; grounded values with their own matching logic are consulted, per the
-; arbiter's matcher. The shim here could do none of that.
+; grounded values with their own matching logic are consulted, per
+; LeaTTa's matcher. The shim here could do none of that.
 ;
 ; add-reduct is an engine builtin, along with add-atoms and add-reducts,
 ; because all three are standard library operations rather than
@@ -36,8 +36,8 @@
 ; return-on-error, for-each-in-atom, unquote, noreduce-eq, is-function,
 ; match-types, match-type-or, type-cast, type-cast-holds.
 ;
-; Several promotions FIX this file's contracts against the mechanised
-; arbiter (LeaTTa MettaHyperonFull/Minimal/Stdlib.lean, measured against
+; Several promotions FIX this file's contracts against LeaTTa's mechanised
+; reference (MettaHyperonFull/Minimal/Stdlib.lean, measured against
 ; pinned Hyperon 0.2.10), the way add-reduct's promotion fixed its:
 ; if-equal compares by alpha-equivalence, not ==; assertEqual and
 ; assertAlphaEqual take Atom parameters and compare result sets, as
