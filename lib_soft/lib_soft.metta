@@ -1,3 +1,8 @@
+; Purpose: score written terms using symbol similarity and structural recursion.
+; Guarantees: a function-naming symbol retains its similarity; grounded values
+;   compare crisply [tested: sh engine/test.sh suites/libraries/lib_soft.plt;
+;   commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
+
 ;Soft structural unification: match quality as a measure over terms.
 ;
 ;This is weak unification in Sessa's sense ("Approximate reasoning by
@@ -21,6 +26,14 @@
 ;and answers (score candidate) pairs, score first, so results feed directly
 ;into lib_measure: (ws-best (collapse (soft-match ...))) is the closest
 ;match, ws-softmax over them is attention over terms.
+
+!(import! &self (library lib_import))
+!(import_prolog_functions_from_file (library lib_soft.pl) (soft-symbol?))
+(: soft-symbol? (-> Atom Bool))
+(@doc soft-symbol?
+      (@desc "Tests written symbol representation, regardless of function registration")
+      (@params ((@param "the held atom; grounded values and expressions answer False")))
+      (@return "True for a symbol, False otherwise"))
 
 ;The degree two symbols are close: exact is 1.0, then declared similarity
 ;in either direction, then 0.0.
@@ -88,23 +101,16 @@
 ;no union of Symbol and Grounded to declare, and Atom is the one that breaks
 ;the public spelling above, which leaves the gradual declaration.
 ;
-;What it costs is measured rather than remembered, and on the shipped spelling
-;rather than on a choice that no longer exists:
+;The early-stop benchmark measures the shipped scorer rather than a
+;declaration that no longer accepts min. The 2026-09-05 figures and the
+;rejected Symbol declaration are recorded in
+;docs/journal/2026-09-05-get-metatype-follows-fun.md.
 ;
-;  mismatch at position 0    90,044
-;  match at position 0      186,050    early stop buys 2.07x
+;  mismatch at position 0     87,657
+;  match at position 0       183,661    early stop buys 2.10x
 ;
-;[measured 2026-09-05, three identical samples at loadavg 59.7, 0.0000%
-;spread; command=$CHECK_PY extensions/python/benchmarks/soft_match_cost.py;
-;fixture=400 six-position candidates; commit=7bc8e2ac2a2adfa252d5251ee123f320c2dd5ce7]. Both are LOWER than
-;the 162,971 and 410,183 this comment carried for the Symbol arm before the
-;rule changed, but that is not a controlled comparison and is not claimed as
-;one [assumed: the old arm swapped soft-fold's declaration alone while all
-;three are gradual now, and the Symbol arm cannot be re-measured because it
-;refuses `min`; commit=7bc8e2ac2a2adfa252d5251ee123f320c2dd5ce7]. The probe is tracked and derives the
-;early-stop ratio above rather than leaving it to be remembered: an untracked
-;one makes a measured claim unfalsifiable the moment it changes, which is how
-;an earlier pair of figures here stopped reproducing.
+;[measured: inference counts above; command=python extensions/python/benchmarks/soft_match_cost.py;
+;fixture=400 candidates with six arguments, Python 3.14.4 with Janus; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
 (: soft-fold (-> %Undefined% Atom Atom Number))
 (: soft-walk (-> %Undefined% Atom Atom Number Number))
 (= (soft-fold min $ps $as) (soft-walk min $ps $as 1.0))
@@ -135,7 +141,7 @@
      (if (== $declared ()) min (car-atom $declared))))
 
 ;The degree a pattern weakly unifies with a term, binding the pattern's
-;variables as it goes. Metatypes drive the cases: a variable binds anything
+;variables as it goes. Value structure drives the cases: a variable binds anything
 ;at degree one, expressions recurse position by position under minimum,
 ;symbols consult sym-sim, and grounded values stay crisp.
 ;
@@ -161,7 +167,9 @@
            (if (== (size-atom $p) (size-atom $a))
                (soft-fold $agg $p $a)
                0.0)
-           (if (and (== (get-metatype $p) Symbol) (== (get-metatype $a) Symbol))
+           ;A function name is Grounded under get-metatype, just like a
+           ;number. Test its representation to retain symbol similarity.
+           (if (and (soft-symbol? $p) (soft-symbol? $a))
                (sym-sim $p $a)
                (if (== $p $a) 1.0 0.0)))))
 
