@@ -5,6 +5,17 @@
 %   a cache owner retires its metadata and any remaining table [tested:
 %   extensions/python/tests/ch11_python_as_a_notation/test_arrow_products.py;
 %   commit=ccad9f6d588270ec2f0810fc56c30e9e59207e7c].
+%   And honoured means it takes EFFECT. A declaration is recorded in the module
+%   the calls resolve in, so a registered operation and a function a space only
+%   inherits are cached rather than admitted and ignored, and enabling reaches
+%   the call sites through the engine's own recompile rather than by removing
+%   and re-adding the stored equations -- which duplicated any equation whose
+%   stored form differs from the retained one [tested:
+%   lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it,
+%   lib_memo_reach:a_body_that_writes_its_own_space_is_not_duplicated_by_memoize,
+%   test_memoizing_an_operation_caches_its_calls,
+%   test_memoizing_a_body_that_writes_its_own_space_runs_it_once;
+%   commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
 % Assumes:
 %   - every space, &self included, compiles its equations into a module of
 %     its own and inherits the rest through that module's base chain, so a
@@ -59,7 +70,12 @@
 %     invalidation_moves_a_live_worker_to_a_fresh_exact_table_generation;
 %     commit=39092863ae34184a9f955f185ff57c1ff177ec40].
 % Decides: cache state is keyed by the module that holds the function's
-%   clauses, the way lib_tabling.pl keys its declarations. The function
+%   clauses, the way lib_tabling.pl keys its declarations, and BOTH ends ask
+%   that question the same way: memo_scope_module/2 records a declaration where
+%   memo_dispatch_call/4 will look for it. Two spaces defining one name keep
+%   separate caches because each has its own clauses; a registered operation is
+%   one predicate shared by every space, so its cache is process-wide, which is
+%   what caching an operation is. The function
 %   name stays the first argument, which is where it earns its place on
 %   the tables consulted with only a name bound: memo_enabled/2 and
 %   metta_memo_generation/4 both index on argument 1 at 47x over sixty
@@ -159,31 +175,78 @@ memo_owner_module(Fun, CallModule, PredArity, Module) :-
     ->  Module = From
     ;   Module = CallModule ).
 
-%Which module a call from the running space is asking about: its own when
-%the space defines the function, &self's when it only inherits it. Used by
-%the public API, where no arity is in hand and the equations answer.
+%Which module a declaration governs, asked where the public API asks it: no
+%arity in hand, so the equations and the engine's own arity record answer.
+%Four cases, in order, and each is somewhere a call could resolve.
+%
+%  1. This module's own equations. The space defines the function; its calls
+%     resolve here and so does its cache.
+%  2. The module the name RESOLVES in, when that is not this one. A space that
+%     only inherits a definition, and a registered operation, both land here.
+%  3. &self's equations. Kept for the case it was written for, a space
+%     memoizing a function &self defines, and reached when the name has not
+%     been compiled into this module yet so case 2 cannot see it.
+%  4. The speaking module. A forward declaration, which resolves nowhere yet.
+%
 %A declaration may PRECEDE the definitions it governs, which is how the
 %aggregate example writes it: !(memoize choices) and then the three
 %(= (choices $x) ...) alternatives. Preferring the calling module only when
 %it ALREADY holds equations for the name sent that forward declaration to
 %&self, so the memoisation governed a module the program never wrote to
-%while the definitions compiled into the speaking one. A forward declaration
-%lands where the program is speaking, and the fallback to &self stays for
-%the case it exists for, a space memoizing a function &self defines. All
-%four branches are pinned, because only the last one moved
+%while the definitions compiled into the speaking one; case 4 is where that
+%landed and it has not moved since
 %[tested: memo_space_isolation:a_declaration_lands_in_the_module_that_is_speaking;
 %commit=c530ccb8fb7d0a5b2aa53df6e9f981ada9f81be8].
+%
+%Case 2 is the one that was missing. Without it the declaration was recorded in
+%the speaking module while memo_dispatch_call/4 keyed every call by the owning
+%one, so `memoize-exact` on a registered operation and `memoize` on an
+%inherited function were both admitted and then never read: `is-memoized`
+%answered true and the function ran uncached on every call
+%[tested: lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it,
+%test_memoizing_an_operation_caches_its_calls; commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
 memo_scope_module(Fun, Module) :-
     current_metta_module(CallModule),
     metta_self_module(Self),
-    (   CallModule == Self
-    ->  Module = Self
-    ;   memo_equation(Fun, CallModule, any, _)
+    (   memo_equation(Fun, CallModule, any, _)
     ->  Module = CallModule
+    ;   memo_resolved_owner(Fun, CallModule, Owner)
+    ->  Module = Owner
     ;   memo_equation(Fun, Self, any, _)
     ->  Module = Self
     ;   Module = CallModule
     ).
+
+%WHERE THE CALLS LOOK, which is the only module a declaration can be recorded
+%in and still be consulted: memo_dispatch_call/4 keys every call by
+%memo_owner_module/4, so a declaration recorded anywhere else is admitted and
+%then never read.
+%
+%Two shapes reach this clause and both were dead before it. A space that only
+%INHERITS a definition answers the module that holds the clauses, which the
+%&self case below already did for one parent and this does for any. And a
+%REGISTERED OPERATION answers the module that registered it: an operation is
+%one predicate imported into every space's execution module, with no per-space
+%copy to key on, so that module is where its calls look from everywhere
+%[tested: memo_space_isolation:a_declaration_lands_in_the_module_that_is_speaking,
+%lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it;
+%commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
+%
+%The arities come from the ENGINE's own record rather than from the speaking
+%module's import table. current_predicate/2 answers nothing for a registered
+%operation until some body that calls it has been compiled, so asking that way
+%resolved the owner only after the first caller existed and every declaration
+%before that one landed in the wrong module. arity/2 is written when the name is
+%registered or defined, which is before any declaration can name it.
+%
+%A name nothing knows has no arity fact and falls through without reaching
+%memo_owner_module/4, which is the forward declaration and the common case
+%[tested: asking_who_owns_an_undefined_name_costs_what_asking_about_an_inherited_one_costs].
+memo_resolved_owner(Fun, CallModule, Owner) :-
+    arity(Fun, PredArity),
+    memo_owner_module(Fun, CallModule, PredArity, Owner),
+    Owner \== CallModule,
+    !.
 
 %This module's equations for Fun, with a fixed input arity when one is
 %asked for and every arity for `any`. The clause's module is the test:
@@ -1676,16 +1739,16 @@ cache_call(Fun, CallModule, AVs, Out) :-
 % Public API
 
 'memoize'(Fun, true) :-
-    memo_target(Fun, any, 'memoize!/2', Space, Module, Terms),
-    memo_recompile(Space, Terms, enable_memoization(Fun, Module)).
+    memo_target(Fun, any, 'memoize!/2', Module, _Terms),
+    memo_recompile(Module, Fun, enable_memoization(Fun, Module)).
 
 'memoize'(Fun, CallArity, true) :-
     ( integer(CallArity), CallArity >= 0
     -> true
     ; throw(error(domain_error(nonneg_integer, CallArity), 'memoize!/3'))
     ),
-    memo_target(Fun, CallArity, 'memoize!/3', Space, Module, Terms),
-    memo_recompile(Space, Terms, enable_memoization(Fun, Module, CallArity)).
+    memo_target(Fun, CallArity, 'memoize!/3', Module, _Terms),
+    memo_recompile(Module, Fun, enable_memoization(Fun, Module, CallArity)).
 
 %An exact answer bag: unlike configurable manual memoize this never quantizes
 %keys, aggregates answers or applies answer-limit, because those policies
@@ -1699,20 +1762,20 @@ cache_call(Fun, CallModule, AVs, Out) :-
     memoize_exact(Fun).
 
 memoize_exact(Fun) :-
-    memo_target(Fun, any, 'memoize-exact!/2', Space, Module, Terms),
+    memo_target(Fun, any, 'memoize-exact!/2', Module, Terms),
     findall(Arity,
             ( member([=, [Fun | Args], _Body], Terms),
               length(Args, InputArity),
               Arity is InputArity + 1 ),
             RawArities),
     sort(RawArities, Arities),
-    memo_recompile(Space, Terms,
+    memo_recompile(Module, Fun,
                    enable_exact_memoization(Fun, Module, Arities)).
 
-%The space that asks owns the equations, unless it only inherits them from
-%&self. Recompiling in the wrong space is how memoizing in one space used
-%to rewrite every other space's equations into it.
-memo_target(Fun, Arities, Context, Space, Module, Terms) :-
+%The MODULE the declaration governs, and the equations it will recompile.
+%Recompiling in the wrong one is how memoizing in one space used to rewrite
+%every other space's equations into it.
+memo_target(Fun, Arities, Context, Module, Terms) :-
     ( atom(Fun), fun(Fun)
     -> true
     ; throw(error(domain_error(function_symbol, Fun), Context))
@@ -1724,7 +1787,6 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
     %forced [tested: test_forward_memoization_preserves_deferred_answer_aggregation].
     metta_ensure_compiled(Fun),
     memo_scope_module(Fun, Module),
-    metta_module_space(Module, Space),
     findall(Term, memo_equation(Fun, Module, Arities, Term), RawTerms),
     sort(RawTerms, Terms).
 
@@ -1746,17 +1808,44 @@ memo_target(Fun, Arities, Context, Space, Module, Terms) :-
 %invalidation, generations and the support graph are unchanged: keeping a cache
 %it enabled correct is this library's job, and deciding to enable one is not.
 
-%Recompiling is what makes memoization take effect: the translator bakes
-%the dispatch into every compiled call site, so equations already compiled
-%go through the compiler again with the flag set.
-%metta_remove_atom/3, not 'remove-atom'/3: this takes ONE occurrence of each
-%term because it puts that one occurrence back, and the MeTTa-facing door
-%takes every atom that unifies, which is upstream's `retractall` shape
-%[source: engine/spaces/foreign.pl, remove_matching_atoms/2]. Through the
-%MeTTa door a function defined by three identical equations came back with
-%one, so a cached definition yielding `a a b` answered `a b`
-%[tested: test_a_cached_definition_preserves_duplicate_answers].
-memo_recompile(Space, Terms, Enable) :-
-    forall(member(Term, Terms), metta_remove_atom(Space, Term, _)),
+%Recompiling is what makes memoization take effect: the translator bakes the
+%dispatch into every compiled call site, so what is already compiled has to go
+%through the compiler again with the flag set. That is the ENGINE's own job and
+%this asks it to do it, through the same doors the automatic mode already uses.
+%
+%It used to round-trip the equations through the space instead, removing each
+%stored atom and adding it back around the enable. That is not the same thing,
+%and it duplicated any equation whose STORED form differs from the retained one
+%the compiler kept. `&self` is the ordinary way to write such a body: the source
+%says (add-atom &self ...) and the retained form carries the space's resolved
+%name, so metta_remove_atom/3 matched nothing, the add put a second, resolved
+%copy in, and a one-clause function became a two-clause one -- two writes and a
+%doubled answer bag on the first call
+%[tested: a_body_that_writes_its_own_space_is_not_duplicated_by_memoize,
+%test_memoizing_a_body_that_writes_its_own_space_runs_it_once; commit=295f4c80ace06f6bf8e132ea936777afd79ac3d5].
+memo_recompile(Module, Fun, Enable) :-
     call(Enable),
-    forall(member(Term, Terms), 'add-atom'(Space, Term, _)).
+    memo_recompile_reach(Module, Fun).
+
+%WHICH call sites the declaration has to reach, which is not the same question
+%for the three shapes a memoized name can have.
+memo_recompile_reach(Module, Fun) :-
+    (   once(memo_equation(Fun, Module, any, _))
+    ->  %Equations of its own. This module's copy is the whole change, and the
+        %narrow door keeps a first evaluation from paying one retranslation per
+        %other live space defining the same head
+        %[source: engine/filereader.pl, recompile_function_impl_in/2]
+        %[tested: test_a_first_evaluation_costs_the_same_in_every_space].
+        recompile_function_impl_in(Module, Fun)
+    ;   current_predicate(Module:Fun/_)
+    ->  %No equations, yet the name answers: a REGISTERED OPERATION, one
+        %predicate imported into every space's execution module. Its call sites
+        %are not its own body, they are its callers' bodies, and only the wide
+        %door reaches those through the support graph
+        %[tested: memoizing_an_operation_reaches_a_caller_compiled_before_it].
+        recompile_function_impl(Fun)
+    ;   %A forward declaration, which is the common case: nothing is compiled
+        %yet, and the equations that arrive later compile with the flag already
+        %set [tested: test_forward_memoization_preserves_deferred_answer_aggregation].
+        true
+    ).
