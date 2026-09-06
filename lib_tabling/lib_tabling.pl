@@ -485,6 +485,15 @@ metta_tabling_policy_word('max-answers',      restraint, max_answers).
 metta_tabling_policy_word('subgoal-abstract', restraint, subgoal_abstract).
 metta_tabling_policy_word('answer-abstract',  restraint, answer_abstract).
 
+%The watch words that make SWI TRACK a table's dependencies, derived from the
+%table above rather than listed again: `plain` is the third watch word and the
+%one that tracks nothing, so it takes no `as` option and conflicts with
+%nothing. A fourth watch word cannot be added without deciding this, which is
+%what a second closed list of the same two names would have let happen.
+metta_tabling_watched(Watch) :-
+    metta_tabling_policy_word(Watch, watch, _),
+    Watch \== plain.
+
 %SWI's tripwire names for the two size restraints, and the count restraint's
 %name under the process-wide flag; the per-predicate count restraint is caught
 %on its answer instead (metta_tabling_restrained/2).
@@ -506,11 +515,11 @@ metta_tabling_compile(Name, Members, Policy) :-
     ->  metta_tabling_refuse(Name, needs(lazy, monotonic))
     ;   true
     ),
-    (   Moded \== none, memberchk(Watch, [incremental, monotonic])
+    (   Moded \== none, metta_tabling_watched(Watch)
     ->  metta_tabling_refuse(Name, cannot_watch(lattice, Watch))
     ;   true
     ),
-    (   Variant == subsumptive, memberchk(Watch, [incremental, monotonic])
+    (   Variant == subsumptive, metta_tabling_watched(Watch)
     ->  metta_tabling_refuse(Name, cannot_watch(subsumptive, Watch))
     ;   true
     ),
@@ -687,7 +696,7 @@ metta_tabling_moded_head(Name, CompiledArity, Mode, ModeHead) :-
 %always written, so a default never depends on SWI's table_shared flag.
 metta_tabling_as_options(policy(Watch, Thread, Variant, Lazy, _, Restraints), Options) :-
     findall(Option,
-            (   memberchk(Watch, [incremental, monotonic]), Option = Watch
+            (   metta_tabling_watched(Watch), Option = Watch
             ;   Lazy == true, Option = lazy
             ;   Variant == subsumptive, Option = subsumptive
             ;   Option = Thread
