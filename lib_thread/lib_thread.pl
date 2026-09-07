@@ -46,6 +46,14 @@
 %     atoms claim four distinct ones and the space is left empty [tested:
 %     lib_thread:test_a_blocking_take_waits_for_a_matching_atom_and_removes_exactly_one,
 %     lib_thread:a_blocking_peek_parks_without_removing; commit=c05f93baf8c6ecd483487efb72d7f8eb92c97809]
+%   - a wait answers an atom the space holds even when no wake-up ever
+%     reached it, because it re-reads the store on slices that back off from
+%     50ms to a second rather than trusting the hint; that covers the write
+%     door's own publisher being installed only while a handler exists, which
+%     leaves a writer already inside it writing silently [tested:
+%     lib_thread:a_wait_finds_an_atom_whose_hint_was_never_published,
+%     lib_thread:a_scheduled_wait_finds_an_atom_whose_hint_was_never_published;
+%     commit=WORKTREE]
 %   - par-map answers one result per element, in the input list's order,
 %     because concurrent_maplist/3 preserves position [tested: lib_thread:par_map_answers_one_result_per_element_in_order]
 %   - par-race releases every worker from one start barrier and ignores Empty
@@ -1772,6 +1780,7 @@ blocking_space_wait_(Space, Pattern, Guard, Deadline, Mode, Out) :-
 %on the existing timer heap, so no sleeping thread is introduced.
 scheduler_space_wait_(Task, Space, Pattern, Guard, Deadline, Mode, Out) :-
     copy_term(Pattern, HookPattern),
+    space_wait_slice(first, Slice),
     setup_call_cleanup(
         assertz((seam:atom_added(Space, Candidate) :-
                     (   \+ HookPattern \= Candidate
@@ -1780,7 +1789,8 @@ scheduler_space_wait_(Task, Space, Pattern, Guard, Deadline, Mode, Out) :-
                     )), HookRef),
         setup_call_cleanup(
             scheduler_deadline_start_(Task, Deadline, DeadlineToken),
-            scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Mode, Out),
+            scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline,
+                                   Slice, Mode, Out),
             scheduler_deadline_cancel_(DeadlineToken)),
         erase(HookRef)).
 
@@ -1812,15 +1822,40 @@ scheduler_deadline_cancel_(deadline(Token, Timer)) :-
     ;   true
     ).
 
-scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Mode, Out) :-
+%A parked engine re-reads the store on every resume, so all it needs is a
+%resume: the same look-again the blocking wait does, in the shape a scheduler
+%task can take. Without one a lost hint parks the task until its deadline, and
+%forever when it has none -- the same defect the blocking wait had and the
+%worse half of it [tested:
+%lib_thread:a_wait_finds_an_atom_whose_hint_was_never_published].
+scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Slice, Mode,
+                       Out) :-
     copy_term(Pattern-Guard, Attempt-AttemptGuard),
     (   space_already_holds_(Space, Attempt, AttemptGuard, Candidate)
     ->  scheduler_claim_candidate_(Task, Space, Pattern, Guard, Candidate,
                                    Deadline, Mode, Out)
     ;   scheduler_deadline_open_(Deadline)
-    ->  engine_yield('$metta_scheduler_suspend'),
-        scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Mode, Out)
+    ->  setup_call_cleanup(
+            scheduler_look_again_(Task, Deadline, Slice, Token),
+            engine_yield('$metta_scheduler_suspend'),
+            scheduler_deadline_cancel_(Token)),
+        space_wait_slice(ceiling, Ceiling),
+        Next is min(Slice * 2, Ceiling),
+        scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Next,
+                               Mode, Out)
     ;   fail
+    ).
+
+%One wake token on the timer heap the deadline already uses. A slice that
+%would land past the deadline needs none, because the deadline's own wake is
+%sooner and the loop gives up when it arrives.
+scheduler_look_again_(Task, Deadline, Slice, Token) :-
+    get_time(Now),
+    At is Now + Slice,
+    (   Deadline \== infinite,
+        At >= Deadline
+    ->  Token = none
+    ;   scheduler_deadline_start_(Task, At, Token)
     ).
 
 scheduler_claim_candidate_(_, _, Pattern, _Guard, Candidate, _, peek, Out) :- !,
@@ -1830,7 +1865,9 @@ scheduler_claim_candidate_(Task, Space, Pattern, Guard, Candidate, Deadline,
                            take, Out) :-
     (   metta_remove_atom(Space, Candidate, true)
     ->  Pattern = Candidate, Out = Candidate
-    ;   scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, take, Out)
+    ;   space_wait_slice(first, Slice),
+        scheduler_space_claim_(Task, Space, Pattern, Guard, Deadline, Slice,
+                               take, Out)
     ).
 
 scheduler_deadline_open_(infinite) :- !.
@@ -1876,7 +1913,7 @@ space_claim_(Space, Pattern, Guard, Queue, Deadline, Mode, Out) :-
     %spawned writer race this and win.
     (   space_already_holds_(Space, Attempt, AttemptGuard, Candidate)
     ->  true
-    ;   await_matching_(Queue, Attempt, AttemptGuard, Deadline, Candidate)
+    ;   await_matching_(Space, Queue, Attempt, AttemptGuard, Deadline, Candidate)
     ),
     (   Mode == peek
     ->  Pattern = Candidate, Out = Candidate
@@ -1900,39 +1937,82 @@ guard_holds_(Module, Guard) :-
     eval_metta_in_module(Module, Guard, Verdict),
     Verdict == true.
 
+%A WAKE-UP IS A HINT AND THE STORE IS THE TRUTH, so a wait that hears nothing
+%looks again rather than concluding that nothing was written. A hint really is
+%lost sometimes, and the mechanism is the engine's own: the write door carries
+%its event publisher only while some seam:atom_added/2 clause exists
+%[source: engine/ext_points.pl, enable_atom_hook/1 and disable_atom_hook/1],
+%so a writer already inside that door when a waiter registers writes without
+%publishing anything, and a write that then lands after the waiter's own first
+%read is one nobody ever mentions. The waiter used to sit out its whole
+%deadline with the atom in the space beside it.
+%
+%Measured over the corpus example's own spawn-and-wait, 3,000 rounds a process
+%under the load the example corpus itself makes: 7 of 90,000 rounds waited the
+%full ten seconds and found the atom PRESENT the moment they gave up, at
+%loadavg 34 to 92; none of 60,000 rounds ever read a store that missed a write
+%whose future had already settled, so the store read is sound and the hint is
+%what goes missing; and with one waiter parked for the whole run, which holds
+%the door's publisher in place, 60,000 rounds at loadavg 116 to 124 missed
+%nothing at all
+%[measured 2026-09-08; command=sh run.sh over a rounds probe under `sh
+%test.sh`; fixture=examples/ch17-concurrency-and-the-loop/01-thread_lib.metta's
+%own (spawn (add-atom ...)) beside (await-atom ... 10); commit=WORKTREE].
+%
+%Re-reading is the discipline every condition variable is used with, for the
+%same reason: the signal is not the state, so the waiter re-tests the
+%predicate instead of trusting the wake-up [source: POSIX
+%pthread_cond_wait/3's spurious-wakeup rule, and Java's Object.wait(),
+%documented as usable only inside a loop that tests the condition]. The slices
+%BACK OFF because the race is at registration: a lost hint costs the first
+%slice, and a wait parked for hours costs one store read a second.
+%
 %The hook test is deliberately loose (unifiable, binding nothing), so a
 %candidate can still fail the real unification here; keep waiting when it does.
-await_matching_(Queue, Pattern, Guard, infinite, Out) :-
-    !,
+space_wait_slice(first, 0.05).
+space_wait_slice(ceiling, 1.0).
+
+await_matching_(Space, Queue, Pattern, Guard, Deadline, Out) :-
     current_metta_module(Module),
-    repeat,
-      thread_get_message(Queue, Candidate),
-      Pattern = Candidate,
-      guard_holds_(Module, Guard),
-      !,
-      Out = Candidate.
-%ONE deadline for the whole call, computed once by space_wait_/5 and carried
+    space_wait_slice(first, Slice),
+    await_matching_(Space, Queue, Pattern, Guard, Module, Deadline, Slice, Out).
+
+%ONE deadline for the whole call, computed once by space_wait_/6 and carried
 %through every claim retry, not one per candidate: thread_get_message/3 FAILS
 %when its timeout expires, so a repeat loop around a per-call timeout would
 %restart the clock on every non-matching write and never give up.
-await_matching_(Queue, Pattern, Guard, Deadline, Out) :-
-    current_metta_module(Module),
-    await_until_(Queue, Pattern, Guard, Module, Deadline, Out).
+await_matching_(Space, Queue, Pattern, Guard, Module, Deadline, Slice, Out) :-
+    await_slice_(Deadline, Slice, Wait),
+    (   thread_get_message(Queue, Candidate, [timeout(Wait)])
+    ->  %The candidate is tested against a FRESH copy so a rejection leaves the
+        %caller's pattern unbound for the next one; the guard rides along in
+        %the copy for the same reason.
+        (   copy_term(Pattern-Guard, Try-TryGuard),
+            Try = Candidate,
+            guard_holds_(Module, TryGuard)
+        ->  Out = Candidate
+        ;   await_matching_(Space, Queue, Pattern, Guard, Module, Deadline,
+                            Slice, Out)
+        )
+    ;   copy_term(Pattern-Guard, Look-LookGuard),
+        (   space_already_holds_(Space, Look, LookGuard, Candidate)
+        ->  Out = Candidate
+        ;   space_wait_slice(ceiling, Ceiling),
+            Next is min(Slice * 2, Ceiling),
+            await_matching_(Space, Queue, Pattern, Guard, Module, Deadline,
+                            Next, Out)
+        )
+    ).
 
-await_until_(Queue, Pattern, Guard, Module, Deadline, Out) :-
+%How long this slice may sleep: the slice, or what is left of the deadline
+%when that is less. A wait with no deadline sleeps whole slices forever, and
+%one whose deadline has passed fails, which is what a deadline means.
+await_slice_(infinite, Slice, Slice) :- !.
+await_slice_(Deadline, Slice, Wait) :-
     get_time(Now),
     Remaining is Deadline - Now,
     Remaining > 0,
-    thread_get_message(Queue, Candidate, [timeout(Remaining)]),
-    %The candidate is tested against a FRESH copy so a rejection leaves the
-    %caller's pattern unbound for the next one; the guard rides along in the
-    %copy for the same reason.
-    (   copy_term(Pattern-Guard, Try-TryGuard),
-        Try = Candidate,
-        guard_holds_(Module, TryGuard)
-    ->  Pattern = Candidate, Out = Candidate
-    ;   await_until_(Queue, Pattern, Guard, Module, Deadline, Out)
-    ).
+    Wait is min(Remaining, Slice).
 
 % --------------------------------------------------------- synchronisation
 
