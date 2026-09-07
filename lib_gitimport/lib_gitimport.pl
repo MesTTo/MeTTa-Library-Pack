@@ -12,6 +12,11 @@
 %     rather than raising existence_error(procedure, process_create/3)
 %     [tested: platform_capabilities_reduced:git_import_refuses_by_name_when_subprocess_is_absent;
 %     commit=87d998c24278fc7f020ccb0e408ebcd9332b63eb].
+%   - git_pinned_dependency/2 answers every revision this process pinned, by
+%     either route, so a lockfile cannot name the declared pins and omit the
+%     imported ones; an UNPINNED import records nothing, because a revision it
+%     never chose is not a pin [tested: tests/shell/test_git_import.sh, the two
+%     pin checks after the arity family; commit=WORKTREE].
 
 :- use_module(library(filesex)).
 %This file loads at BOOT, from engine/metta.pl's own ensure_loaded list, so it
@@ -70,7 +75,37 @@
     acquire_pinned_repository('git-import!', Url, Build, Base, Rev,
                               Name, LocalDir),
     acquire_manifest_dependencies(LocalDir),
-    register_git_library_path(Name, LocalDir).
+    register_git_library_path(Name, LocalDir),
+    record_git_pin(Url, Rev, Build, Base).
+
+%The runtime form records what it pinned, in the SAME table the declarative
+%form keeps, so a reader asking what revisions this process is running gets
+%both routes from one place. Without it a lockfile could name the pins a
+%manifest declared and silently omit the ones a program imported by hand,
+%which is the half a reader would never think to check
+%[tested: tests/shell/test_git_import.sh, the pin a runtime import records].
+%
+%Recorded AFTER the checkout succeeds, because it is a record of what happened
+%rather than a claim about what will: a refused or failed acquisition leaves
+%no row, exactly as the declarative form's marker is erased when its body
+%raises. The row replaces any earlier one for the same URL, which is what
+%keeps it true when one process imports the same repository twice; the
+%declarative form's own conflict check is unchanged and now sees a runtime
+%pin as the standing specification, which is what it is.
+record_git_pin(Url, Rev, Build, Base) :-
+    with_mutex(git_dependencies,
+               (   absolute_file_name(Base, CanonBase, [file_errors(fail)])
+               ->  normalize_git_url(Url, IdentityUrl),
+                   retractall(git_dependency(IdentityUrl, _)),
+                   assertz(git_dependency(IdentityUrl,
+                                          dependency(Rev, Build, CanonBase)))
+               ;   true
+               )).
+
+%Every pinned repository this process acquired, by either route: the URL as
+%the identity the table keys on, and the full 40-character revision.
+git_pinned_dependency(Url, Rev) :-
+    git_dependency(Url, dependency(Rev, _, _)).
 
 % Collect and satisfy the pinned dependencies declared by one parsed file.
 acquire_declared_dependencies(ParsedForms) :-
