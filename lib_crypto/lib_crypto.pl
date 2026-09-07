@@ -25,7 +25,18 @@
 %crypto library records the capability absent without swallowing any failure
 %from a library that did resolve. library(sha) is part of the reduced seat and
 %is the deliberately narrow fallback for hashing, not for randomness.
-:- metta_platform_load(crypto, [crypto_data_hash/3, crypto_n_random_bytes/2]).
+%hex_bytes/2 is on this list because crypto_random_hex/2 calls it. It was not,
+%and the library-index autoloader was what had been finding it: with the
+%autoloader off, on a platform that HAS crypto, `(crypto-random-hex 4)` raised
+%`Unknown procedure: hex_bytes/2` while the same form answered "edf2d01d" with
+%autoload on [measured 2026-09-07: NO_AUTOLOAD=1 sh run.sh over
+%`!(import! &self (library lib_crypto))` and `!(println! (crypto-random-hex 4))`,
+%exit 2 against exit 0; commit=WORKTREE]. No corpus example calls it, so the
+%no-autoload GATE never reached the line; the lib-autoload lane reads every
+%shipped library's clauses instead of waiting for an example to
+%[tested: sh check.sh lib-autoload; commit=WORKTREE].
+:- metta_platform_load(crypto, [crypto_data_hash/3, crypto_n_random_bytes/2,
+                                hex_bytes/2]).
 :- use_module(library(sha), [sha_hash/3, hash_atom/2]).
 
 crypto_hash(Algorithm, Text, Hex) :-
