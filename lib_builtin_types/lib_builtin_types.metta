@@ -300,8 +300,8 @@
 ;; with no declaration at all, so their arguments are ordinary evaluated
 ;; ones; a held operand answered `((+ 1 2) b)` where upstream answers
 ;; `(3 b)` [source: PeTTa@ae66fa8 src/metta.pl:111,153; measured 2026-08-30,
-;; ai-tmp/family.metta, 7 of 15 forms in this family differed and every one
-;; of them differed only here]. The RESULT types are untouched: `Atom` on
+;; 7 of 15 forms in this family differed and every one of them differed only
+;; here]. The RESULT types are untouched: `Atom` on
 ;; cons is what keeps a rebuild linear, per the note below.
 (: cons-atom (-> %Undefined% %Undefined% Atom))
 (: decons-atom (-> %Undefined% Atom))

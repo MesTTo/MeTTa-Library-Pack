@@ -1349,13 +1349,13 @@ pool_destroy(Name, true) :-
 %the number of timers: N timers cost no threads. The timer thread holds a heap
 %keyed by deadline and waits with a timed message receive, which measured a
 %constant 0.06ms drift from 1ms out to 500ms, and 20,000 timers went into the
-%heap in 29ms [measured 2026-08-15, ai-tmp/pool/gran.pl].
+%heap in 29ms [measured 2026-08-15].
 %
 %Not alarm/4, which is SWI's own timer wheel and would have been the obvious
 %choice: its goal runs as a SIGNAL on whichever thread scheduled it, so a
 %firing timer would interrupt unrelated evaluation. Running MeTTa evaluation
 %from a signal handler is what took SIGSEGV when metta_timeout tried it
-%[measured 2026-08-15, ai-tmp/pool/alarm.pl].
+%[measured 2026-08-15].
 :- dynamic metta_timer_cancelled/1.
 
 metta_timer_queue(metta_timer_requests).
