@@ -190,7 +190,20 @@
 %An explicit declaration is honoured with the `autoload` flag false, which is
 %the whole point of naming the file [tested: the GATE no-autoload lane, 258
 %examples; commit=11afdcdbad5bbbe37168b5d8528c23a21c42b4b6].
-:- autoload(library(wfs), [call_delays/2]).
+%The declaration itself is in engine/metta.pl, beside the engine's own
+%`autoload(library(uuid))`, and it has to be: this file has no module of
+%its own, so it loads into `user` where that directive already defined
+%SWI's `'$autoload'/3` table, and a SECOND file adding to it prints
+%`Redefined static procedure '$autoload'/3` on stderr once per load. The
+%`petta` conformance lane compares this engine's output against upstream's
+%line for line and blocked on tabling_fib.metta with nothing but that
+%warning between them [measured 2026-09-07: GATE_ONLY=1 sh check.sh,
+%`petta: 1 entries block the gate`; with the declaration moved the same
+%lane reports 154/156 agreeing and 0 blocking; commit=WORKTREE]. The
+%multifile declaration that would let it live here is not available
+%either: this tree's seam scan reads any multifile under engine/ or lib/
+%as a seam needing a seam:kind/2 fact, and SWI's autoload table is not
+%one of this tree's seams.
 
 
 %A MeTTa call form arrives as a list, possibly under one quote; the
