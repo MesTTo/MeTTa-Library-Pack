@@ -172,6 +172,26 @@
 %table_statistics/3 is tableutil's, and it is not autoloaded.
 :- use_module(library(tableutil)).
 
+%call_delays/2 is library(wfs)'s, not library(tabling)'s, and the library-index
+%autoloader is what had been finding it: with autoload off the restraint
+%dispatch raised `Unknown procedure: call_delays/2` and the no-autoload lane
+%stopped on
+%examples/ch18-performance/18-02-memoisation-and-tabling/16-cache_policy_restraints.metta.
+%That lane exists for exactly this, a module boundary broken with every other
+%lane still green.
+%
+%An autoload/2 DECLARATION rather than a use_module/2, and the difference is
+%measured: this file is loaded by every boot and wfs is needed only where a
+%restrained table is read, so loading it eagerly charges every program that
+%never restrains anything. The parity corpus's tabling row reads 138,172
+%inferences on trunk, 140,178 with `use_module` and 138,995 with this
+%[measured 2026-09-07; command=swipl tests/fixtures/parity_driver.pl <root>
+%examples/ch18-performance/18-02-memoisation-and-tabling/09-tabling_fib.metta].
+%An explicit declaration is honoured with the `autoload` flag false, which is
+%the whole point of naming the file [tested: the GATE no-autoload lane, 258
+%examples; commit=WORKTREE].
+:- autoload(library(wfs), [call_delays/2]).
+
 
 %A MeTTa call form arrives as a list, possibly under one quote; the
 %function name is its head atom and the compiled arity is the input
