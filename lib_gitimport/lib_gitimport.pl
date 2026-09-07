@@ -16,7 +16,7 @@
 %     either route, so a lockfile cannot name the declared pins and omit the
 %     imported ones; an UNPINNED import records nothing, because a revision it
 %     never chose is not a pin [tested: tests/shell/test_git_import.sh, the two
-%     pin checks after the arity family; commit=WORKTREE].
+%     pin checks after the arity family; commit=ff4257005f562786e3ef7a5a37ce94b7d80e782d].
 
 :- use_module(library(filesex)).
 %This file loads at BOOT, from engine/metta.pl's own ensure_loaded list, so it
