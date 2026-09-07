@@ -53,7 +53,7 @@
 %     leaves a writer already inside it writing silently [tested:
 %     lib_thread:a_wait_finds_an_atom_whose_hint_was_never_published,
 %     lib_thread:a_scheduled_wait_finds_an_atom_whose_hint_was_never_published;
-%     commit=WORKTREE]
+%     commit=5f92ecfb105f7a11d8f3b1a4c0a7e3b6d4b656a6]
 %   - par-map answers one result per element, in the input list's order,
 %     because concurrent_maplist/3 preserves position [tested: lib_thread:par_map_answers_one_result_per_element_in_order]
 %   - par-race releases every worker from one start barrier and ignores Empty
@@ -1957,7 +1957,7 @@ guard_holds_(Module, Guard) :-
 %nothing at all
 %[measured 2026-09-08; command=sh run.sh over a rounds probe under `sh
 %test.sh`; fixture=examples/ch17-concurrency-and-the-loop/01-thread_lib.metta's
-%own (spawn (add-atom ...)) beside (await-atom ... 10); commit=WORKTREE].
+%own (spawn (add-atom ...)) beside (await-atom ... 10); commit=5f92ecfb105f7a11d8f3b1a4c0a7e3b6d4b656a6].
 %
 %Re-reading is the discipline every condition variable is used with, for the
 %same reason: the signal is not the state, so the waiter re-tests the
