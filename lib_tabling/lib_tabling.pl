@@ -176,6 +176,25 @@
 %table_statistics/3 is tableutil's, and it is not autoloaded.
 :- use_module(library(tableutil)).
 
+%call_delays/2 is library(wfs)'s, not library(tabling)'s, and the library-index
+%autoloader was what had been finding it. With the autoloader off the restraint
+%dispatch raised `Unknown procedure: call_delays/2` and the no-autoload GATE
+%stopped on
+%examples/ch18-performance/18-02-memoisation-and-tabling/16-cache_policy_restraints.metta
+%[measured 2026-09-07: NO_AUTOLOAD=1 sh run.sh over that example, exit 2 against
+%exit 0 with the autoloader on; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
+%
+%An autoload/2 DECLARATION rather than a use_module/2: an explicit declaration
+%is honoured with the `autoload` flag false, which is the whole point of naming
+%the file, and it keeps wfs off the load path of every program that imports this
+%library and never restrains a table
+%[source: SWI-Prolog 10.1 Reference Manual, autoload/2; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
+%The same conclusion was reached independently on the branch carrying
+%95016842d2648ba63a879c246b54c8100aa85e6, which measures the two spellings at
+%140,178 inferences for use_module against 138,995 for this one; whichever copy
+%merges second is redundant and can be dropped whole.
+:- autoload(library(wfs), [call_delays/2]).
+
 
 %A MeTTa call form arrives as a list, possibly under one quote; the
 %function name is its head atom and the compiled arity is the input
