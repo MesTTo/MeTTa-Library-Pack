@@ -363,7 +363,7 @@
 ;; ARGUMENT arriving and reads linear, while retired instructions read 1.057
 ;; and say linearithmic. A row would state the cheaper of the two readings.
 ;; alpha-unique-atom has no such gap, its association tree being Prolog's, and
-;; it is the row alpha-unique carries in engine/prelude.metta
+;; it is the row alpha-unique carries in engine/metta/prelude.pl
 ;; [measured 2026-09-07: `python -m benchmarks.costs --paired`, unique-atom
 ;; 0.978 against 1.057 and alpha-unique-atom 1.076 against 1.079].
 (: unique-atom (-> Expression Atom))
@@ -457,7 +457,7 @@
 ;; is evaluated; the call to report and the two bags are held, because a
 ;; reported form must be what the program wrote and a collapsed tuple
 ;; evaluated again is an APPLICATION of its first answer to the rest.
-;; DECLARED HERE rather than in engine/prelude.metta, beside the assert family
+;; DECLARED HERE rather than in the engine's prelude, beside the assert family
 ;; that calls it: the mask index for a BUILTIN call site is derived from this
 ;; file, in load_builtin_type_surface/0, and the prelude compiles after that,
 ;; so a prelude-only declaration would arrive too late to hold anything

@@ -1,7 +1,7 @@
 ; %%%% Hyperon-Experimental compatibility library. %%%%
 ;
 ; Everything this library once defined is part of the core engine now,
-; loaded from engine/prelude.metta at startup, so a program reaches every
+; the engine's own Prolog vocabulary now, so a program reaches every
 ; form below with no import at all. Importing this file remains a no-op
 ; so existing programs keep working unchanged.
 ;
@@ -25,7 +25,7 @@
 ; evalc is an engine builtin, and it takes any space rather than only the
 ; literal &self this shim matched.
 ;
-; Everything else moved to engine/prelude.metta on 2026-08-18, by the same
+; Everything else moved to the engine's prelude on 2026-08-18, by the same
 ; rule the earlier promotions state: standard vocabulary, not shims.
 ; Each name registers as a builtin: reachable from every space,
 ; shadowable per named space by an equation there, stored as an atom in
