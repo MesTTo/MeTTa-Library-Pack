@@ -199,7 +199,7 @@
 %line for line and blocked on tabling_fib.metta with nothing but that
 %warning between them [measured 2026-09-07: GATE_ONLY=1 sh check.sh,
 %`petta: 1 entries block the gate`; with the declaration moved the same
-%lane reports 154/156 agreeing and 0 blocking; commit=WORKTREE]. The
+%lane reports 154/156 agreeing and 0 blocking; commit=c2fe16d7daecca88683c097dbd9f09a09db803b8]. The
 %multifile declaration that would let it live here is not available
 %either: this tree's seam scan reads any multifile under engine/ or lib/
 %as a seam needing a seam:kind/2 fact, and SWI's autoload table is not
