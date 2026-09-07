@@ -177,28 +177,37 @@
 :- use_module(library(tableutil)).
 
 %call_delays/2 is library(wfs)'s, not library(tabling)'s, and the library-index
-%autoloader was what had been finding it. With the autoloader off the restraint
-%dispatch raised `Unknown procedure: call_delays/2` and the no-autoload GATE
+%autoloader is what had been finding it: with autoload off the restraint
+%dispatch raised `Unknown procedure: call_delays/2` and the no-autoload lane
 %stopped on
-%examples/ch18-performance/18-02-memoisation-and-tabling/16-cache_policy_restraints.metta
-%[measured 2026-09-07: NO_AUTOLOAD=1 sh run.sh over that example, exit 2 against
-%exit 0 with the autoloader on; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
+%examples/ch18-performance/18-02-memoisation-and-tabling/16-cache_policy_restraints.metta.
+%That lane exists for exactly this, a module boundary broken with every other
+%lane still green.
 %
-%A use_module/2 with the import list, not an autoload/2 declaration. An
-%autoload/2 directive materialises a '$autoload'/3 fact table in the module the
-%file loads into, and this file and engine/metta.pl both load into user:
-%engine/metta.pl:382 declares `:- autoload(library(uuid))`, and a second
-%autoload/2 directive from another file REDEFINES that table (SWI warns
-%"Redefined static procedure '$autoload'/3, previously defined at
-%engine/metta.pl:382", which the upstream-conformance lane read on
-%tabling_fib.metta where upstream prints nothing), so importing this library
-%would have discarded the engine's own declaration. The eager load costs about
-%1,200 inferences per program that imports this library (measured on the
-%branches that declared it: 140,178 for use_module against 138,995 for the
-%autoload spelling), a constant paid once, against a declaration table silently
-%replaced [source: SWI-Prolog 10.1 Reference Manual, autoload/2 and
-%use_module/2; commit=bc0d495562674e064276e91f04c61286d0b93585].
-:- use_module(library(wfs), [call_delays/2]).
+%An autoload/2 DECLARATION rather than a use_module/2, and the difference is
+%measured: this file is loaded by every boot and wfs is needed only where a
+%restrained table is read, so loading it eagerly charges every program that
+%never restrains anything. The parity corpus's tabling row reads 138,172
+%inferences on trunk, 140,178 with `use_module` and 138,995 with this
+%[measured 2026-09-07; command=swipl tests/fixtures/parity_driver.pl <root>
+%examples/ch18-performance/18-02-memoisation-and-tabling/09-tabling_fib.metta].
+%An explicit declaration is honoured with the `autoload` flag false, which is
+%the whole point of naming the file [tested: the GATE no-autoload lane, 258
+%examples; commit=11afdcdbad5bbbe37168b5d8528c23a21c42b4b6].
+%The declaration itself is in engine/metta.pl, beside the engine's own
+%`autoload(library(uuid))`, and it has to be: this file has no module of
+%its own, so it loads into `user` where that directive already defined
+%SWI's `'$autoload'/3` table, and a SECOND file adding to it prints
+%`Redefined static procedure '$autoload'/3` on stderr once per load. The
+%`petta` conformance lane compares this engine's output against upstream's
+%line for line and blocked on tabling_fib.metta with nothing but that
+%warning between them [measured 2026-09-07: GATE_ONLY=1 sh check.sh,
+%`petta: 1 entries block the gate`; with the declaration moved the same
+%lane reports 154/156 agreeing and 0 blocking; commit=c2fe16d7daecca88683c097dbd9f09a09db803b8]. The
+%multifile declaration that would let it live here is not available
+%either: this tree's seam scan reads any multifile under engine/ or lib/
+%as a seam needing a seam:kind/2 fact, and SWI's autoload table is not
+%one of this tree's seams.
 
 
 %A MeTTa call form arrives as a list, possibly under one quote; the
@@ -513,6 +522,15 @@ metta_tabling_policy_word('max-answers',      restraint, max_answers).
 metta_tabling_policy_word('subgoal-abstract', restraint, subgoal_abstract).
 metta_tabling_policy_word('answer-abstract',  restraint, answer_abstract).
 
+%The watch words that make SWI TRACK a table's dependencies, derived from the
+%table above rather than listed again: `plain` is the third watch word and the
+%one that tracks nothing, so it takes no `as` option and conflicts with
+%nothing. A fourth watch word cannot be added without deciding this, which is
+%what a second closed list of the same two names would have let happen.
+metta_tabling_watched(Watch) :-
+    metta_tabling_policy_word(Watch, watch, _),
+    Watch \== plain.
+
 %SWI's tripwire names for the two size restraints, and the count restraint's
 %name under the process-wide flag; the per-predicate count restraint is caught
 %on its answer instead (metta_tabling_restrained/2).
@@ -534,11 +552,11 @@ metta_tabling_compile(Name, Members, Policy) :-
     ->  metta_tabling_refuse(Name, needs(lazy, monotonic))
     ;   true
     ),
-    (   Moded \== none, memberchk(Watch, [incremental, monotonic])
+    (   Moded \== none, metta_tabling_watched(Watch)
     ->  metta_tabling_refuse(Name, cannot_watch(lattice, Watch))
     ;   true
     ),
-    (   Variant == subsumptive, memberchk(Watch, [incremental, monotonic])
+    (   Variant == subsumptive, metta_tabling_watched(Watch)
     ->  metta_tabling_refuse(Name, cannot_watch(subsumptive, Watch))
     ;   true
     ),
@@ -715,7 +733,7 @@ metta_tabling_moded_head(Name, CompiledArity, Mode, ModeHead) :-
 %always written, so a default never depends on SWI's table_shared flag.
 metta_tabling_as_options(policy(Watch, Thread, Variant, Lazy, _, Restraints), Options) :-
     findall(Option,
-            (   memberchk(Watch, [incremental, monotonic]), Option = Watch
+            (   metta_tabling_watched(Watch), Option = Watch
             ;   Lazy == true, Option = lazy
             ;   Variant == subsumptive, Option = subsumptive
             ;   Option = Thread
