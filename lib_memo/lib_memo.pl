@@ -31,11 +31,11 @@
 %     once, by whichever layer the call entered first
 %     [tested: tracer:a_memoised_head_records_its_calls_once,
 %     test_a_memoised_head_records_the_calls_its_cache_answers;
-%     commit=WORKTREE].
+%     commit=e54c3654b9e0d3d040560d12c105a54303f63af7].
 %   - seam:forget_derived/0 drops every cached ANSWER and keeps every cache
 %     DECISION, so the next call caches again; a replay of a recorded run asks
 %     for it before re-running [tested: tracer:a_memoised_head_records_its_calls_once;
-%     commit=WORKTREE].
+%     commit=e54c3654b9e0d3d040560d12c105a54303f63af7].
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
 %   - Memo aggregation values come from the memo-aggregate catalog

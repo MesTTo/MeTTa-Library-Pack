@@ -29,7 +29,7 @@
 %   - seam:forget_derived/0 drops every declared table's answers and keeps the
 %     declarations, which is the abolition a changed equation already causes,
 %     so a replay of a recorded run over a tabled head takes the first run's
-%     path [tested: tabling_equation_change_drops_tables; commit=WORKTREE].
+%     path [tested: tabling_equation_change_drops_tables; commit=e54c3654b9e0d3d040560d12c105a54303f63af7].
 %   - A declared table survives a write to a space it reads, and a change
 %     to any equation drops it [tested: tabling_equation_change_drops_tables,
 %     and end to end by examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
