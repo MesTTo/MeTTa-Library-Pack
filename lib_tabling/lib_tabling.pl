@@ -26,6 +26,10 @@
 %     dropped costs the same 377 inferences at N of 5,000, 20,000 and 80,000,
 %     where abolish_all_tables/0 cost 2N [tested:
 %     test_an_equation_change_does_not_pay_for_a_dropped_table; commit=57f21ba9edf94bcf28cde11f938bce2c241a3709]
+%   - seam:forget_derived/0 drops every declared table's answers and keeps the
+%     declarations, which is the abolition a changed equation already causes,
+%     so a replay of a recorded run over a tabled head takes the first run's
+%     path [tested: tabling_equation_change_drops_tables; commit=WORKTREE].
 %   - A declared table survives a write to a space it reads, and a change
 %     to any equation drops it [tested: tabling_equation_change_drops_tables,
 %     and end to end by examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
@@ -1272,6 +1276,16 @@ seam:function_changed(_) :-
 
 :- multifile seam:function_removed/1.
 seam:function_removed(_) :-
+    ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
+
+%Every answer this library derived, dropped, which is the same abolition a
+%changed function already causes. A replay of a recorded run asks for it: a
+%tabled head answers a second run from its table in fewer reductions than the
+%first, so the recorded event stream and the replayed one would differ over
+%the same answers. The DECLARATIONS survive, as they do above, so the tables
+%fill again from the next call.
+:- multifile seam:forget_derived/0.
+seam:forget_derived :-
     ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
 
 %Every table a MeTTa declaration made, and nothing else.

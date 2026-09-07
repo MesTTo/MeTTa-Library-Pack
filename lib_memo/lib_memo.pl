@@ -25,6 +25,17 @@
 %     places an equation in a space
 %     [source: engine/spaces.pl, metta_remove_atom/3]
 % Guarantees:
+%   - A call this library answers from its cache is still a CALL to whatever is
+%     watching: the dispatcher declares itself through
+%     seam:interposed_dispatch/4, so a memoised head's reduction is recorded
+%     once, by whichever layer the call entered first
+%     [tested: tracer:a_memoised_head_records_its_calls_once,
+%     test_a_memoised_head_records_the_calls_its_cache_answers;
+%     commit=WORKTREE].
+%   - seam:forget_derived/0 drops every cached ANSWER and keeps every cache
+%     DECISION, so the next call caches again; a replay of a recorded run asks
+%     for it before re-running [tested: tracer:a_memoised_head_records_its_calls_once;
+%     commit=WORKTREE].
 %   - Routine cache eviction does not write diagnostics to user_error
 %     [tested 2026-08-14: memo_eviction_output].
 %   - Memo aggregation values come from the memo-aggregate catalog
@@ -311,6 +322,36 @@ memo_dispatch_call(Fun, Args, Out, Goal) :-
     ;  Goal = cache_call(Fun, CallModule, Args, Out)
     ).
 
+%The module this file's predicates live in. engine/metta.pl consults
+%lib_memo.pl into `user`, and every space module inherits from there, so a
+%compiled call site's unqualified cache_call/4 resolves to that ONE predicate;
+%an observer wrapping `lib_memo:cache_call/4` would create a local shadow
+%nobody calls, which is why SWI's own port tracer requalifies to the defining
+%module before it wraps
+%[source: /usr/lib/swi-prolog/library/prolog_trace.pl, resolve_predicate/2;
+%measured 2026-09-07: predicate_property(lib_memo:cache_call(_,_,_,_),
+%imported_from(user))].
+:- dynamic memo_home_module/1.
+:- prolog_load_context(module, HomeModule),
+   retractall(memo_home_module(_)),
+   assertz(memo_home_module(HomeModule)).
+
+%What the two dispatch goals above MEAN, for anything watching function calls.
+%A memoised head answered from its cache never enters the function, so a
+%tracer wrapping the function alone saw nothing: `!(fib 8)` under the automatic
+%memo recorded 0 events over 23,050 inferences [measured 2026-09-07]. The head
+%is a template, so one clause both names the predicate to wrap and reads a live
+%call of it; the seam's own note in engine/ext_points.pl carries the rest.
+:- multifile seam:interposed_dispatch/4.
+seam:interposed_dispatch(Module:cache_call(Fun, _CallModule, InArgs, Out),
+                         Fun, InArgs, Out) :-
+    memo_home_module(Module).
+seam:interposed_dispatch(Module:ReplayHead, Fun, InArgs, Out) :-
+    exact_memo_specialization(ReplayName, _TableName, Fun, Module, Arity),
+    length(RawArgs, Arity),
+    ReplayHead =.. [ReplayName | RawArgs],
+    append(InArgs, [Out], RawArgs).
+
 %Tell the shared effect walk which source call this transparent dispatcher
 %executes. Reconciliation can then re-check a function after it has been
 %compiled through the cache without mistaking cache_call/4 for a user effect.
@@ -412,6 +453,15 @@ seam:source_program_compiled :-
 seam:cache_policy_changed(Fun) :-
     memo_automatic_mark_policy_changed(Fun),
     memo_automatic_reconcile_dirty.
+
+%Everything this library derived, dropped. cache_clear/0 is what
+%`(clear-memoize)` already does, and the DECISIONS survive it: a function the
+%automatic memo chose stays chosen and caches again from the next call, which
+%is what a caller asking to re-run from a cold cache wants and not what
+%disabling the memo would give.
+:- multifile seam:forget_derived/0.
+seam:forget_derived :-
+    cache_clear.
 
 :- multifile seam:automatic_cache_explanation/3.
 seam:automatic_cache_explanation(Fun, Choice, Reason) :-
