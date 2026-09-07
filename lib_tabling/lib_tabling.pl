@@ -189,7 +189,7 @@
 %examples/ch18-performance/18-02-memoisation-and-tabling/09-tabling_fib.metta].
 %An explicit declaration is honoured with the `autoload` flag false, which is
 %the whole point of naming the file [tested: the GATE no-autoload lane, 258
-%examples; commit=WORKTREE].
+%examples; commit=11afdcdbad5bbbe37168b5d8528c23a21c42b4b6].
 :- autoload(library(wfs), [call_delays/2]).
 
 
