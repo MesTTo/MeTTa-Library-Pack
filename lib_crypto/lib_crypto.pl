@@ -31,10 +31,10 @@
 %`Unknown procedure: hex_bytes/2` while the same form answered "edf2d01d" with
 %autoload on [measured 2026-09-07: NO_AUTOLOAD=1 sh run.sh over
 %`!(import! &self (library lib_crypto))` and `!(println! (crypto-random-hex 4))`,
-%exit 2 against exit 0; commit=WORKTREE]. No corpus example calls it, so the
+%exit 2 against exit 0; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3]. No corpus example calls it, so the
 %no-autoload GATE never reached the line; the lib-autoload lane reads every
 %shipped library's clauses instead of waiting for an example to
-%[tested: sh check.sh lib-autoload; commit=WORKTREE].
+%[tested: sh check.sh lib-autoload; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
 :- metta_platform_load(crypto, [crypto_data_hash/3, crypto_n_random_bytes/2,
                                 hex_bytes/2]).
 :- use_module(library(sha), [sha_hash/3, hash_atom/2]).
