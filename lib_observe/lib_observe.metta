@@ -9,7 +9,7 @@
                 (@param "MeTTa source text")
                 (@param "all or a tuple of function names")
                 (@param "positive event limit")))
-      (@return "a space of (trace-event depth kind term answer) and (trace-stopped reason) atoms"))
+      (@return "a space of (trace-event seq time depth kind term answer) and (trace-stopped reason) atoms"))
 
 
 (: observe-source (-> SpaceType String String SpaceType))
