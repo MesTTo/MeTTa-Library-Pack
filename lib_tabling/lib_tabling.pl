@@ -184,16 +184,21 @@
 %[measured 2026-09-07: NO_AUTOLOAD=1 sh run.sh over that example, exit 2 against
 %exit 0 with the autoloader on; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
 %
-%An autoload/2 DECLARATION rather than a use_module/2: an explicit declaration
-%is honoured with the `autoload` flag false, which is the whole point of naming
-%the file, and it keeps wfs off the load path of every program that imports this
-%library and never restrains a table
-%[source: SWI-Prolog 10.1 Reference Manual, autoload/2; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
-%The same conclusion was reached independently on the branch carrying
-%95016842d2648ba63a879c246b54c8100aa85e6, which measures the two spellings at
-%140,178 inferences for use_module against 138,995 for this one; whichever copy
-%merges second is redundant and can be dropped whole.
-:- autoload(library(wfs), [call_delays/2]).
+%A use_module/2 with the import list, not an autoload/2 declaration. An
+%autoload/2 directive materialises a '$autoload'/3 fact table in the module the
+%file loads into, and this file and engine/metta.pl both load into user:
+%engine/metta.pl:382 declares `:- autoload(library(uuid))`, and a second
+%autoload/2 directive from another file REDEFINES that table (SWI warns
+%"Redefined static procedure '$autoload'/3, previously defined at
+%engine/metta.pl:382", which the upstream-conformance lane read on
+%tabling_fib.metta where upstream prints nothing), so importing this library
+%would have discarded the engine's own declaration. The eager load costs about
+%1,200 inferences per program that imports this library (measured on the
+%branches that declared it: 140,178 for use_module against 138,995 for the
+%autoload spelling), a constant paid once, against a declaration table silently
+%replaced [source: SWI-Prolog 10.1 Reference Manual, autoload/2 and
+%use_module/2; commit=WORKTREE].
+:- use_module(library(wfs), [call_delays/2]).
 
 
 %A MeTTa call form arrives as a list, possibly under one quote; the
