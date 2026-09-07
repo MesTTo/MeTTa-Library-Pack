@@ -197,7 +197,7 @@
 %branches that declared it: 140,178 for use_module against 138,995 for the
 %autoload spelling), a constant paid once, against a declaration table silently
 %replaced [source: SWI-Prolog 10.1 Reference Manual, autoload/2 and
-%use_module/2; commit=WORKTREE].
+%use_module/2; commit=bc0d495562674e064276e91f04c61286d0b93585].
 :- use_module(library(wfs), [call_delays/2]).
 
 
