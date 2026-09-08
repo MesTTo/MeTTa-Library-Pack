@@ -1,4 +1,6 @@
 # The standard library's Quick Load Format artifacts, on the same terms as the
-# engine's: lazily generated per boot, tied to the SWI that wrote them, never
-# shipped.
+# engine's: generated lazily, by the boot for the three halves it loads and by
+# the first import that loads any other (engine/metta/interop.pl,
+# metta_load_source/2), tied to the SWI that wrote them, purged with the
+# engine's set, never shipped.
 *.qlf
