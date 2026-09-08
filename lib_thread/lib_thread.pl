@@ -15,7 +15,7 @@
 %     failure, transfer explicitly kept spaces and revoke every released alias
 %     [tested: lib_thread_scope,
 %     extensions/python/tests/ch17_concurrency_and_the_loop/test_scopes.py;
-%     commit=WORKTREE].
+%     commit=c6e1198c490a824b96f6fc6e1c0622a542917024].
 %   - spawned computations are SWI engines stepped over a bounded carrier
 %     pool, and a space write wakes rather than parks a carrier [tested:
 %     lib_thread:spawned_engines_multiplex_over_bounded_carriers,
@@ -27,7 +27,7 @@
 %     cannot consume scheduler capacity; cancellation signals the engine and
 %     waits for acknowledgement. A foreign call must return before its engine
 %     can acknowledge cancellation [tested: lib_thread_cancellation;
-%     commit=WORKTREE]
+%     commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
 %   - future await, empty channel receive and full channel send suspend their
 %     engines and wake from completion or mailbox state instead of blocking
 %     all carriers [tested:
@@ -77,7 +77,7 @@
 %     operations and mailbox operations share its bag, and reads copy terms
 %     [tested: lib_thread:a_channel_round_trips_a_term,
 %     test_channel_space_and_mailbox_share_a_randomized_bag_and_fifo;
-%     commit=WORKTREE].
+%     commit=c6e1198c490a824b96f6fc6e1c0622a542917024].
 %   - timers cost no per-timer threads: one timer thread and one bounded pool serve every
 %     timer in the process [assumed 2026-08-16: no test counts threads around an armed timer]
 % Fails when:
@@ -92,7 +92,7 @@
 %     construction. Exactly-one still holds, and the wasted work is one
 %     failed removal per loser per atom. Channel notifications also wake
 %     every registered waiter; their FIFO selects one receiver per message
-%     [source: lib/lib_thread/lib_thread.pl:metta_channel_wake/2; commit=WORKTREE].
+%     [source: lib/lib_thread/lib_thread.pl:metta_channel_wake/2; commit=c6e1198c490a824b96f6fc6e1c0622a542917024].
 %   - a branch needs the caller's variable bindings back. Threads copy terms,
 %     so bindings made inside a branch do not escape it.
 % Owns:
@@ -100,7 +100,7 @@
 %     scope_close/4 succeeds; a failed cleanup retains its resources for retry.
 %     Revocation markers retain only names [tested:
 %     test_cleanup_failure_revokes_aliases_attempts_all_and_can_retry;
-%     commit=WORKTREE].
+%     commit=c6e1198c490a824b96f6fc6e1c0622a542917024].
 %   - one seam:atom_added/2 clause and one message queue per live
 %     space_await/space_take call, both released when the call leaves
 %   - one SWI engine and one completion queue per live spawned future; one
@@ -114,7 +114,7 @@
 %     protects its FIFO; recorded database operations publish waiters before
 %     their first probe. Signals, callbacks and joins leave these
 %     mutexes before running user work [source: lib/lib_thread/lib_thread.pl,
-%     scope_cancel/2, scope_join_engines_/1, channel_try_/3; commit=WORKTREE].
+%     scope_cancel/2, scope_join_engines_/1, channel_try_/3; commit=c6e1198c490a824b96f6fc6e1c0622a542917024].
 %   - '$metta_engine_scheduler' protects task state and carrier creation;
 %     '$metta_timers' serialises starting the timer service; one outcome mutex
 %     per future claims its terminal value, one answer mutex serialises
@@ -326,7 +326,7 @@ next_metta_handle(Id) :-
 % A nursery joins before releasing inputs. The recorded database is deliberate:
 % SWI transactions must not roll back ownership of a still-running computation.
 % Python carries these handles; it owns no parallel lifetime registry.
-% [tested: lib_thread_scope; commit=WORKTREE]
+% [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
 :- meta_predicate scope_call(+, 0).
 :- meta_predicate scope_publish(+, 0).
 :- multifile seam:engine_context/1, seam:space_created/1,
@@ -1354,7 +1354,7 @@ metta_scheduler_cancel(Task, Answer) :-
 % Request first, acknowledge separately: a scope signals every sibling before
 % it waits for a foreign call. The engine handle is the signal target; its
 % carrier has a different signal queue [tested: lib_thread_cancellation;
-% commit=WORKTREE]. The retained engine blob identifies this lifetime even if
+% commit=c6e1198c490a824b96f6fc6e1c0622a542917024]. The retained engine blob identifies this lifetime even if
 % it finishes between selection and signalling. No signal runs under a mutex
 % that the target may need to leave its guard.
 metta_scheduler_request_cancel(Task, Wait) :-
@@ -1821,7 +1821,7 @@ cancel_repeating_worker_(ThreadId) :-
 % The FIFO is the space provider's only term store. Queue entries are capacity
 % tokens. Recorded terms preserve copying and remain outside transactions,
 % unlike dynamic clauses [source: SWI-Prolog V10.1.13, man/builtin.plx,
-% "The recorded database"; commit=WORKTREE].
+% "The recorded database"; commit=c6e1198c490a824b96f6fc6e1c0622a542917024].
 channel_new(Id) :- channel_create_([], Id).
 channel_new(MaxSize, Id) :-
     must_be(positive_integer, MaxSize),

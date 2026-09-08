@@ -2,7 +2,7 @@
 ;   channels, pools, Linda waits and locks over SWI-Prolog primitives.
 ; Guarantees:
 ;   - scope joins children and returns their retained spaces; capture holds an
-;     expression in its current space [tested: lib_thread_scope; commit=WORKTREE]
+;     expression in its current space [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
 ;   - spawn computations multiplex as suspended engines over a bounded carrier
 ;     pool; await and channel backpressure wake engines instead of parking
 ;     carriers [tested: tests/prolog/suites/libraries/lib_thread.plt; commit=39092863ae34184a9f955f185ff57c1ff177ec40]
