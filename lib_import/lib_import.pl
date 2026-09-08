@@ -22,9 +22,9 @@
           ]).
 
 % Guarantees: private helpers and autoload declarations belong to this module.
-% [tested: engine_modules; commit=WORKTREE]
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 % Assumes: engine operations resolve through metta_engine's published exports.
-% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 :- set_module(base(metta_engine)).
 
 :- multifile seam:foreign_space/1, seam:foreign_capability/2,
@@ -186,5 +186,5 @@ static_import_outcome(Outcome, MettaFile, PlFile) :-
 
 
 % The imported exports belong to the host tier that every space inherits.
-% [tested: lib_import:use_module_imports_into_the_shared_host_tier; commit=WORKTREE]
+% [tested: lib_import:use_module_imports_into_the_shared_host_tier; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 'use-module!'(Module, true) :- user:use_module(library(Module)).

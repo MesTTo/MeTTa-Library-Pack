@@ -136,14 +136,14 @@
             metta_memo_total_bytes/1,
             reset_exact_memo_table/3,
             % Generated call bodies resolve this exported dispatcher.
-            % [tested: lib_memo_reach; commit=WORKTREE]
+            % [tested: lib_memo_reach; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
             cache_call/4
           ]).
 
 % Guarantees: private helpers and autoload declarations belong to this module.
-% [tested: engine_modules; commit=WORKTREE]
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 % Assumes: engine operations resolve through metta_engine's published exports.
-% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 :- set_module(base(metta_engine)).
 
 :- use_module(library(lists)).
@@ -170,7 +170,7 @@
 % Read the core's arity/2 registry. A local dynamic declaration would shadow
 % it with an empty predicate and record memo ownership in the wrong module.
 % [tested: lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it;
-% commit=WORKTREE]
+% commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 
 % Cached results: metta_memo_entry(Fun, Module, Arity, Gen, AVs, Results).
 % Exact decorator tables: exact_memo_specialization(ReplayName, TableName,
@@ -366,7 +366,7 @@ memo_dispatch_call(Fun, Args, Out, Goal) :-
 
 % Keep the dispatcher owner in the interposition seam's metadata, so observers
 % wrap lib_memo:cache_call/4 rather than creating a local shadow elsewhere.
-% [source: lib/lib_memo/lib_memo.pl:seam:interposed_dispatch/4; commit=WORKTREE]
+% [source: lib/lib_memo/lib_memo.pl:seam:interposed_dispatch/4; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 
 :- dynamic memo_home_module/1.
 :- prolog_load_context(module, HomeModule),
