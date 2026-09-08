@@ -61,7 +61,7 @@
 %     [tested:
 %     lib_thread:a_signal_before_the_worker_installs_its_catch_still_settles,
 %     lib_thread:cancelling_a_worker_that_ended_unsettled_answers_cancelled;
-%     commit=WORKTREE]
+%     commit=50e34286f66c938d89d5d367c6370ad44164c97f]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
@@ -1547,7 +1547,7 @@ future_body_context_(Context, Module, Expr, Space, Done) :-
 %canceller waits for that settlement under the await mutex, and a worker that
 %died unsettled left it waiting forever
 %[tested: lib_thread:a_signal_before_the_worker_installs_its_catch_still_settles;
-%commit=WORKTREE].
+%commit=50e34286f66c938d89d5d367c6370ad44164c97f].
 future_worker_(Space, Done, Body, Outcome, Release) :-
     setup_call_catcher_cleanup(
         true,
