@@ -1,11 +1,15 @@
 ; Purpose: publish parallel data operations, M:N engine futures, timers,
 ;   channels, pools, Linda waits and locks over SWI-Prolog primitives.
 ; Guarantees:
+;   - scope joins children and returns their retained spaces; capture holds an
+;     expression in its current space [tested: lib_thread_scope; commit=WORKTREE]
 ;   - spawn computations multiplex as suspended engines over a bounded carrier
 ;     pool; await and channel backpressure wake engines instead of parking
 ;     carriers [tested: tests/prolog/suites/libraries/lib_thread.plt; commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 ;
-;Four kinds of thing live here and they compose.
+;(scope $expr) joins children, cancels siblings on failure and releases owned
+;spaces, channels, timers and pools. Spaces in its result transfer to its parent.
+;(capture $expr) returns (evalc $expr <current-space>) with $expr held.
 ;
 ;Parallel evaluation over a list. (par-map $f $list) evaluates ($f $element)
 ;for every element at once and answers one result per element, in the input
@@ -24,7 +28,9 @@
 ;(await-atom $f $pattern) to take answers as they land instead of waiting for
 ;the end. A scheduled await suspends its engine until completion, so it leaves
 ;the small carrier pool free. (settled? $f) asks without waiting, (cancel $f)
-;stops one running.
+;stops one running. True acknowledges a stopped body; False means it finished.
+;An unknown future refuses rather than claiming completion.
+;A foreign call must return before its engine can acknowledge cancellation.
 ;
 ;Timers, which are futures that start later. (after $seconds $expr) is
 ;setTimeout and (every $seconds $expr) is setInterval; both answer a space the
@@ -35,12 +41,13 @@
 ;per-timer threads: one timer thread and one bounded pool serve every timer,
 ;and a saturated body pool does not delay scheduler deadline wakeups.
 ;
-;Channels, which are mailboxes any thread may use. (channel) answers a handle,
+;Channels are FIFO spaces any thread may use. (channel) answers a space,
 ;(channel $max-size) one that blocks its senders when full. (send $ch $term),
 ;(recv $ch) blocking, (recv $ch $seconds) with a deadline, (try-recv $ch)
 ;never blocking, (channel-size $ch), (channel-close $ch). A sent term is
 ;COPIED, so the receiver gets its own copy and no variable binding crosses.
 ;Inside a spawned engine, an empty receive or full send suspends the engine.
+;add-atom, remove-atom and get-atoms operate on that same buffer.
 ;
 ;Pools, for when the fan-out is bigger than the machine. (pool $name $size)
 ;creates one, (submit $name $expr) answers the same handle await takes, so
@@ -86,6 +93,7 @@
    channel_size channel_close
    pool_create pool_submit pool_stats pool_destroy
    timer_after timer_every
+   scope_body capture
    space_await space_take space_await_where space_take_where
    with_lock cpu_count thread_count))
 
@@ -97,6 +105,9 @@
 ;which declares the same for its assertion forms].
 (: par-race (-> Atom %Undefined%))
 (: spawn (-> Atom %Undefined%))
+(: scope (-> Atom %Undefined%))
+(: capture (-> Atom Atom))
+(: scope_body (-> Atom %Undefined%))
 (: submit (-> %Undefined% Atom %Undefined%))
 (: with-lock (-> %Undefined% Atom %Undefined%))
 (: after (-> Number Atom %Undefined%))
@@ -142,6 +153,7 @@
 (= (par-race $exprs) (par_race $exprs))
 
 (= (spawn $expr) (thread_spawn $expr))
+(= (scope $expr) (scope_body $expr))
 (= (await $handle) (thread_await $handle))
 (= (settled? $handle) (thread_settled $handle))
 (= (cancel $handle) (thread_cancel $handle))
@@ -177,3 +189,6 @@
 
 (= (cpu-count) (cpu_count))
 (= (thread-count) (thread_count))
+
+(@doc scope (@desc "Join children and release resources created by the body; child failure cancels siblings; returned spaces transfer to the enclosing scope") (@params ((@param "the held body"))) (@return "each body answer"))
+(@doc capture (@desc "Hold an expression with its current evaluation space as an evalc value") (@params ((@param "the held expression"))) (@return "(evalc expression space)"))

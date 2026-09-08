@@ -11,6 +11,11 @@
 %     and calls each goal once [source 2026-08-15:
 %     /usr/lib/swi-prolog/library/thread.pl, workers/2 and once_in_module/5]
 % Guarantees:
+%   - scope_body/2 and scope_close/4 join their child tree, cancel siblings on
+%     failure, transfer explicitly kept spaces and revoke every released alias
+%     [tested: lib_thread_scope,
+%     extensions/python/tests/ch17_concurrency_and_the_loop/test_scopes.py;
+%     commit=WORKTREE].
 %   - spawned computations are SWI engines stepped over a bounded carrier
 %     pool, and a space write wakes rather than parks a carrier [tested:
 %     lib_thread:spawned_engines_multiplex_over_bounded_carriers,
@@ -19,10 +24,10 @@
 %     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
 %   - oracleIO host operations detach onto transient offload threads before
 %     entering foreign code, so even more blocked calls than normal carriers
-%     cannot consume scheduler capacity; cancellation reports false until a
-%     running foreign call returns and the engine actually settles [tested:
-%     test_a_blocking_oracle_uses_the_dirty_lane_without_pinning_normal_work;
-%     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+%     cannot consume scheduler capacity; cancellation signals the engine and
+%     waits for acknowledgement. A foreign call must return before its engine
+%     can acknowledge cancellation [tested: lib_thread_cancellation;
+%     commit=WORKTREE]
 %   - future await, empty channel receive and full channel send suspend their
 %     engines and wake from completion or mailbox state instead of blocking
 %     all carriers [tested:
@@ -68,8 +73,11 @@
 %     every duplicate occurrence exactly once [tested:
 %     test_future_iteration_watermark_separates_snapshot_from_later_events;
 %     commit=1877bec75a9a22265c9222f0c0c538c8f65a983f]
-%   - a channel send never loses a term: message queues copy, so the receiver
-%     gets its own copy and variable bindings do not cross [tested: lib_thread:a_channel_round_trips_a_term, a_channel_carries_a_term_between_threads]
+%   - channels use one recorded FIFO as their foreign-space provider; space
+%     operations and mailbox operations share its bag, and reads copy terms
+%     [tested: lib_thread:a_channel_round_trips_a_term,
+%     test_channel_space_and_mailbox_share_a_randomized_bag_and_fifo;
+%     commit=WORKTREE].
 %   - timers cost no per-timer threads: one timer thread and one bounded pool serve every
 %     timer in the process [assumed 2026-08-16: no test counts threads around an armed timer]
 % Fails when:
@@ -82,25 +90,36 @@
 %     to race for it, the thundering herd a hand-off queue would avoid and
 %     this seam cannot, because an EVENT seam runs every handler by
 %     construction. Exactly-one still holds, and the wasted work is one
-%     failed removal per loser per atom. Tens of waiters are what this is
-%     for; thousands want a channel, which hands each message to one
-%     receiver.
+%     failed removal per loser per atom. Channel notifications also wake
+%     every registered waiter; their FIFO selects one receiver per message
+%     [source: lib/lib_thread/lib_thread.pl:metta_channel_wake/2; commit=WORKTREE].
 %   - a branch needs the caller's variable bindings back. Threads copy terms,
 %     so bindings made inside a branch do not escape it.
 % Owns:
+%   - recorded scope rows, host cleanup references and progress queues until
+%     scope_close/4 succeeds; a failed cleanup retains its resources for retry.
+%     Revocation markers retain only names [tested:
+%     test_cleanup_failure_revokes_aliases_attempts_all_and_can_retry;
+%     commit=WORKTREE].
 %   - one seam:atom_added/2 clause and one message queue per live
 %     space_await/space_take call, both released when the call leaves
 %   - one SWI engine and one completion queue per live spawned future; one
 %     bounded normal carrier pool for the process; one transient offload
 %     thread per currently blocking oracleIO step; one message queue per live
-%     channel; and, once any timer has been used, one timer thread plus one
+%     channel and one notification queue per blocked host channel call;
+%     and, once any timer has been used, one timer thread plus one
 %     bounded timer pool for the process.
 % Guarded by:
+%   - '$metta_scopes' protects scope state and ownership; each channel's name
+%     protects its FIFO; recorded database operations publish waiters before
+%     their first probe. Signals, callbacks and joins leave these
+%     mutexes before running user work [source: lib/lib_thread/lib_thread.pl,
+%     scope_cancel/2, scope_join_engines_/1, channel_try_/3; commit=WORKTREE].
 %   - '$metta_engine_scheduler' protects task state and carrier creation;
 %     '$metta_timers' serialises starting the timer service; one outcome mutex
 %     per future claims its terminal value, one answer mutex serialises
 %     publication with iteration snapshots, and one await mutex serialises
-%     cancellation, waiter registration and mailbox consumption;
+%     waiter registration and mailbox consumption;
 %     '$metta_timer_lifecycle' serialises timer dispatch and cancellation;
 %     '$metta_scheduler_deadlines' serialises finite wake tokens.
 % Decides:
@@ -124,9 +143,9 @@
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
-%   Future Enhancements: structured concurrency (a scope owning its children),
-%     latches and barriers over spaces, and supervision, are tracked in
-%     ai-todo-parallel.md B9.2 to B9.4.
+%   Future Enhancements: latches and barriers over spaces, and supervision.
+%     The choose/par handler follow-up is specified in
+%     docs/journal/2026-09-08-a-scope-owns-its-children.md.
 
 
 :- module(lib_thread,
@@ -158,6 +177,26 @@
             pool_destroy/2,
             pool_stats/2,
             pool_submit/3,
+            scope_open/4,
+            scope_current/1,
+            scope_close/4,
+            scope_call/2,
+            scope_apply/4,
+            scope_do/3,
+            scope_keep/3,
+            scope_cancel/2,
+            scope_attach_space/3,
+            scope_space_live/1,
+            scope_space_dead/1,
+            scope_engine_released/1,
+            scope_forget_space/1,
+            scope_drop_space/1,
+            scope_cleanup/0,
+            scope_publish/2,
+            scope_host_resource/4,
+            scope_host_done/2,
+            scope_body/2,
+            capture/2,
             space_await/3,
             space_await/4,
             space_await_where/4,
@@ -200,11 +239,9 @@
 
 :- dynamic metta_future/3.          % Space, Worker, DoneQueue
 :- dynamic metta_future_result/2.   % Space, done | cancelled | error(Error)
-:- dynamic metta_channel/2.         % Id, Queue
 :- dynamic metta_scheduler_task/6.  % Id, Engine, Space, Done, Context, State
 :- dynamic metta_scheduler_lane/3.  % Lane, runnable queue, carrier threads
 :- dynamic metta_future_waiter/2.   % Future space, suspended scheduler task
-:- dynamic metta_channel_waiter/3.  % Channel, send | recv, scheduler task
 :- dynamic metta_timer_context/3.   % Future space, repeat policy, Python Context
 :- dynamic metta_scheduler_deadline/2. % Token, suspended scheduler task
 :- dynamic metta_async_future/4.    % Token, operation name, space, DoneQueue
@@ -283,6 +320,492 @@ metta_thread_settled_(Thread, Delay) :-
 next_metta_handle(Id) :-
     flag('$metta_thread_handle', Previous, Previous + 1),
     Id is Previous + 1.
+
+% --------------------------------------------------------- lifetime scopes
+
+% A nursery joins before releasing inputs. The recorded database is deliberate:
+% SWI transactions must not roll back ownership of a still-running computation.
+% Python carries these handles; it owns no parallel lifetime registry.
+% [tested: lib_thread_scope; commit=WORKTREE]
+:- meta_predicate scope_call(+, 0).
+:- meta_predicate scope_publish(+, 0).
+:- multifile seam:engine_context/1, seam:space_created/1,
+             seam:space_access/1, seam:space_releasing/1,
+             seam:host_engine_created/1, seam:host_engine_released/1,
+             seam:foreign_refuse/2.
+
+scope_current_(Scope) :-
+    ( nb_current('$metta_scope', Current) -> Scope = Current ; Scope = none ).
+
+scope_current(Scope) :- scope_current_(Scope).
+
+scope_id_(Prefix, Id) :-
+    next_metta_handle(Number), atom_concat(Prefix, Number, Id).
+
+scope_state_(Id, Parent, Owner, State, Reason) :-
+    with_mutex('$metta_scopes',
+               recorded(Id, state(Parent, Owner, State, Reason), _)).
+
+scope_open(Parent, Owner, Seconds, Id) :-
+    scope_outside_transaction_,
+    ( Seconds == infinite -> true
+    ; must_be(number, Seconds),
+      ( Seconds >= 0 -> true ; domain_error(not_less_than_zero, Seconds) ) ),
+    scope_id_('$metta_scope_', Id),
+    message_queue_create(Progress, [max_size(1)]),
+    catch(( with_mutex('$metta_scopes', sig_atomic((
+                scope_checkpoint_(Parent),
+                recorda(Id, state(Parent, Owner, open, none), _),
+                recordz(Id, progress(Progress), _),
+                ( Parent == none -> true ; recordz(Parent, child(scope, Id), _) ) ))),
+            scope_deadline_(Seconds, Id) ), Error,
+          ( message_queue_destroy(Progress), scope_erase_(Id),
+            scope_unlink_(Parent, scope, Id), throw(Error) )).
+
+scope_deadline_(infinite, _) :- !.
+scope_deadline_(Seconds, Id) :-
+    ensure_timer_service, get_time(Now), Deadline is Now + Seconds,
+    metta_timer_queue(Queue),
+    thread_send_message(Queue, schedule(Deadline, scope_deadline(Id))).
+
+scope_outside_transaction_ :-
+    ( current_transaction(_)
+    -> permission_error(start, scope_in_transaction, transaction)
+    ; true ).
+
+scope_checkpoint_(none) :- !.
+scope_checkpoint_(Id) :-
+    ( scope_state_(Id, Parent, _, State, _)
+    -> ( State == cancelled -> scope_throw_(Id)
+       ; State == closing -> permission_error(enter, closed_scope, Id)
+       ; scope_checkpoint_(Parent) )
+    ; existence_error(metta_scope, Id) ).
+
+scope_throw_(Id) :-
+    throw(error(metta_control_signal(interrupted, [scope, Id]),
+                context(metta, scope(Id)))).
+
+scope_call(none, Goal) :- !, call(Goal).
+scope_call(Id, Goal) :-
+    scope_current_(Previous),
+    ( Previous \== none, scope_descendant_(Previous, Id)
+    -> Effective = Previous ; Effective = Id ),
+    setup_call_cleanup(
+        scope_enter_(Effective, Registration),
+        ( b_setval('$metta_scope', Effective),
+          scope_checkpoint_(Effective), call(Goal), scope_checkpoint_(Effective) ),
+        ( b_setval('$metta_scope', Previous), scope_leave_(Effective, Registration) )).
+
+scope_descendant_(Id, Id) :- !.
+scope_descendant_(Id, Ancestor) :-
+    scope_state_(Id, Parent, _, _, _), Parent \== none,
+    scope_descendant_(Parent, Ancestor).
+
+scope_enter_(Id, Registration) :-
+    thread_self(Engine),
+    with_mutex('$metta_scopes', sig_atomic((
+        scope_checkpoint_(Id),
+        ( recorded(Id, active(_, Engine), _)
+        -> Registration = none
+        ; scope_id_('$metta_scope_call_', Token),
+          recordz(Id, active(Token, Engine), Ref), Registration = ref(Ref) ) ))).
+
+scope_leave_(_, none).
+scope_leave_(Id, ref(Ref)) :-
+    with_mutex('$metta_scopes', (erase(Ref), scope_progress_(Id))).
+
+scope_progress_(Id) :-
+    ( recorded(Id, progress(Queue), _), message_queue_property(Queue, size(0))
+    -> thread_send_message(Queue, changed) ; true ).
+
+% A completion publishes terminal state before its observers finish. Retain
+% that producer until publication leaves, including when cancellation won.
+scope_publish(Space, Goal) :-
+    ( scope_space_owner_(Space, Id, _), scope_state_(Id, _, _, _, _)
+    -> scope_current_(Previous),
+       setup_call_cleanup(
+           with_mutex('$metta_scopes', recordz(Id, publishing, Ref)),
+           ( b_setval('$metta_scope', Id), call(Goal) ),
+           ( b_setval('$metta_scope', Previous), scope_leave_(Id, ref(Ref)) ) )
+    ; call(Goal) ).
+
+scope_apply(Id, Predicate, Inputs, Out) :-
+    append(Inputs, [Out], Arguments), Goal =.. [Predicate|Arguments],
+    scope_call(Id, user:Goal).
+scope_do(Id, Predicate, Inputs) :-
+    Goal =.. [Predicate|Inputs], scope_call(Id, user:Goal).
+
+seam:engine_context(lib_thread:scope_call(Id)) :-
+    scope_current_(Id), Id \== none.
+
+seam:host_engine_created(Engine) :-
+    scope_current_(Id),
+    ( Id == none -> true
+    ; with_mutex('$metta_scopes', sig_atomic((
+          scope_checkpoint_(Id), recordz(Id, child(engine, Engine), _),
+          scope_engine_key_(Engine, Key), recorda(Key, owner(Id), _) ))) ).
+seam:host_engine_released(Engine) :-
+    with_mutex('$metta_scopes',
+        ( scope_engine_key_(Engine, Key),
+          forall(recorded(Key, owner(Id), Ref),
+                 ( erase(Ref), scope_unlink_(Id, engine, Engine), scope_progress_(Id) )) )).
+
+scope_engine_key_(Engine, Key) :-
+    term_to_atom(Engine, Atom), atom_concat('$metta_scope_engine:', Atom, Key).
+
+scope_owner_(Id, Owner) :-
+    ( scope_state_(Id, _, Actual, _, _)
+    -> ( Actual == Owner -> true ; permission_error(close, scope_owner, Id) )
+    ; existence_error(metta_scope, Id) ).
+
+scope_cancel(Id, Reason) :-
+    with_mutex('$metta_scopes', sig_atomic((
+        ( recorded(Id, state(Parent, Owner, State, Prior), Ref), State \== closing
+        -> ( Prior == none -> Cause = Reason ; Cause = Prior ),
+           erase(Ref), recorda(Id, state(Parent, Owner, cancelled, Cause), _),
+           findall(Kind-Value, recorded(Id, child(Kind, Value), _), Resources),
+           findall(active-(Token-Engine), recorded(Id, active(Token, Engine), _), Active),
+           append(Resources, Active, Requests)
+        ; Requests = [] ) ))),
+    % A refused signal must not prevent the remaining siblings from stopping.
+    findall(Error,
+        ( member(Request, Requests),
+          catch(( scope_request_stop_(Id, Reason, Request)
+                -> fail
+                ; throw(error(scope_cancel_failed(Request), context(scope_cancel/2, Id))) ),
+                Error, true) ), Errors),
+    ( Errors == [] -> true
+    ; Errors = [Error] -> throw(Error)
+    ; throw(error(scope_cancellation(Errors), context(scope_cancel/2, Id))) ).
+
+% An automatic request has no caller to receive refusal. Retain it for close;
+% completion publication and the shared timer service must still finish.
+scope_cancel_automatic_(Id, Reason) :-
+    catch(scope_cancel(Id, Reason), Error,
+          ( message_to_string(Error, Text), scope_fault_(Id, [prolog, Text]) )).
+
+scope_signal_active_(Id, Token-Engine) :-
+    ( metta_scheduler_task(_, Engine, Space, _, _, _),
+      scope_space_owner_(Space, Id, _)
+    -> true
+    ; catch(thread_signal(Engine, lib_thread:scope_deliver_(Id, Token)),
+            error(existence_error(thread, _), _), true) ).
+
+scope_deliver_(Id, Token) :-
+    ( recorded(Id, active(Token, _), _),
+      scope_state_(Id, _, _, cancelled, _)
+    -> scope_throw_(Id)
+    ; true ).
+
+scope_request_stop_(_, Reason, scope-Child) :- !, scope_cancel(Child, Reason).
+scope_request_stop_(Id, _, active-Active) :- !, scope_signal_active_(Id, Active).
+scope_request_stop_(_, _, space-Space) :- !,
+    ( metta_future_result(Space, _) -> true
+    ; metta_future(Space, scheduler(Task), _)
+    -> metta_scheduler_request_cancel(Task, _)
+    ; metta_future(Space, async(Token), _)
+    -> metta_async_cancel(Token, _)
+    ; metta_future(Space, none, _)
+    -> thread_cancel(Space, _)
+    ; metta_future(Space, Worker, _)
+    -> catch(thread_signal(Worker, lib_thread:future_cancel_signal_(Space, Worker)),
+             error(existence_error(thread, _), _), true)
+    ; true ).
+scope_request_stop_(Id, _, host-Token) :- !,
+    ( recorded(Token, host(_, future, Object), _)
+    -> user:py_call(Object:'__call__'(Id))
+    ; true ).
+scope_request_stop_(_, _, _).
+
+scope_space_key_(Space, Key) :-
+    term_to_atom(Space, Atom), atom_concat('$metta_scope_space:', Atom, Key).
+
+scope_space_owner_(Space, Owner, Host) :-
+    ground(Space), scope_space_key_(Space, Key),
+    with_mutex('$metta_scopes', recorded(Key, lifetime(Owner, Host), _)).
+
+scope_space_live(Space) :-
+    ( nb_current('$metta_scope_cleanup', true) -> true
+    ; scope_revoked_(Space)
+    -> permission_error(access, released_scope_space, Space)
+    ; true ).
+
+seam:space_access(Space) :- scope_space_live(Space).
+seam:space_created(Space) :-
+    scope_current_(Id),
+    ( Id == none -> true
+    ; with_mutex('$metta_scopes', sig_atomic((
+          % Allocation has already happened. Enrol it even if cancellation won;
+          % the active call keeps its scope open until the next checkpoint.
+          scope_space_live(Space),
+          ( scope_space_owner_(Space, _, _) -> true
+          ; scope_space_key_(Space, Key),
+            recorda(Key, lifetime(Id, none), _),
+            recordz(Id, child(space, Space), _) ) ))) ).
+
+scope_attach_space(Space, Host, Scoped) :-
+    with_mutex('$metta_scopes', sig_atomic((
+        ( scope_space_key_(Space, Key), recorded(Key, lifetime(Owner, Existing), Ref)
+        -> Scoped = true,
+           ( Owner == dead -> true
+           ; recorded(Key, retired, _) -> true
+           ; nb_current('$metta_scope_cleanup', true) -> true
+           ; Existing == none, Host \== none
+           -> erase(Ref), recorda(Key, lifetime(Owner, Host), _)
+           ; true )
+        ; Scoped = false ) ))).
+
+scope_forget_space(Space) :-
+    with_mutex('$metta_scopes', sig_atomic((
+        ( scope_space_key_(Space, Key), recorded(Key, lifetime(Owner, _), Ref)
+        -> erase(Ref), forall(recorded(Key, retired, Retired), erase(Retired)),
+           recorda(Key, lifetime(dead, none), _),
+           scope_unlink_(Owner, space, Space)
+        ; true ) ))).
+
+seam:space_releasing(Space) :-
+    ( metta_future(Space, _, _)
+    -> thread_cancel(Space, _), future_settle_(Space, _)
+    ; true ).
+seam:space_released(Space) :-
+    forall(retract(metta_future(Space, _, Done)),
+           message_queue_destroy(Done)),
+    retractall(metta_future_result(Space, _)),
+    with_mutex('$metta_scopes', sig_atomic((
+        ( scope_space_key_(Space, Key), recorded(Key, lifetime(Owner, Host), Ref)
+        -> ( Host == none
+           -> erase(Ref), recorda(Key, lifetime(dead, none), _),
+              scope_unlink_(Owner, space, Space)
+           ; ( recorded(Key, retired, _) -> true ; recordz(Key, retired, _) ) )
+        ; true ) ))).
+
+scope_cleanup :- nb_current('$metta_scope_cleanup', true).
+
+scope_engine_released(Space) :-
+    scope_space_key_(Space, Key), recorded(Key, retired, _).
+
+scope_drop_space(Space) :-
+    scope_space_owner_(Space, dead, _), !.
+scope_drop_space(Space) :-
+    setup_call_cleanup(
+        ( ( nb_current('$metta_scope_cleanup', Previous) -> true ; Previous = false ),
+          b_setval('$metta_scope_cleanup', true) ),
+        scope_release_(none, none, cleanup, space-Space),
+        b_setval('$metta_scope_cleanup', Previous)).
+
+% A revoked raw name must refuse reads as well as creation. Enumeration omits
+% tombstones: a revocation is not a registered live space.
+scope_revoked_(Space) :-
+    ground(Space),
+    with_mutex('$metta_scopes',
+        ( scope_space_owner_(Space, Owner, _),
+          ( Owner == dead -> true ; scope_engine_released(Space) ) )).
+scope_space_dead(Space) :- scope_revoked_(Space).
+seam:foreign_space(Space) :- scope_revoked_(Space).
+seam:foreign_refuse(Space, _) :- scope_revoked_(Space), scope_space_live(Space).
+seam:foreign_atoms(Space, _) :-
+    scope_revoked_(Space), !, scope_space_live(Space).
+seam:foreign_match(Space, _, _) :-
+    scope_revoked_(Space), !, scope_space_live(Space).
+seam:foreign_add(Space, _) :-
+    scope_revoked_(Space), !, scope_space_live(Space).
+seam:foreign_remove(Space, _, _) :-
+    scope_revoked_(Space), !, scope_space_live(Space).
+seam:foreign_clear(Space) :-
+    scope_revoked_(Space), !, scope_space_live(Space).
+
+scope_host_resource(Id, Kind, Object, Token) :-
+    scope_outside_transaction_,
+    must_be(oneof([future, cleanup]), Kind),
+    scope_id_('$metta_scope_host_', Token),
+    ( Kind == future -> message_queue_create(Queue, [max_size(1)]) ; Queue = none ),
+    catch(with_mutex('$metta_scopes', sig_atomic((
+              scope_checkpoint_(Id), recorda(Token, host(Id, Kind, Object), _),
+              recordz(Id, child(host, Token), _),
+              ( Queue == none -> true ; recordz(Token, queue(Queue), _) ) ))),
+          Error,
+          ( ( Queue == none -> true ; message_queue_destroy(Queue) ),
+            scope_erase_(Token), scope_unlink_(Id, host, Token), throw(Error) )).
+
+scope_host_done(Token, Error) :-
+    ( recorded(Token, host(Id, future, _), _)
+    -> ( Error == none -> true
+       ; scope_fault_(Id, [python, Error]), scope_cancel_automatic_(Id, child_failure) ),
+       recorded(Token, queue(Queue), _), thread_send_message(Queue, done)
+    ; true ).
+
+scope_fault_(Id, Error) :-
+    with_mutex('$metta_scopes', recordz(Id, fault(Error), _)).
+
+scope_future_done_(Space, Outcome) :-
+    ( scope_space_owner_(Space, Id, _), scope_state_(Id, _, _, _, _),
+      Outcome = error(Error)
+    -> message_to_string(Error, Text),
+       with_mutex('$metta_scopes', sig_atomic((
+           recordz(Id, fault([prolog, Text]), _),
+           recorded(Id, state(Parent, Owner, State, Prior), Ref),
+           ( State == closing -> true
+           ; ( Prior == none -> Reason = child_failure ; Reason = Prior ),
+             erase(Ref), recorda(Id, state(Parent, Owner, cancelled, Reason), _) ) )))
+    ; true ).
+
+scope_keep(Id, Owner, Value) :-
+    scope_owner_(Id, Owner), scope_checkpoint_(Id),
+    forall(( sub_term(Space, Value), ground(Space),
+             scope_space_owner_(Space, Id, _) ),
+           scope_keep_space_(Id, Space)).
+
+scope_keep_space_(Id, Space) :-
+    ( recorded(Id, keep(Space), _) -> true
+    ; recordz(Id, keep(Space), _),
+      forall(( seam:space_dependency(Space, Parent),
+               scope_space_owner_(Parent, Id, _) ),
+             scope_keep_space_(Id, Parent)),
+      ( metta_future(Space, _, _)
+      -> forall(( 'get-atoms'(Space, Answer), sub_term(Child, Answer),
+                  ground(Child), scope_space_owner_(Child, Id, _) ),
+                scope_keep_space_(Id, Child))
+      ; true ) ).
+
+scope_close(Id, Owner, Disposition, [Reason, Errors, Released]) :-
+    scope_owner_(Id, Owner),
+    thread_self(Current),
+    ( recorded(Id, active(_, Current), _)
+    -> permission_error(close, active_scope_body, Id) ; true ),
+    ( Disposition == success -> true ; scope_cancel(Id, body_failure) ),
+    setup_call_cleanup(
+        ( ( nb_current('$metta_scope_cleanup', Previous) -> true ; Previous = false ),
+          b_setval('$metta_scope_cleanup', true) ),
+        ( scope_finish_(Id, Reason, Errors),
+          ( scope_state_(Id, _, _, _, _) -> Released = false ; Released = true ) ),
+        b_setval('$metta_scope_cleanup', Previous)).
+
+scope_finish_(Id, Reason, Errors) :-
+    ( scope_state_(Id, _, _, cancelled, _)
+    -> scope_cancel(Id, cancelled) ; true ),
+    forall(( recorded(Id, child(space, Timer), _),
+             metta_timer_context(Timer, every(_), _) ), thread_cancel(Timer, _)),
+    scope_join_(Id),
+    scope_join_engines_(Id),
+    findall(Space, recorded(Id, keep(Space), _), Roots),
+    forall(recorded(Id, keep(_), KeepRef), erase(KeepRef)),
+    maplist(scope_keep_space_(Id), Roots),
+    with_mutex('$metta_scopes', sig_atomic((
+        recorded(Id, state(Parent, Owner, _, Reason), Ref), erase(Ref),
+        recorda(Id, state(Parent, Owner, closing, Reason), _),
+        findall(Kind-Value, recorded(Id, child(Kind, Value), _), Resources) ))),
+    reverse(Resources, Reverse),
+    partition(scope_returning_(Id, Reason), Reverse, Returning, Releasing),
+    scope_release_all_(Id, Parent, cleanup, Releasing, FirstErrors),
+    ( FirstErrors == [] -> Transfer = Reason ; Transfer = cleanup ),
+    scope_release_all_(Id, Parent, Transfer, Returning, LastErrors),
+    append(FirstErrors, LastErrors, CleanupErrors),
+    findall(Error, recorded(Id, fault(Error), _), Faults),
+    append(Faults, CleanupErrors, Errors),
+    ( is_message_queue(metta_timer_requests)
+    -> thread_send_message(metta_timer_requests, cancel(scope_deadline(Id)))
+    ; true ),
+    ( CleanupErrors == []
+    -> with_mutex('$metta_scopes',
+           ( recorded(Id, progress(Progress), _), message_queue_destroy(Progress),
+             scope_erase_(Id), scope_unlink_(Parent, scope, Id) ))
+    ; true ).
+
+scope_returning_(Id, none, space-Space) :- recorded(Id, keep(Space), _).
+
+scope_release_all_(Id, Parent, Reason, Resources, Errors) :-
+    findall([prolog, Text],
+        ( member(Resource, Resources),
+          catch(( ( scope_release_(Id, Parent, Reason, Resource) -> true
+                  ; throw(error(scope_cleanup_failed(Resource), context(scope, Id))) ),
+                  fail ), Error, message_to_string(Error, Text)) ), Errors).
+
+scope_join_(Id) :-
+    ( recorded(Id, child(space, Space), _),
+      metta_future(Space, _, _), \+ metta_future_result(Space, _)
+    -> ( scope_state_(Id, _, _, cancelled, _)
+       -> thread_cancel(Space, _) ; true ),
+       future_settle_(Space, _), scope_join_(Id)
+    ; recorded(Id, child(host, Token), _),
+      recorded(Token, host(_, future, _), _),
+      \+ recorded(Token, joined, _)
+    -> recorded(Token, queue(Queue), _), thread_get_message(Queue, done),
+       recordz(Token, joined, _), scope_join_(Id)
+    ; true ).
+
+scope_join_engines_(Id) :-
+    scope_join_(Id),
+    forall(recorded(Id, child(engine, Engine), _), metta_host_hold_close(Engine)),
+    with_mutex('$metta_scopes',
+        ( ( (recorded(Id, active(_, _), _) ; recorded(Id, publishing, _))
+          -> Waiting = true
+          ; ( recorded(Id, child(space, Space), _), metta_future(Space, _, _),
+              \+ metta_future_result(Space, _)
+            ; recorded(Id, child(host, Token), _), recorded(Token, host(_, future, _), _),
+              \+ recorded(Token, joined, _) )
+          -> Waiting = again
+          ; recorded(Id, child(scope, Child), _),
+            scope_state_(Child, _, _, ChildState, _), ChildState \== closing
+          -> Waiting = child(Child)
+          ; recorded(Id, state(Parent, Owner, _, Reason), Ref), erase(Ref),
+            recorda(Id, state(Parent, Owner, closing, Reason), _), Waiting = false ),
+          recorded(Id, progress(Progress), _) )),
+    ( Waiting == true
+    -> thread_get_message(Progress, changed), scope_join_(Id), scope_join_engines_(Id)
+    ; Waiting == again -> scope_join_engines_(Id)
+    ; Waiting = child(Child)
+    -> scope_state_(Child, _, ChildOwner, _, _),
+       scope_close(Child, ChildOwner, success, [_, ChildErrors, _]),
+       maplist(scope_fault_(Id), ChildErrors),
+       ( ChildErrors == [] -> true ; scope_cancel(Id, child_failure) ),
+       scope_join_engines_(Id)
+    ; true ).
+
+scope_release_(Id, Parent, none, space-Space) :-
+    recorded(Id, keep(Space), _), !,
+    with_mutex('$metta_scopes', sig_atomic((
+        scope_space_key_(Space, Key), recorded(Key, lifetime(_, Host), Ref),
+        erase(Ref), recorda(Key, lifetime(Parent, Host), _),
+        scope_unlink_(Id, space, Space),
+        ( Parent == none -> true ; recordz(Parent, child(space, Space), _) ) ))).
+scope_release_(_, _, _, space-Space) :-
+    ( scope_space_owner_(Space, _, Host), Host \== none
+    -> user:py_call(Host:'__call__'(), _), scope_forget_space(Space)
+    ; metta_release_space(Space) ).
+scope_release_(_, _, _, host-Token) :-
+    ( recorded(Token, host(_, Kind, Object), _)
+    -> scope_host_release_(Kind, Object),
+       forall(recorded(Token, queue(Queue), _), message_queue_destroy(Queue)),
+       scope_erase_(Token)
+    ; true ).
+scope_release_(_, _, _, pool-Name) :- pool_destroy(Name, _).
+scope_release_(_, _, _, engine-Engine) :- metta_host_hold_close(Engine).
+scope_release_(_, _, _, scope-Id) :-
+    ( scope_state_(Id, _, Owner, _, _)
+    -> scope_close(Id, Owner, failure, [_, Errors, _]),
+       ( Errors == [] -> true ; throw(error(scope_cleanup(Errors), _)) )
+    ; true ).
+
+scope_host_release_(future, _).
+scope_host_release_(cleanup, Object) :- user:py_call(Object:'__call__'()).
+
+scope_unlink_(Id, Kind, Value) :-
+    forall(recorded(Id, child(Kind, Value), Ref), erase(Ref)).
+scope_erase_(Id) :- forall(recorded(Id, _, Ref), erase(Ref)).
+
+scope_body(Expr, Out) :-
+    scope_current_(Parent), thread_self(Owner),
+    scope_open(Parent, Owner, infinite, Id), current_metta_module(Module),
+    catch(( findall(Value, scope_call(Id, eval_metta_in_module(Module, Expr, Value)), Values),
+            scope_keep(Id, Owner, Values), Disposition = success ),
+          Error, Disposition = error(Error)),
+    scope_close(Id, Owner, Disposition, [Reason, Errors, _]),
+    ( Disposition = error(Error), Reason \== child_failure -> throw(Error)
+    ; Errors \== [] -> throw(error(scope_children(Errors), context(scope_body/2, Reason)))
+    ; Disposition = error(Error) -> throw(Error)
+    ; member(Out, Values) ).
+
+capture(Expr, [evalc, Expr, Space]) :- current_metta_space(Space).
 
 % ------------------------------------------------------- parallel over data
 
@@ -496,6 +1019,8 @@ race_queues_destroy(Start, Results) :-
 %prose. ensure_native_storage_module/2 is idempotent, so the first write is a
 %cache hit.
 future_space_name(Number, Space) :-
+    scope_current_(Id),
+    ( Id == none -> true ; scope_outside_transaction_ ),
     atom_concat('&future-', Number, Space),
     ensure_native_storage_module(Space, _).
 
@@ -603,11 +1128,13 @@ metta_scheduler_spawn(Module, Expr, Space, Done, Context, Task) :-
 %forall/2 retains every answer. Each answer is yielded to the scheduler before
 %the carrier writes it, so no engine is attached while an atom hook runs and a
 %hook that wakes another task only queues that task.
-metta_scheduler_body(Task, Context, Module, Expr, done) :-
-    b_setval('$metta_scheduler_task', Task),
-    b_setval('$metta_python_context', Context),
-    forall(eval_metta_in_module(Module, Expr, Value),
-           engine_yield('$metta_scheduler_answer'(Value))).
+metta_scheduler_body(Task, Context, Module, Expr, Outcome) :-
+    catch(( b_setval('$metta_scheduler_task', Task),
+            metta_in_python_context(Context,
+                forall(eval_metta_in_module(Module, Expr, Value),
+                       engine_yield('$metta_scheduler_answer'(Value)))),
+            Outcome = done ),
+          Error, future_caught_(Error, Outcome)).
 
 %A carrier sends its successor step to an unbounded runnable queue, then
 %returns to that queue before the engine may resume. Enqueue is non-blocking,
@@ -702,8 +1229,17 @@ metta_scheduler_event(Task, _,
     metta_scheduler_handoff(Task, Lane).
 metta_scheduler_event(Task, _, the(done)) :- !,
     metta_scheduler_finish(Task, done).
+metta_scheduler_event(Task, _, the(cancelled)) :- !,
+    metta_scheduler_finish(Task, cancelled).
+metta_scheduler_event(Task, _, the(error(Error))) :- !,
+    metta_scheduler_finish(Task, error(Error)).
 metta_scheduler_event(Task, _, no) :- !,
     metta_scheduler_finish(Task, done).
+% A signal may arrive before the body's catch has been entered. The carrier's
+% engine_next_reified guard owns that interval and classifies the same token.
+metta_scheduler_event(Task, _,
+        throw(error(metta_control_signal(interrupted, scheduler(Task)), _))) :- !,
+    metta_scheduler_finish(Task, cancelled).
 metta_scheduler_event(Task, _, throw(Error)) :- !,
     metta_scheduler_finish(Task, error(Error)).
 metta_scheduler_event(Task, _, Unexpected) :-
@@ -714,8 +1250,11 @@ metta_scheduler_event(Task, _, Unexpected) :-
                             'a scheduled engine yielded an unknown event')))).
 
 metta_scheduler_write_answer(Task, Value) :-
-    metta_scheduler_task(Task, _, Space, _, _, _),
-    future_add_atom(Space, Value).
+    with_mutex('$metta_engine_scheduler',
+               ( metta_scheduler_task(Task, _, Space, _, _, State),
+                 ( State = cancelling(_, _) -> Publish = false
+                 ; Publish = true ) )),
+    ( Publish == true -> future_add_atom(Space, Value) ; true ).
 
 metta_scheduler_continue(Task, Lane) :-
     with_mutex('$metta_engine_scheduler',
@@ -793,7 +1332,6 @@ metta_scheduler_finish(Task, Outcome) :-
     (   nonvar(Engine)
     ->  catch(engine_destroy(Engine), _, true),
         retractall(metta_future_waiter(_, Task)),
-        retractall(metta_channel_waiter(_, _, Task)),
         metta_release_python_context(Context),
         metta_future_complete(Space, Done, Outcome)
     ;   true
@@ -806,40 +1344,60 @@ metta_scheduler_take_task(Task, Engine, Space, Done, Context) :-
     ).
 
 metta_scheduler_cancel(Task, Answer) :-
+    metta_scheduler_request_cancel(Task, Wait),
+    (   Wait = await(Space)
+    ->  future_settle_(Space, Outcome),
+        ( Outcome == cancelled -> Answer = true ; Answer = false )
+    ;   Answer = false
+    ).
+
+% Request first, acknowledge separately: a scope signals every sibling before
+% it waits for a foreign call. The engine handle is the signal target; its
+% carrier has a different signal queue [tested: lib_thread_cancellation;
+% commit=WORKTREE]. The retained engine blob identifies this lifetime even if
+% it finishes between selection and signalling. No signal runs under a mutex
+% that the target may need to leave its guard.
+metta_scheduler_request_cancel(Task, Wait) :-
     with_mutex('$metta_engine_scheduler',
-               metta_scheduler_cancel_locked(Task, Action, Answer)),
+               metta_scheduler_cancel_locked(Task, Action, Wait)),
     metta_scheduler_cancel_action(Action).
 
-metta_scheduler_cancel_locked(Task, Action, Answer) :-
+metta_scheduler_cancel_locked(Task, Action, Wait) :-
     (   retract(metta_scheduler_task(Task, Engine, Space, Done, Context,
-                                     queued(_)))
-    ->  Action = dispose(Task, Engine, Space, Done, Context), Answer = true
+                                      queued(_)))
+    ->  Action = dispose(Task, Engine, Space, Done, Context), Wait = await(Space)
     ;   retract(metta_scheduler_task(Task, Engine, Space, Done, Context,
-                                     offloaded(_)))
-    ->  Action = dispose(Task, Engine, Space, Done, Context), Answer = true
+                                      offloaded(_)))
+    ->  Action = dispose(Task, Engine, Space, Done, Context), Wait = await(Space)
     ;   retract(metta_scheduler_task(Task, Engine, Space, Done, Context,
-                                     suspended(_)))
-    ->  Action = dispose(Task, Engine, Space, Done, Context), Answer = true
+                                      suspended(_)))
+    ->  Action = dispose(Task, Engine, Space, Done, Context), Wait = await(Space)
     ;   retract(metta_scheduler_task(Task, Engine, Space, Done, Context,
                                      running(Lane, Thread)))
     ->  assertz(metta_scheduler_task(Task, Engine, Space, Done, Context,
                                      cancelling(Lane, Thread))),
-        Action = none, Answer = false
+        Action = signal(Engine, Task), Wait = await(Space)
     ;   retract(metta_scheduler_task(Task, Engine, Space, Done, Context,
                                      wake_pending(Lane, Thread)))
     ->  assertz(metta_scheduler_task(Task, Engine, Space, Done, Context,
                                      cancelling(Lane, Thread))),
-        Action = none, Answer = false
-    ;   metta_scheduler_task(Task, _, _, _, _, cancelling(_, _))
-    ->  Action = none, Answer = false
-    ;   Action = none, Answer = false
+        Action = signal(Engine, Task), Wait = await(Space)
+    ;   metta_scheduler_task(Task, _, Space, _, _, cancelling(_, _))
+    ->  Action = none, Wait = await(Space)
+    ;   Action = none, Wait = finished
     ).
 
+metta_scheduler_signal(Engine, Task) :-
+    catch(thread_signal(Engine,
+              throw(error(metta_control_signal(interrupted, scheduler(Task)),
+                          context(metta, scheduler(Task))))),
+          error(existence_error(thread, _), _), true).
+
 metta_scheduler_cancel_action(none).
+metta_scheduler_cancel_action(signal(Engine, Task)) :- metta_scheduler_signal(Engine, Task).
 metta_scheduler_cancel_action(dispose(Task, Engine, Space, Done, Context)) :-
     catch(engine_destroy(Engine), _, true),
     retractall(metta_future_waiter(_, Task)),
-    retractall(metta_channel_waiter(_, _, Task)),
     metta_release_python_context(Context),
     metta_future_complete(Space, Done, cancelled).
 
@@ -890,12 +1448,12 @@ metta_async_future_discard(Token, Space, Done) :-
     catch(message_queue_destroy(Done), _, true).
 
 metta_async_cancel(Token, Answer) :-
-    (   current_predicate(user:py_call/2),
-        catch(user:py_call(metta_ops:async_cancel(Token), Cancelled), _, fail),
-        ( Cancelled == true ; Cancelled == @(true) )
-    ->  Answer = true
-    ;   Answer = false
-    ).
+    metta_async_cancel_request_(Token, @(false), Answer, _).
+
+metta_async_cancel_request_(Token, Joining, Answer, Running) :-
+    user:py_call(metta_ops:async_cancel(Token, Joining), Accepted-Active),
+    ( memberchk(Accepted, [true, @(true)]) -> Answer = true ; Answer = false ),
+    ( memberchk(Active, [true, @(true)]) -> Running = true ; Running = false ).
 
 %A nested spawn forks the scheduled engine's retained Context after any host
 %callback mutations made by that engine. A top-level door snapshots the Python
@@ -903,22 +1461,30 @@ metta_async_cancel(Token, Answer) :-
 %would lose nested changes because carriers deliberately do not inherit task
 %state between engine steps.
 metta_capture_python_context(Context) :-
+    scope_current_(Scope),
     (   nb_current('$metta_python_context', Parent), integer(Parent)
-    ->  user:py_call(metta_ops:fork_context(Parent), Context)
+    ->  user:py_call(metta_ops:fork_context(Parent), Python)
     ;   current_predicate(metta_py_dispatch_det/3)
-    ->  user:py_call(metta_ops:capture_context(), Context)
-    ;   Context = none
-    ).
+    ->  user:py_call(metta_ops:capture_context(), Python)
+    ;   Python = none
+    ),
+    scope_context_(Scope, Python, Context).
+
+scope_context_(none, Python, Python) :- !.
+scope_context_(Scope, Python, scoped(Scope, Python)).
 
 metta_capture_python_contexts(Count, Contexts) :-
+    scope_current_(Scope),
     (   nb_current('$metta_python_context', Parent), integer(Parent)
-    ->  user:py_call(metta_ops:fork_contexts(Parent, Count), Contexts)
+    ->  user:py_call(metta_ops:fork_contexts(Parent, Count), Pythons)
     ;   current_predicate(metta_py_dispatch_det/3)
-    ->  user:py_call(metta_ops:capture_contexts(Count), Contexts)
-    ;   length(Contexts, Count),
-        maplist(=(none), Contexts)
-    ).
+    ->  user:py_call(metta_ops:capture_contexts(Count), Pythons)
+    ;   length(Pythons, Count), maplist(=(none), Pythons)
+    ),
+    maplist(scope_context_(Scope), Pythons, Contexts).
 
+metta_release_python_context(scoped(_, Context)) :- !,
+    metta_release_python_context(Context).
 metta_release_python_context(none) :- !.
 metta_release_python_context(Context) :-
     (   current_predicate(user:py_call/2)
@@ -929,6 +1495,8 @@ metta_release_python_context(Context) :-
 metta_release_python_contexts(Contexts) :-
     maplist(metta_release_python_context, Contexts).
 
+metta_in_python_context(scoped(Scope, Context), Goal) :- !,
+    scope_call(Scope, metta_in_python_context(Context, Goal)).
 metta_in_python_context(Context, Goal) :-
     setup_call_cleanup(
         metta_python_context_push(Context, Previous),
@@ -956,17 +1524,19 @@ future_body_context_(Context, Module, Expr, Space, Done) :-
     metta_future_complete(Space, Done, Outcome).
 
 future_body_outcome_(Context, Module, Expr, Space, Outcome) :-
-    setup_call_cleanup(
-        metta_python_context_push(Context, Previous),
-        (   catch(( forall(eval_metta_in_module(Module, Expr, Value),
-                           future_add_atom(Space, Value)),
+        (   catch(( metta_in_python_context(Context,
+                        forall(eval_metta_in_module(Module, Expr, Value),
+                               future_add_atom(Space, Value))),
                     Outcome = done ),
                   Error,
-                  Outcome = error(Error))
+                  future_caught_(Error, Outcome))
         ->  true
         ;   Outcome = done
-        ),
-        metta_python_context_pop(Previous)).
+        ).
+
+future_caught_(error(metta_control_signal(interrupted, Detail), _), cancelled) :-
+    ( Detail = scheduler(_) ; Detail = future(_) ; Detail = [scope, _] ), !.
+future_caught_(Error, error(Error)).
 
 future_mutex_(Space, Mutex) :-
     atom_concat('$metta_future_', Space, Mutex).
@@ -1032,9 +1602,12 @@ metta_future_complete(Space, Done, Outcome) :-
         CompletionMutex,
         (   metta_future_result(Space, _)
         ->  Claimed = false
-        ;   assertz(metta_future_result(Space, Outcome)),
+        ;   scope_future_done_(Space, Outcome),
+            assertz(metta_future_result(Space, Outcome)),
             Claimed = true
         )),
+    ( Claimed == true, Outcome = error(_), scope_space_owner_(Space, Id, _)
+    -> scope_cancel_automatic_(Id, child_failure) ; true ),
     metta_future_publish_(Claimed, Space, Done, Outcome).
 
 metta_future_publish_(false, _, _, _) :- !.
@@ -1192,7 +1765,9 @@ timer_cancel_action_(active(every(_), Context, Done, Worker), Space, true) :- !,
     metta_future_complete(Space, Done, cancelled).
 
 cancel_future_(Space, Answer) :-
-    future_mutex_(Space, Mutex),
+    % An awaiter holds the await mutex while sleeping. Cancellation must be
+    % able to reach the producer while such an await is outstanding.
+    future_completion_mutex_(Space, Mutex),
     with_mutex(Mutex, future_cancel_probe_(Space, Status)),
     cancel_future_status_(Status, Space, Answer).
 
@@ -1211,27 +1786,30 @@ future_cancel_probe_(_, missing).
 
 cancel_future_status_(terminal(Worker), _, false) :- !,
     future_join_(Worker).
-cancel_future_status_(missing, _, false) :- !.
+cancel_future_status_(missing, Space, _) :- !, existence_error(metta_future, Space).
 cancel_future_status_(pending(Worker, Done), Space, Answer) :-
     cancel_future_worker_(Worker, Space, Done, Answer).
 
 cancel_future_worker_(scheduler(Task), _, _, Answer) :- !,
     metta_scheduler_cancel(Task, Answer).
-cancel_future_worker_(async(Token), _, _, Answer) :- !,
-    metta_async_cancel(Token, Answer).
+cancel_future_worker_(async(Token), Space, _, Answer) :- !,
+    metta_async_cancel_request_(Token, @(true), Accepted, Running),
+    ( Accepted == true, Running == true
+    -> future_settle_(Space, Outcome),
+       ( Outcome == cancelled -> Answer = true ; Answer = false )
+    ; Answer = Accepted ).
 cancel_future_worker_(none, _, _, false) :- !.
-cancel_future_worker_(ThreadId, Space, Done, Answer) :-
-    catch(thread_signal(ThreadId, abort), _, true),
-    catch(metta_thread_join_settled(ThreadId, Status), _, Status = unknown),
-    future_mutex_(Space, Mutex),
-    with_mutex(Mutex, future_cancel_probe_(Space, AfterJoin)),
-    (   AfterJoin = terminal(_)
-    ->  Answer = false
-    ;   Status = exception(unwind(abort))
-    ->  metta_future_complete(Space, Done, cancelled),
-        Answer = true
-    ;   Answer = false
-    ).
+cancel_future_worker_(ThreadId, Space, _, Answer) :-
+    catch(thread_signal(ThreadId, lib_thread:future_cancel_signal_(Space, ThreadId)),
+          error(existence_error(thread, _), _), true),
+    future_settle_(Space, Outcome),
+    ( Outcome == cancelled -> Answer = true ; Answer = false ).
+
+future_cancel_signal_(Space, Thread) :-
+    ( metta_future(Space, Thread, _), \+ metta_future_result(Space, _)
+    -> throw(error(metta_control_signal(interrupted, future(Space)),
+                   context(metta, future(Space))))
+    ; true ).
 
 cancel_repeating_worker_(none) :- !.
 cancel_repeating_worker_(ThreadId) :-
@@ -1240,111 +1818,177 @@ cancel_repeating_worker_(ThreadId) :-
 
 % ----------------------------------------------------------------- channels
 
-%A mailbox any thread may send to and receive from. Unbounded unless a size
-%is given, in which case a full channel blocks its senders.
-channel_new(Id) :-
-    next_metta_handle(Id),
-    message_queue_create(Queue, []),
-    assertz(metta_channel(Id, Queue)).
-
+% The FIFO is the space provider's only term store. Queue entries are capacity
+% tokens. Recorded terms preserve copying and remain outside transactions,
+% unlike dynamic clauses [source: SWI-Prolog V10.1.13, man/builtin.plx,
+% "The recorded database"; commit=WORKTREE].
+channel_new(Id) :- channel_create_([], Id).
 channel_new(MaxSize, Id) :-
     must_be(positive_integer, MaxSize),
-    next_metta_handle(Id),
-    message_queue_create(Queue, [max_size(MaxSize)]),
-    assertz(metta_channel(Id, Queue)).
+    channel_create_([max_size(MaxSize)], Id).
+
+channel_create_(Options, Id) :-
+    next_metta_handle(Number),
+    atom_concat('&channel-', Number, Id),
+    message_queue_create(Queue, Options),
+    channel_key_(Id, Key),
+    catch(sig_atomic((
+              recorda(Key, queue(Queue), _),
+              recordz('$metta_channels', Id, _),
+              metta_claim_space(Id, lib_thread),
+              forall(seam:space_created(Id), true) )),
+          Error,
+          ( channel_release_(Id), throw(Error) )).
+
+channel_key_(Id, Key) :- atom_concat('$metta_channel:', Id, Key).
+
+metta_channel(Id, Queue) :-
+    ( var(Id) -> recorded('$metta_channels', Id, _) ; atom(Id) ),
+    channel_key_(Id, Key),
+    recorded(Key, queue(Queue), _).
 
 known_channel_(Id, Queue) :-
-    (   metta_channel(Id, Queue)
-    ->  true
-    ;   existence_error(metta_channel, Id)
-    ).
+    ( metta_channel(Id, Queue) -> true ; existence_error(metta_channel, Id) ).
 
-%The term is COPIED into the queue, so the receiver gets its own copy and no
-%variable binding crosses the boundary. That is message_queue semantics and
-%it is why a channel is safe between threads.
 channel_send(Id, Term, true) :-
-    known_channel_(Id, Queue),
-    (   nb_current('$metta_scheduler_task', Task)
-    ->  scheduler_channel_send_(Task, Id, Queue, Term)
-    ;   thread_send_message(Queue, Term),
-        metta_channel_wake(Id, recv)
-    ).
+    channel_wait_(Id, send, infinite, Term),
+    seam:observe(added, Id, Term).
 
-%Block until a term arrives.
 channel_recv(Id, Term) :-
-    known_channel_(Id, Queue),
-    (   nb_current('$metta_scheduler_task', Task)
-    ->  scheduler_channel_recv_(Task, Id, Queue, infinite, Term)
-    ;   thread_get_message(Queue, Term),
-        metta_channel_wake(Id, send)
-    ).
+    channel_wait_(Id, recv, infinite, Term),
+    seam:observe(removed, Id, Term).
 
-%Block for at most Timeout seconds; no answer when it expires.
 channel_recv(Id, Timeout, Term) :-
-    known_channel_(Id, Queue),
-    (   nb_current('$metta_scheduler_task', Task)
-    ->  get_time(Now),
-        Deadline is Now + Timeout,
-        scheduler_channel_recv_(Task, Id, Queue, Deadline, Term)
-    ;   thread_get_message(Queue, Term, [timeout(Timeout)]),
-        metta_channel_wake(Id, send)
-    ).
+    must_be(number, Timeout),
+    ( Timeout >= 0 -> true ; domain_error(not_less_than_zero, Timeout) ),
+    get_time(Now), Deadline is Now + Timeout,
+    channel_wait_(Id, recv, Deadline, Term),
+    seam:observe(removed, Id, Term).
 
-%Take a term if one is waiting, otherwise no answer, never blocking.
 channel_try_recv(Id, Term) :-
-    known_channel_(Id, Queue),
-    thread_get_message(Queue, Term, [timeout(0)]),
-    metta_channel_wake(Id, send).
+    channel_try_(Id, recv, Term),
+    seam:observe(removed, Id, Term).
 
 channel_size(Id, Size) :-
     known_channel_(Id, Queue),
     message_queue_property(Queue, size(Size)).
 
 channel_close(Id, true) :-
-    known_channel_(Id, Queue),
-    retractall(metta_channel(Id, _)),
-    catch(message_queue_destroy(Queue), _, true),
-    metta_channel_wake(Id, send),
-    metta_channel_wake(Id, recv).
+    ( metta_channel(Id, _) -> metta_release_space(Id) ; true ).
 
-%A scheduled bounded send or empty receive follows the same level-triggered
-%pattern as Linda waits: register first, probe the mailbox, and suspend the
-%engine only while the store condition is false. Counterpart operations wake
-%all matching waiters; the queue itself decides which resumed operation wins.
-scheduler_channel_send_(Task, Id, Queue, Term) :-
+channel_try_(Id, Mode, Term) :-
+    channel_key_(Id, Key),
+    with_mutex(Key, sig_atomic((
+        known_channel_(Id, Queue), channel_change_(Mode, Key, Queue, Term) ))),
+    channel_counterpart_(Mode, Other),
+    metta_channel_wake(Id, Other).
+
+channel_change_(send, Key, Queue, Term) :-
+    thread_send_message(Queue, slot, [timeout(0)]),
+    catch(recordz(Key, message(Term), _), Error,
+          ( thread_get_message(Queue, slot, [timeout(0)]), throw(Error) )).
+channel_change_(recv, Key, Queue, Term) :-
+    once(recorded(Key, message(Term), Reference)),
+    erase(Reference),
+    thread_get_message(Queue, slot, [timeout(0)]).
+
+channel_counterpart_(send, recv).
+channel_counterpart_(recv, send).
+
+% Register before probing; every notification is a hint to re-read the FIFO.
+% The same wait works on a carrier or on a host, including in a transaction.
+channel_wait_(Id, Mode, Deadline, Term) :-
+    known_channel_(Id, _),
     setup_call_cleanup(
-        assertz(metta_channel_waiter(Id, send, Task), Ref),
-        scheduler_channel_send_loop_(Task, Id, Queue, Term),
-        erase(Ref)).
+        channel_waiter_open_(Id, Mode, Deadline, Waiter, Ref, Timer),
+        channel_wait_loop_(Id, Mode, Deadline, Term, Waiter),
+        ( erase(Ref), channel_waiter_close_(Waiter, Timer) )).
 
-scheduler_channel_send_loop_(Task, Id, Queue, Term) :-
-    (   thread_send_message(Queue, Term, [timeout(0)])
-    ->  metta_channel_wake(Id, recv)
-    ;   engine_yield('$metta_scheduler_suspend'),
-        scheduler_channel_send_loop_(Task, Id, Queue, Term)
-    ).
+channel_waiter_open_(Id, Mode, Deadline, Waiter, Ref, Timer) :-
+    channel_key_(Id, Key),
+    ( nb_current('$metta_scheduler_task', Task)
+    -> Waiter = scheduler(Task),
+       scheduler_deadline_start_(Task, Deadline, Timer)
+    ;  message_queue_create(Queue, [max_size(1)]),
+       Waiter = host(Queue), Timer = none ),
+    catch(recordz(Key, waiter(Mode, Waiter), Ref), Error,
+          ( channel_waiter_close_(Waiter, Timer), throw(Error) )).
 
-scheduler_channel_recv_(Task, Id, Queue, Deadline, Term) :-
-    setup_call_cleanup(
-        assertz(metta_channel_waiter(Id, recv, Task), Ref),
-        setup_call_cleanup(
-            scheduler_deadline_start_(Task, Deadline, DeadlineToken),
-            scheduler_channel_recv_loop_(Task, Id, Queue, Deadline, Term),
-            scheduler_deadline_cancel_(DeadlineToken)),
-        erase(Ref)).
+channel_waiter_close_(scheduler(_), Timer) :- scheduler_deadline_cancel_(Timer).
+channel_waiter_close_(host(Queue), _) :- message_queue_destroy(Queue).
 
-scheduler_channel_recv_loop_(Task, Id, Queue, Deadline, Term) :-
-    (   thread_get_message(Queue, Term, [timeout(0)])
-    ->  metta_channel_wake(Id, send)
-    ;   scheduler_deadline_open_(Deadline)
-    ->  engine_yield('$metta_scheduler_suspend'),
-        scheduler_channel_recv_loop_(Task, Id, Queue, Deadline, Term)
-    ;   fail
-    ).
+channel_wait_loop_(Id, Mode, Deadline, Term, Waiter) :-
+    ( channel_try_(Id, Mode, Term) -> true
+    ; scheduler_deadline_open_(Deadline)
+    -> channel_waiter_pause_(Waiter, Deadline),
+       channel_wait_loop_(Id, Mode, Deadline, Term, Waiter)
+    ; fail ).
+
+channel_waiter_pause_(scheduler(_), _) :- engine_yield('$metta_scheduler_suspend').
+channel_waiter_pause_(host(Queue), infinite) :- !, thread_get_message(Queue, wake).
+channel_waiter_pause_(host(Queue), Deadline) :-
+    get_time(Now), Left is max(0, Deadline - Now),
+    thread_get_message(Queue, wake, [timeout(Left)]).
+
+metta_channel_waiter(Id, Mode, Waiter) :-
+    ( var(Id) -> recorded('$metta_channels', Id, _) ; true ),
+    channel_key_(Id, Key), recorded(Key, waiter(Mode, Waiter), _).
 
 metta_channel_wake(Id, Mode) :-
-    findall(Task, metta_channel_waiter(Id, Mode, Task), Tasks),
-    maplist(metta_scheduler_wake, Tasks).
+    findall(Waiter, metta_channel_waiter(Id, Mode, Waiter), Waiters),
+    maplist(channel_wake_, Waiters).
+
+channel_wake_(scheduler(Task)) :- metta_scheduler_wake(Task).
+channel_wake_(host(Queue)) :-
+    catch(( thread_send_message(Queue, wake, [timeout(0)]) -> true ; true ),
+          error(existence_error(message_queue, _), _), true).
+
+channel_snapshot_(Id, Terms) :-
+    channel_key_(Id, Key),
+    with_mutex(Key, ( known_channel_(Id, _),
+                     findall(Term, recorded(Key, message(Term), _), Terms) )).
+
+channel_clear_(Id) :-
+    channel_key_(Id, Key),
+    with_mutex(Key, sig_atomic((
+        known_channel_(Id, Queue),
+        findall(Term, ( recorded(Key, message(Term), Ref), erase(Ref),
+                       thread_get_message(Queue, slot, [timeout(0)]) ), Terms) ))),
+    metta_channel_wake(Id, send),
+    forall(member(Term, Terms), seam:observe(removed, Id, Term)).
+
+channel_release_(Id) :-
+    channel_key_(Id, Key),
+    with_mutex(Key, sig_atomic((
+        ( recorded(Key, queue(Queue), QueueRef)
+        -> erase(QueueRef), message_queue_destroy(Queue) ; true ),
+        forall(recorded(Key, message(_), MessageRef), erase(MessageRef)) ))),
+    metta_channel_wake(Id, send),
+    metta_channel_wake(Id, recv),
+    forall(recorded('$metta_channels', Id, Ref), erase(Ref)),
+    metta_disclaim_space(Id, lib_thread).
+
+:- multifile seam:foreign_space/1, seam:foreign_capability/2,
+             seam:foreign_atoms/2, seam:foreign_match/3,
+             seam:foreign_add/2, seam:foreign_remove/3, seam:foreign_clear/1,
+             seam:context_events/3, seam:space_released/1.
+seam:foreign_space(Id) :- metta_channel(Id, _).
+seam:foreign_capability(Id, Capability) :-
+    metta_channel(Id, _),
+    member(Capability, [add, remove, enumerate, match, clear]).
+seam:context_events(Id, 'per-write-exactly', unordered) :- metta_channel(Id, _).
+seam:foreign_atoms(Id, Term) :-
+    metta_channel(Id, _), !, channel_snapshot_(Id, Terms), member(Term, Terms).
+seam:foreign_match(Id, Term, _) :-
+    metta_channel(Id, _), !, channel_snapshot_(Id, Terms), member(Term, Terms).
+seam:foreign_add(Id, Term) :-
+    metta_channel(Id, _), !, channel_wait_(Id, send, infinite, Term).
+seam:foreign_remove(Id, Term, Removed) :-
+    metta_channel(Id, _), !,
+    ( channel_try_(Id, recv, Term) -> Removed = true ; Removed = false ).
+seam:foreign_clear(Id) :- metta_channel(Id, _), !, channel_clear_(Id).
+seam:space_released(Id) :-
+    ( metta_channel(Id, _) -> channel_release_(Id) ; true ).
 
 % ------------------------------------------------------- bounded worker pools
 
@@ -1356,7 +2000,9 @@ pool_create(Name, Size, true) :-
     must_be(positive_integer, Size),
     (   current_thread_pool(Name)
     ->  true
-    ;   thread_pool_create(Name, Size, [])
+    ;   thread_pool_create(Name, Size, []),
+        scope_current_(Id),
+        ( Id == none -> true ; recordz(Id, child(pool, Name), _) )
     ).
 
 %Submit an expression and answer a future handle, the same handle thread-await
@@ -1500,6 +2146,8 @@ timer_fire_value_(scheduler_wake(Task, Token), Rest, Rest) :- !,
                ;   Wake = false
                )),
     ( Wake == true -> metta_scheduler_wake(Task) ; true ).
+timer_fire_value_(scope_deadline(Id), Rest, Rest) :- !,
+    scope_cancel_automatic_(Id, deadline).
 timer_fire_value_(timer(Space, Module, Expr, Repeat, Context), Rest, Next) :-
     with_mutex('$metta_timer_lifecycle',
                timer_fire_value_locked_(Space, Module, Expr, Repeat, Context,
@@ -1638,14 +2286,23 @@ repeating_body_started_(Start, Context, Module, Expr, Space) :-
         thread_get_message(Start, go),
         catch(message_queue_destroy(Start), _, true)),
     call_cleanup(
-        metta_in_python_context(
-            Context,
-            catch(forall(eval_metta_in_module(Module, Expr, Value),
-                         future_add_atom(Space, Value)),
-                  Error,
-                  ( term_to_atom(Error, Message),
-                    future_add_atom(Space, ['Error', Expr, Message]) ))),
+        ( future_body_outcome_(Context, Module, Expr, Space, Outcome),
+          repeating_outcome_(Outcome, Context, Expr, Space) ),
         repeating_body_finished_(Space)).
+
+repeating_outcome_(done, _, _, _) :- !.
+repeating_outcome_(error(Error), Context, Expr, Space) :-
+    Context \= scoped(_, _), !,
+    term_to_atom(Error, Message), future_add_atom(Space, ['Error', Expr, Message]).
+repeating_outcome_(Outcome, Context, _, Space) :-
+    with_mutex('$metta_timer_lifecycle',
+        ( ( metta_timer_cancelled(Space) -> true
+          ; assertz(metta_timer_cancelled(Space)) ),
+          ( retract(metta_timer_context(Space, _, Context)) -> Release = true
+          ; Release = false ),
+          metta_future(Space, _, Done) )),
+    ( Release == true -> metta_release_python_context(Context) ; true ),
+    metta_future_complete(Space, Done, Outcome).
 
 repeating_body_finished_(Space) :-
     thread_self(Worker),
