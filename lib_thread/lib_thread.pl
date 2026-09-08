@@ -1468,8 +1468,12 @@ metta_async_cancel(Token, Answer) :-
 
 metta_async_cancel_request_(Token, Joining, Answer, Running) :-
     user:py_call(metta_ops:async_cancel(Token, Joining), Accepted-Active),
-    ( memberchk(Accepted, [true, @(true)]) -> Answer = true ; Answer = false ),
-    ( memberchk(Active, [true, @(true)]) -> Running = true ; Running = false ).
+    janus_true_(Accepted, Answer),
+    janus_true_(Active, Running).
+
+janus_true_(Value, Truth) :-
+    % policy-inventory-exempt: mechanism-internal; reason=the two spellings janus hands a Python True, the bare atom and the @-wrapped one, depending on the conversion the caller asked for; evidence=lib/lib_thread/lib_thread.pl:metta_async_cancel_request_/4
+    ( memberchk(Value, [true, @(true)]) -> Truth = true ; Truth = false ).
 
 %A nested spawn forks the scheduled engine's retained Context after any host
 %callback mutations made by that engine. A top-level door snapshots the Python
@@ -2025,6 +2029,7 @@ channel_release_(Id) :-
 seam:foreign_space(Id) :- metta_channel(Id, _).
 seam:foreign_capability(Id, Capability) :-
     metta_channel(Id, _),
+    % policy-inventory-exempt: mechanism-internal; reason=a channel is a FIFO that adds by send, removes by receive, enumerates and matches by snapshot and clears, and the vocabulary's other words are not FIFO operations; evidence=lib/lib_thread/lib_thread.pl:channel_snapshot_/2
     member(Capability, [add, remove, enumerate, match, clear]).
 seam:context_events(Id, 'per-write-exactly', unordered) :- metta_channel(Id, _).
 seam:foreign_atoms(Id, Term) :-
