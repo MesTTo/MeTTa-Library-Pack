@@ -23,7 +23,7 @@
 %   Shared predicates refuse calls inside a transaction or snapshot before
 %   entering their answer trie. Previously compiled callers receive the same
 %   refusal; an explicit private policy uses SWI's rollback machinery
-%   [tested: lib_tabling_transactions; commit=WORKTREE].
+%   [tested: lib_tabling_transactions; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
 % Owns resources: each shared table owns a metta_tabling_transaction wrapper;
 %   unregistering the table removes that wrapper.
 % Guarantees:
@@ -782,7 +782,7 @@ metta_tabling_install(Module, Name, CompiledArity, Declared, InForce, Reads) :-
 % predicate itself so calls compiled before the declaration are checked too.
 % SWI-Prolog V10.1.13, man/builtin.plx, transaction-impact:
 % https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/man/builtin.plx
-% [tested: lib_tabling_transactions; commit=WORKTREE]
+% [tested: lib_tabling_transactions; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4]
 metta_tabling_guard_transaction(policy(_, shared, _, _, _, _), Head, Name) :-
     !,
     wrap_predicate(Head, metta_tabling_transaction, Wrapped,

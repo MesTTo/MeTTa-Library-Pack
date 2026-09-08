@@ -11,11 +11,11 @@
 %   'unimport!'/3 withdraws native source ownership through metta_unimport/2
 %   [tested: lib_import_lifecycle; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
 % Guarantees: static caches restore occurrence identity through the native
-%   funnel and remain inert [tested: lib_import_tokens; commit=WORKTREE].
+%   funnel and remain inert [tested: lib_import_tokens; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
 % Owns resources: an imports descriptor owns no handle or copied rows.
 %   static-import! releases its temporary static_import_image/1 payload after
 %   success or failure [source: lib/lib_import/lib_import.pl:'static-import!'/3;
-%   commit=WORKTREE].
+%   commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
 % Guarded by: metta_loader serializes metta_unimport/2 and static payload use.
 
 
@@ -127,7 +127,7 @@ prolog:error_message(metta_static_import_failed(File)) -->
 % qcompile already loads its input. The payload is held only while this
 % serialized load validates and restores it; source ownership lives in the
 % engine's existing journal, not in a second table of stored references.
-% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/boot/qlf.pl:qcompile_/3; commit=WORKTREE]
+% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/boot/qlf.pl:qcompile_/3; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4]
 :- dynamic static_import_image/1.
 
 static_import_load_payload(Source, PlFile, QlfFile) :-
