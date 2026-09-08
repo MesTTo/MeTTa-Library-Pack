@@ -35,6 +35,12 @@
 %     lib_thread:empty_channel_receives_suspend_engines_instead_of_all_carriers,
 %     lib_thread:full_channel_sends_suspend_engines_instead_of_all_carriers;
 %     commit=39092863ae34184a9f955f185ff57c1ff177ec40]
+%   - channel_close/2 refuses a closed or unknown channel with
+%     existence_error(metta_channel, Id), as recv and send do, while a scope
+%     releasing a channel already gone is not an error [tested:
+%     lib_thread:closing_a_closed_channel_is_an_existence_error,
+%     examples/ch17-concurrency-and-the-loop/05-channels_pools_and_the_machine.metta;
+%     commit=WORKTREE]
 %   - future completion is single-assignment, settled pool work cannot be
 %     reported as cancelled, timer dispatch cannot cross a successful
 %     cancellation, a failed async landing publication records a terminal
@@ -1873,8 +1879,11 @@ channel_size(Id, Size) :-
     known_channel_(Id, Queue),
     message_queue_property(Queue, size(Size)).
 
+% The door refuses a channel that is gone, the way recv and send do; the
+% scope's own release path (seam:space_released/1 below) tolerates one.
 channel_close(Id, true) :-
-    ( metta_channel(Id, _) -> metta_release_space(Id) ; true ).
+    known_channel_(Id, _),
+    metta_release_space(Id).
 
 channel_try_(Id, Mode, Term) :-
     channel_key_(Id, Key),
