@@ -40,7 +40,7 @@
 %     releasing a channel already gone is not an error [tested:
 %     lib_thread:closing_a_closed_channel_is_an_existence_error,
 %     examples/ch17-concurrency-and-the-loop/05-channels_pools_and_the_machine.metta;
-%     commit=WORKTREE]
+%     commit=f75df8e1c17a6c700e8d3700e440fe1ee535ea9f]
 %   - future completion is single-assignment, settled pool work cannot be
 %     reported as cancelled, timer dispatch cannot cross a successful
 %     cancellation, a failed async landing publication records a terminal
