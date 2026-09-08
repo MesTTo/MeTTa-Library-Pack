@@ -21,6 +21,18 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_redis,
+          [ 'redis-attach'/3,
+            'redis-detach'/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 %The import door reads this declaration before consulting the file. The
 %directive repeats the check for a direct Prolog consult, and the load itself
 %uses the same census route as every other optional platform library.
@@ -127,7 +139,7 @@ redis_space_register_ready_subscription(
         ReadyChannel, ReadyQueue) :-
     redis_subscribe(SubConn, [Channel, ReadyChannel], SubId,
                     [ detached(true),
-                      at_exit(user:redis_space_subscription_exit(SubConn))
+                      at_exit(lib_redis:redis_space_subscription_exit(SubConn))
                     ]),
     catch(( redis_space_wait_until_subscribed(
                 Space, Conn, SubId, ReadyChannel, ReadyQueue),

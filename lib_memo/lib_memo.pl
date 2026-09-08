@@ -107,6 +107,45 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_memo,
+          [ 'clear-memoize'/1,
+            'clear-memoize-stats'/1,
+            'config-memoize'/2,
+            'config-memoize'/3,
+            'config-memoize'/4,
+            'get-memoize-config'/1,
+            'get-memoize-stats'/1,
+            'get-memoize-stats'/2,
+            'invalidate-memoize'/2,
+            'is-memoized'/2,
+            'is-memoized'/3,
+            'memoize-exact'/2,
+            cache_clear/0,
+            disable_memoization/1,
+            memo_aggregate_mode/1,
+            memo_answer_limit/1,
+            memo_dispatch_call/4,
+            memo_equation/4,
+            memo_function_removed/1,
+            memo_owner_module/4,
+            memo_size_limit/1,
+            memo_withdraw_removed_definition/2,
+            memoize/2,
+            memoize/3,
+            metta_memo_total_bytes/1,
+            reset_exact_memo_table/3,
+            % Generated call bodies resolve this exported dispatcher.
+            % [tested: lib_memo_reach; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+            cache_call/4
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists)).
 :- use_module(library(ordsets)).
 :- use_module(library(solution_sequences)).
@@ -128,7 +167,10 @@
 :- dynamic memo_automatic_enabled/2.
 :- dynamic memo_automatic_decision/4.
 :- dynamic memo_automatic_dirty/1.
-:- dynamic arity/2.
+% Read the core's arity/2 registry. A local dynamic declaration would shadow
+% it with an empty predicate and record memo ownership in the wrong module.
+% [tested: lib_memo_reach:memoizing_an_operation_reaches_a_caller_compiled_before_it;
+% commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 
 % Cached results: metta_memo_entry(Fun, Module, Arity, Gen, AVs, Results).
 % Exact decorator tables: exact_memo_specialization(ReplayName, TableName,
@@ -322,15 +364,10 @@ memo_dispatch_call(Fun, Args, Out, Goal) :-
     ;  Goal = cache_call(Fun, CallModule, Args, Out)
     ).
 
-%The module this file's predicates live in. engine/metta.pl consults
-%lib_memo.pl into `user`, and every space module inherits from there, so a
-%compiled call site's unqualified cache_call/4 resolves to that ONE predicate;
-%an observer wrapping `lib_memo:cache_call/4` would create a local shadow
-%nobody calls, which is why SWI's own port tracer requalifies to the defining
-%module before it wraps
-%[source: /usr/lib/swi-prolog/library/prolog_trace.pl, resolve_predicate/2;
-%measured 2026-09-07: predicate_property(lib_memo:cache_call(_,_,_,_),
-%imported_from(user))].
+% Keep the dispatcher owner in the interposition seam's metadata, so observers
+% wrap lib_memo:cache_call/4 rather than creating a local shadow elsewhere.
+% [source: lib/lib_memo/lib_memo.pl:seam:interposed_dispatch/4; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+
 :- dynamic memo_home_module/1.
 :- prolog_load_context(module, HomeModule),
    retractall(memo_home_module(_)),

@@ -35,6 +35,48 @@
 %     rather than a single string, is tracked in ai-todo-language-completeness
 %     section 2.4.
 
+
+:- module(lib_file,
+          [ 'append-file!'/3,
+            'copy-file!'/3,
+            'delete-dir!'/2,
+            'delete-file!'/2,
+            'dir-exists'/2,
+            'exit!'/2,
+            'file-close!'/2,
+            'file-exists'/2,
+            'file-get-size!'/2,
+            'file-lines!'/2,
+            'file-metadata!'/2,
+            'file-open!'/3,
+            'file-read-exact!'/3,
+            'file-read-to-string!'/2,
+            'file-seek!'/3,
+            'file-space!'/2,
+            'file-write!'/3,
+            'list-dir!'/2,
+            'make-dir!'/2,
+            'path-extension'/2,
+            'path-join'/3,
+            'path-name'/2,
+            'path-parent'/2,
+            'read-file!'/2,
+            'stderr!'/2,
+            'stdin-to-string!'/1,
+            'temp-dir!'/2,
+            'temp-path!'/2,
+            'write-file!'/3,
+            stderr/1,
+            stdin/1,
+            stdout/1
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists)).
 :- use_module(library(filesex)).
 

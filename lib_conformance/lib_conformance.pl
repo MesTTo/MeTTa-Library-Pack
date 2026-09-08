@@ -45,10 +45,23 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_conformance,
+          [metta_check_space_provider/2]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists)).
 
 :- multifile prolog:error_message//1.
 
+% The engine readies a provider through this exported entry point after
+% ensure_conformance_kit/0 loads this module. Helpers remain local.
+% [tested: lib_conformance:conformance_passes_a_conforming_provider; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 %The whole kit. Answers the checks it ran, one STRING per check, so a caller
 %sees what was covered rather than a bare true, and a MeTTa caller gets the
 %type a message has. The source discipline is READ, not supplied: the

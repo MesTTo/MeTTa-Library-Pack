@@ -27,6 +27,18 @@
 %   - the row state is private and target-truncated; exhaustive configurations
 %     remain the separate chooseK family in lib_combinatorics.metta
 
+
+:- module(lib_combinatorics,
+          [ 'weighted-subset-mass-independent'/3,
+            'weighted-subset-posterior-independent'/3
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists), [reverse/2]).
 
 % A probabilistic adder can merge power-set paths reaching the same sum and

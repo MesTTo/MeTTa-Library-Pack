@@ -11,6 +11,18 @@
 % equal row widths; the first record is data, including a header if present.
 % [tested: lib_csv:text_and_quoting, lib_csv:ragged_rows; commit=504f8dddfa890ced97e795a13ab10e239b1de2ce]
 
+
+:- module(lib_csv,
+          [ 'csv-snapshot!'/2,
+            'csv-space'/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(csv)).
 :- use_module(library(error)).
 

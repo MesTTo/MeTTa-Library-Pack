@@ -27,6 +27,25 @@
 %     the .metta half out of these plus lib_json, so nothing here needs to know
 %     about JSON.
 
+
+:- module(lib_reflect,
+          [ 'engine-arity'/2,
+            'engine-builtin'/1,
+            'engine-extension-point'/1,
+            'engine-function'/1,
+            'engine-knows'/2,
+            'engine-origin'/2,
+            'engine-special-form'/1,
+            'engine-surface-counts'/1,
+            'engine-user-function'/1
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists)).
 
 %One builtin name per solution. Indexed on the name, so asking about a

@@ -20,6 +20,21 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_constraints,
+          [ 'clpb-labeling'/2,
+            'clpb-taut'/2,
+            'clpq-entailed'/2,
+            clpb/2,
+            clpq/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(clpq), [entailed/1]).
 :- use_module(library(clpb), [sat/1, labeling/1, taut/2]).
 %library(clpq) pulls in library(ugraphs) for its own variable-elimination

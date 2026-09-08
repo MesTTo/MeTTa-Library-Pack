@@ -9,6 +9,22 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_regex,
+          [ regex_captures/3,
+            regex_find/3,
+            regex_match/3,
+            regex_replace/4,
+            regex_replace_all/4,
+            regex_split/3
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 %Nothing below this line works without library(pcre), so the file says so
 %where the engine's pre-load scan can read it: an import on a build without
 %the regex capability then refuses naming this file, the capability and what

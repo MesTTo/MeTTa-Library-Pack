@@ -25,6 +25,25 @@
 %     callers retain moments or supply a finite identifiable variance
 %   - no clipping, delta-method inversion, or confidence discount is applied
 
+
+:- module(lib_pln2,
+          [ 'pln2-beta-moments'/2,
+            'pln2-beta-update'/4,
+            'pln2-confidence-count'/3,
+            'pln2-count-confidence'/3,
+            'pln2-moments-stv'/3,
+            'pln2-product-independent'/3,
+            'pln2-require-independent-supports'/2,
+            'pln2-stv-moments'/3,
+            'pln2-total-probability-independent'/4
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 % The standard Beta mean and variance fix the parameterization used below.
 % [source: https://www.itl.nist.gov/div898/handbook/eda/section3/eda366h.htm;
 % commit=afc4024cef7d4b7bcdd194bb030a112187b676d0]

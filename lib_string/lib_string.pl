@@ -23,6 +23,36 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_string,
+          [ 'number-to-string'/2,
+            'parse-number'/2,
+            'string-chars'/2,
+            'string-contains'/3,
+            'string-ends-with'/3,
+            'string-from-chars'/2,
+            'string-index-of'/3,
+            'string-join'/3,
+            'string-length'/2,
+            'string-lower'/2,
+            'string-pad-left'/4,
+            'string-pad-right'/4,
+            'string-repeat'/3,
+            'string-replace'/4,
+            'string-slice'/4,
+            'string-split'/3,
+            'string-starts-with'/3,
+            'string-trim'/2,
+            'string-upper'/2,
+            metta_text/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists)).
 :- use_module(library(apply)).
 

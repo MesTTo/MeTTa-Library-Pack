@@ -128,6 +128,60 @@
 %     latches and barriers over spaces, and supervision, are tracked in
 %     ai-todo-parallel.md B9.2 to B9.4.
 
+
+:- module(lib_thread,
+          [ channel_close/2,
+            channel_new/1,
+            channel_new/2,
+            channel_recv/2,
+            channel_recv/3,
+            channel_send/3,
+            channel_size/2,
+            channel_try_recv/2,
+            cpu_count/1,
+            future_add_atom/2,
+            metta_async_future/4,
+            metta_async_future_abandon/2,
+            metta_async_future_bind/4,
+            metta_async_future_discard/1,
+            metta_async_future_discard/3,
+            metta_async_future_fail/2,
+            metta_async_future_new/2,
+            metta_async_future_settle/4,
+            metta_future_snapshot/3,
+            par_any/3,
+            par_filter/3,
+            par_forall/3,
+            par_map/3,
+            par_race/2,
+            pool_create/3,
+            pool_destroy/2,
+            pool_stats/2,
+            pool_submit/3,
+            space_await/3,
+            space_await/4,
+            space_await_where/4,
+            space_await_where/5,
+            space_take/3,
+            space_take/4,
+            space_take_where/4,
+            space_take_where/5,
+            thread_await/2,
+            thread_cancel/2,
+            thread_count/1,
+            thread_settled/2,
+            thread_spawn/2,
+            timer_after/3,
+            timer_every/3,
+            with_lock/3
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+:- set_module(base(metta_engine)).
+
 %Nothing below this line works without threads, so the file says so where the
 %engine's pre-load scan can read it. An import on a build without
 %library(thread) then refuses naming the capability and what it costs, and
@@ -836,8 +890,8 @@ metta_async_future_discard(Token, Space, Done) :-
     catch(message_queue_destroy(Done), _, true).
 
 metta_async_cancel(Token, Answer) :-
-    (   current_predicate(py_call/2),
-        catch(py_call(metta_ops:async_cancel(Token), Cancelled), _, fail),
+    (   current_predicate(user:py_call/2),
+        catch(user:py_call(metta_ops:async_cancel(Token), Cancelled), _, fail),
         ( Cancelled == true ; Cancelled == @(true) )
     ->  Answer = true
     ;   Answer = false
@@ -850,25 +904,25 @@ metta_async_cancel(Token, Answer) :-
 %state between engine steps.
 metta_capture_python_context(Context) :-
     (   nb_current('$metta_python_context', Parent), integer(Parent)
-    ->  py_call(metta_ops:fork_context(Parent), Context)
+    ->  user:py_call(metta_ops:fork_context(Parent), Context)
     ;   current_predicate(metta_py_dispatch_det/3)
-    ->  py_call(metta_ops:capture_context(), Context)
+    ->  user:py_call(metta_ops:capture_context(), Context)
     ;   Context = none
     ).
 
 metta_capture_python_contexts(Count, Contexts) :-
     (   nb_current('$metta_python_context', Parent), integer(Parent)
-    ->  py_call(metta_ops:fork_contexts(Parent, Count), Contexts)
+    ->  user:py_call(metta_ops:fork_contexts(Parent, Count), Contexts)
     ;   current_predicate(metta_py_dispatch_det/3)
-    ->  py_call(metta_ops:capture_contexts(Count), Contexts)
+    ->  user:py_call(metta_ops:capture_contexts(Count), Contexts)
     ;   length(Contexts, Count),
         maplist(=(none), Contexts)
     ).
 
 metta_release_python_context(none) :- !.
 metta_release_python_context(Context) :-
-    (   current_predicate(py_call/2)
-    ->  catch(py_call(metta_ops:release_context(Context), _), _, true)
+    (   current_predicate(user:py_call/2)
+    ->  catch(user:py_call(metta_ops:release_context(Context), _), _, true)
     ;   true
     ).
 
