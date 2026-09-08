@@ -10,8 +10,13 @@
 % Guarantees: imports/2 enumerates committed (import Path) atoms and
 %   'unimport!'/3 withdraws native source ownership through metta_unimport/2
 %   [tested: lib_import_lifecycle; commit=4f2d6c0f8eb293b73f8dde30a1c84e24834f7393].
+% Guarantees: static caches restore occurrence identity through the native
+%   funnel and remain inert [tested: lib_import_tokens; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
 % Owns resources: an imports descriptor owns no handle or copied rows.
-% Guarded by: metta_unimport/2 serializes source changes with metta_loader.
+%   static-import! releases its temporary static_import_image/1 payload after
+%   success or failure [source: lib/lib_import/lib_import.pl:'static-import!'/3;
+%   commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
+% Guarded by: metta_loader serializes metta_unimport/2 and static payload use.
 
 
 :- module(lib_import,
@@ -68,48 +73,31 @@ seam:foreign_refuse(View, Capability) :-
 %build, so a variable is a variable and a string with an escaped quote is one
 %string. portray_clause/2 then writes it back as Prolog that reads as the same
 %term [tested: import_converts_through_the_reader].
-metta_file_to_prolog(Input, Space, Output) :-
-    read_file_to_string(Input, Source, []),
+metta_file_to_prolog(Input, Output) :-
+    read_file_to_string(Input, Source, [encoding(utf8)]),
     parse_metta_source(Source, ParsedForms),
-    %The storage module, not user. Native atoms live in '$metta_atoms:<space>'
-    %and the converter wrote its facts into user, so a static import loaded
-    %clauses the space could never read and reported success: the data was
-    %there, in the database, invisible to (match &self ...) and to get-atoms.
-    ensure_native_storage_module(Space, Module),
-    maplist(static_import_fact(Input, Space), ParsedForms, Facts),
-    %Write only after every form has converted, and only into a file that is
-    %removed on failure: a half-written .pl is indistinguishable from a
-    %complete one on the next run.
-    setup_call_cleanup(open(Output, write, Out),
-                       write_static_import_facts(Out, Module, Facts),
+    maplist(static_import_fact(Input), ParsedForms, Atoms),
+    metta_static_import_image(Atoms, Image),
+    setup_call_cleanup(open(Output, write, Out, [encoding(utf8)]),
+                       write_static_import_image(Out, Image),
                        close(Out)).
 
-write_static_import_facts(Out, Module, Facts) :-
-    %One declaration per arity actually present. The space predicate is
-    %Space(Rel, Args...), so a file mixing (p x) with (p x y) needs both, and
-    %dynamic is what keeps a later add-atom from raising a permission error on
-    %a predicate the load had made static.
-    setof(Name/Arity,
-          Fact^( member(Fact, Facts), functor(Fact, Name, Arity) ),
-          Indicators),
-    forall(member(Indicator, Indicators),
-           ( format(Out, ":- dynamic ~q:~q.~n", [Module, Indicator]),
-             format(Out, ":- multifile ~q:~q.~n", [Module, Indicator]),
-             format(Out, ":- discontiguous ~q:~q.~n", [Module, Indicator]) )),
-    nl(Out),
-    forall(member(Fact, Facts), portray_clause(Out, Module:Fact)).
+write_static_import_image(Out, Image) :-
+    portray_clause(Out, (:- encoding(utf8))),
+    portray_clause(Out, (:- dynamic lib_import:static_import_image/1)),
+    portray_clause(Out, lib_import:static_import_image(Image)).
 
 %A data file holds data. A runnable cannot become an atom, and writing
 %something else and hoping is how the truncated cache happened. Everything a
 %space can hold is converted, expressions and scalars alike, through the same
-%native_atom_clause/3 an ordinary add-atom uses.
-static_import_fact(Input, Space, Parsed, Fact) :-
+%native storage funnel an ordinary add-atom uses.
+static_import_fact(Input, Parsed, Atom) :-
     parsed_form_parts(Parsed, Kind, Text, Term),
     (   Kind == runnable
     ->  throw(error(metta_static_import_form(Input, Text),
                     context('static-import!',
                             'a runnable form cannot be imported as data')))
-    ;   native_atom_clause(Space, Term, Fact)
+    ;   Atom = Term
     ).
 
 :- multifile prolog:error_message//1.
@@ -118,30 +106,39 @@ prolog:error_message(metta_static_import_form(File, Text)) -->
 prolog:error_message(metta_static_import_failed(File)) -->
     [ 'static-import! could not convert ~w'-[File] ].
 %The static import function that allows loading static data files fast:
-'static-import!'(Space, File, true) :- style_check(-discontiguous),
-                                       atom_string(File, SFile),
-                                       %current_working_dir/1, not the bare
-                                       %working_dir/1: that has a clause only
-                                       %while a .metta file load is active, so
-                                       %a static import from anywhere else
-                                       %simply FAILED, with no answer and no
-                                       %error. The engine already keeps the
-                                       %process directory as the fallback.
-                                       current_working_dir(Base),
-                                       atomic_list_concat([Base, '/', SFile, '.qlf'], QlfFile),
-                                       atomic_list_concat([Base, '/', SFile, '.pl'], PlFile),
-                                       atomic_list_concat([Base, '/', SFile, '.metta'], MettaFile),
-                                       ( static_import_cache_fresh(MettaFile, QlfFile)
-                                         -> % Case 1: a current .qlf → load fastest
-                                            consult(QlfFile)
-                                          ; static_import_cache_fresh(MettaFile, PlFile)
-                                         -> % Case 2: a current .pl → compile to qlf and load
-                                            qcompile(PlFile),
-                                            consult(QlfFile)
-                                          ; % Case 3: nothing current → generate, compile, load
-                                            static_import_generate(MettaFile, Space, PlFile),
-                                            qcompile(PlFile),
-                                            consult(QlfFile) ).
+'static-import!'(Space, File, true) :-
+    atom_string(File, SFile),
+    current_working_dir(Base),
+    directory_file_path(Base, SFile, Stem),
+    atom_concat(Stem, '.tokens-v1', Cache),
+    file_name_extension(Cache, qlf, QlfFile),
+    file_name_extension(Cache, pl, PlFile),
+    file_name_extension(Stem, metta, MettaFile),
+    with_mutex(metta_loader,
+        setup_call_cleanup(
+            retractall(static_import_image(_)),
+            ( static_import_load_payload(MettaFile, PlFile, QlfFile),
+              findall(Image, static_import_image(Image), Images),
+              ( Images = [Only] -> metta_restore_static_import(QlfFile, Space, Only)
+              ; throw(error(metta_static_import_failed(QlfFile),
+                            context('static-import!', 'the cache must contain one image'))) ) ),
+            retractall(static_import_image(_)))).
+
+% qcompile already loads its input. The payload is held only while this
+% serialized load validates and restores it; source ownership lives in the
+% engine's existing journal, not in a second table of stored references.
+% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/boot/qlf.pl:qcompile_/3; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4]
+:- dynamic static_import_image/1.
+
+static_import_load_payload(Source, PlFile, QlfFile) :-
+    (   static_import_cache_fresh(Source, QlfFile)
+    ->  consult(QlfFile)
+    ;   ( static_import_cache_fresh(Source, PlFile) -> true
+        ; static_import_generate(Source, PlFile) ),
+        catch(qcompile(PlFile), Error,
+              ( ( exists_file(QlfFile) -> delete_file(QlfFile) ; true ),
+                throw(Error) ))
+    ).
 
 %A cache older than the source it came from answers from data the file no
 %longer holds, which is a wrong answer with no symptom. The old branches asked
@@ -162,12 +159,12 @@ static_import_cache_fresh(Source, Cache) :-
 %with half the data, in binary, for good. Failing silently was the other half
 %of it: 'static-import!' simply had no answer and said nothing
 %[tested: import_removes_a_partial_conversion].
-static_import_generate(MettaFile, Space, PlFile) :-
+static_import_generate(MettaFile, PlFile) :-
     %The outcome is carried out of the catch as a term rather than as a
     %binding: a variable bound inside the CONDITION of an if-then-else is
     %unbound again on the way to the else branch, so reading it there always
     %saw an unbound error and reported every exception as "no output".
-    catch(( metta_file_to_prolog(MettaFile, Space, PlFile)
+    catch(( metta_file_to_prolog(MettaFile, PlFile)
             -> Outcome = converted
             ;  Outcome = failed ),
           Error,

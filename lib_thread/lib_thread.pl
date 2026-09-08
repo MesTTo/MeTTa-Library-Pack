@@ -52,6 +52,16 @@
 %     lib_thread:a_repeating_timer_never_overlaps_its_own_invocations,
 %     test_a_failed_landing_publication_settles_the_future_as_an_error;
 %     commit=2f562bc5c051ee373cb7ab27ea6cae641f1df094]
+%   - a thread worker settles its future exactly once whatever a cancellation
+%     signal interrupted, including the window before its evaluation catch is
+%     installed and the one after it exits, because the settlement runs in a
+%     cleanup handler with thread signals blocked; and cancelling waits for
+%     the worker thread to end rather than for its settlement, settling a
+%     worker that ended unsettled as cancelled, so no canceller waits forever
+%     [tested:
+%     lib_thread:a_signal_before_the_worker_installs_its_catch_still_settles,
+%     lib_thread:cancelling_a_worker_that_ended_unsettled_answers_cancelled;
+%     commit=WORKTREE]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
@@ -1524,10 +1534,34 @@ metta_python_context_pop(absent) :-
 %Explicit user-created pools and timers promise parallel workers rather than
 %scheduler multiplexing, and run their already-captured Context here.
 future_body_context_(Context, Module, Expr, Space, Done) :-
-    call_cleanup(
-        future_body_outcome_(Context, Module, Expr, Space, Outcome),
-        metta_release_python_context(Context)),
-    metta_future_complete(Space, Done, Outcome).
+    future_worker_(Space, Done,
+                   future_body_outcome_(Context, Module, Expr, Space, Outcome),
+                   Outcome,
+                   metta_release_python_context(Context)).
+
+%A thread worker settles its future from a cleanup handler, which SWI runs
+%with thread signals blocked, so the settlement happens exactly once whatever
+%the cancellation signal interrupted: the body's own catch answers the common
+%case, and a signal that lands before that catch is installed or after it has
+%exited leaves the outcome unbound, which the handler reads as cancelled. The
+%canceller waits for that settlement under the await mutex, and a worker that
+%died unsettled left it waiting forever
+%[tested: lib_thread:a_signal_before_the_worker_installs_its_catch_still_settles;
+%commit=WORKTREE].
+future_worker_(Space, Done, Body, Outcome, Release) :-
+    setup_call_catcher_cleanup(
+        true,
+        catch(Body, error(metta_control_signal(interrupted, _), _), true),
+        Catcher,
+        ( future_worker_outcome_(Catcher, Outcome, Settled),
+          metta_future_complete(Space, Done, Settled),
+          Release )).
+
+future_worker_outcome_(exit, Outcome, Settled) :- !,
+    ( var(Outcome) -> Settled = cancelled ; Settled = Outcome ).
+future_worker_outcome_(exception(Error), _, Settled) :- !,
+    future_caught_(Error, Settled).
+future_worker_outcome_(Catcher, _, error(metta_future_worker_ended(Catcher))).
 
 future_body_outcome_(Context, Module, Expr, Space, Outcome) :-
         (   catch(( metta_in_python_context(Context,
@@ -1805,9 +1839,16 @@ cancel_future_worker_(async(Token), Space, _, Answer) :- !,
        ( Outcome == cancelled -> Answer = true ; Answer = false )
     ; Answer = Accepted ).
 cancel_future_worker_(none, _, _, false) :- !.
-cancel_future_worker_(ThreadId, Space, _, Answer) :-
+cancel_future_worker_(ThreadId, Space, Done, Answer) :-
     catch(thread_signal(ThreadId, lib_thread:future_cancel_signal_(Space, ThreadId)),
           error(existence_error(thread, _), _), true),
+    %Wait for the thread itself rather than for its settlement: a worker that
+    %met the signal at its first call port, before its cleanup handler was
+    %installed, ended without settling and did no work, so once it is gone
+    %its outcome is cancelled unless it settled itself, in which case the
+    %claim below is refused and the recorded outcome answers.
+    future_join_(ThreadId),
+    metta_future_complete(Space, Done, cancelled),
     future_settle_(Space, Outcome),
     ( Outcome == cancelled -> Answer = true ; Answer = false ).
 
@@ -2276,10 +2317,10 @@ timer_dispatch_failed_locked_(Space, Repeat, Context, Error, Action) :-
 %(Error <expr> <message>) atom, HE's own error shape. The consumer sees it by
 %matching, which is how it would see any other answer.
 timer_once_body_(Context, Module, Expr, Space, Done) :-
-    call_cleanup(
-        ( future_body_outcome_(Context, Module, Expr, Space, Outcome),
-          metta_future_complete(Space, Done, Outcome) ),
-        timer_context_release_(Space, once, Context)).
+    future_worker_(Space, Done,
+                   future_body_outcome_(Context, Module, Expr, Space, Outcome),
+                   Outcome,
+                   timer_context_release_(Space, once, Context)).
 
 timer_context_release_(Space, Repeat, Context) :-
     with_mutex('$metta_timer_lifecycle',

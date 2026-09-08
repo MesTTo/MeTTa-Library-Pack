@@ -20,6 +20,12 @@
 %   watch each read storage predicate carries. A row installs the table by
 %   itself, for every compiled arity of the name, now or when the clauses
 %   arrive; `tabled` installs under the standing row's policy or the default.
+%   Shared predicates refuse calls inside a transaction or snapshot before
+%   entering their answer trie. Previously compiled callers receive the same
+%   refusal; an explicit private policy uses SWI's rollback machinery
+%   [tested: lib_tabling_transactions; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
+% Owns resources: each shared table owns a metta_tabling_transaction wrapper;
+%   unregistering the table removes that wrapper.
 % Guarantees:
 %   - a function change invalidates the tables MeTTa DECLARED and walks no
 %     further: one equation change after a table of N answers was built and
@@ -192,6 +198,7 @@
 
 %table_statistics/3 is tableutil's, and it is not autoloaded.
 :- use_module(library(tableutil)).
+:- use_module(library(prolog_wrap), [wrap_predicate/4, unwrap_predicate/2]).
 
 %call_delays/2 is library(wfs)'s, not library(tabling)'s, and the library-index
 %autoloader is what had been finding it: with autoload off the restraint
@@ -312,6 +319,8 @@ metta_tabling_install_dispatch_handler(Name) :-
     assertz(metta_tabling_dispatch_installed(Name)).
 
 metta_tabling_unregister(Name, Module, CompiledArity) :-
+    ignore(unwrap_predicate(Module:Name/CompiledArity,
+                            metta_tabling_transaction)),
     retractall(metta_tabling_registration(Name, Module, CompiledArity)),
     retractall(metta_tabling_policy_installed(Name, Module, CompiledArity, _, _, _, _)),
     metta_tabling_release_storage(Name, Module, CompiledArity),
@@ -766,7 +775,22 @@ metta_tabling_install(Module, Name, CompiledArity, Declared, InForce, Reads) :-
     table(Module:Spec as As),
     functor(Head, Name, CompiledArity),
     metta_tabling_verify(Module:Head, Name/CompiledArity, Policy),
+    metta_tabling_guard_transaction(Policy, Module:Head, Name),
     metta_tabling_in_force(Policy, InForce).
+
+% Shared answer tries expose uncommitted rows to another thread. Wrap the
+% predicate itself so calls compiled before the declaration are checked too.
+% SWI-Prolog V10.1.13, man/builtin.plx, transaction-impact:
+% https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/man/builtin.plx
+% [tested: lib_tabling_transactions; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4]
+metta_tabling_guard_transaction(policy(_, shared, _, _, _, _), Head, Name) :-
+    !,
+    wrap_predicate(Head, metta_tabling_transaction, Wrapped,
+                   ( ( current_transaction(_)
+                     -> metta_tabling_refuse(Name, shared_transaction)
+                     ;  true ),
+                     Wrapped )).
+metta_tabling_guard_transaction(_, _, _).
 
 metta_tabling_verify(Head, Indicator, policy(Watch, Thread, Variant, Lazy, _, Restraints)) :-
     (   predicate_property(Head, tabled),
@@ -838,6 +862,12 @@ metta_tabling_refusal(Name, moded_shared) -->
        (type_error(trie, ...) from trie_gen/2 [measured 2026-09-07]); write \c
        private, or leave the thread word out of (cache ~w ...) and private is \c
        chosen'-[Name] ].
+metta_tabling_refusal(Name, shared_transaction) -->
+    [ 'its shared answer trie cannot isolate a transaction or snapshot on \c
+       SWI-Prolog 10.1.13: another thread can read uncommitted answers. \c
+       Declare (cache ~w (incremental private)) for a watched private table, \c
+       preserve the other policy words when adding private, or call the \c
+       shared table outside the transaction'-[Name] ].
 metta_tabling_refusal(Name, reads_unwatched(Kind, Reads)) -->
     { metta_tabling_reads_text(Reads, Text) },
     [ 'its body reads ~w and a ~w table cannot watch a read on SWI-Prolog \c
@@ -932,7 +962,7 @@ metta_tabling_read(Operation, Space, Pattern, Reads) :-
     findall(Storage:Functor/Arity,
             ( member(Shape, Shapes),
               length(Shape, Count),
-              Arity is Count + 1 ),
+              Arity is Count + 2 ),
             Reads).
 
 %The argument lists a pattern reads. A conjunction contributes one per
