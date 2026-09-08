@@ -147,6 +147,23 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_tabling,
+          [ metta_table_clear/2,
+            metta_table_clear_all/1,
+            metta_table_statistics/2,
+            metta_tabled_decl/2,
+            metta_tabling_reads/4,
+            metta_tabling_target/4,
+            metta_untabled_decl/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 :- multifile prolog:error_message//1.
 
 %A tabled call is another owner of the universal call-dispatch seam. Like
@@ -184,30 +201,13 @@
 %That lane exists for exactly this, a module boundary broken with every other
 %lane still green.
 %
-%An autoload/2 DECLARATION rather than a use_module/2, and the difference is
-%measured: this file is loaded by every boot and wfs is needed only where a
-%restrained table is read, so loading it eagerly charges every program that
-%never restrains anything. The parity corpus's tabling row reads 138,172
-%inferences on trunk, 140,178 with `use_module` and 138,995 with this
-%[measured 2026-09-07; command=swipl tests/fixtures/parity_driver.pl <root>
-%examples/ch18-performance/18-02-memoisation-and-tabling/09-tabling_fib.metta].
-%An explicit declaration is honoured with the `autoload` flag false, which is
-%the whole point of naming the file [tested: the GATE no-autoload lane, 258
-%examples; commit=11afdcdbad5bbbe37168b5d8528c23a21c42b4b6].
-%The declaration itself is in engine/metta.pl, beside the engine's own
-%`autoload(library(uuid))`, and it has to be: this file has no module of
-%its own, so it loads into `user` where that directive already defined
-%SWI's `'$autoload'/3` table, and a SECOND file adding to it prints
-%`Redefined static procedure '$autoload'/3` on stderr once per load. The
-%`petta` conformance lane compares this engine's output against upstream's
-%line for line and blocked on tabling_fib.metta with nothing but that
-%warning between them [measured 2026-09-07: GATE_ONLY=1 sh check.sh,
-%`petta: 1 entries block the gate`; with the declaration moved the same
-%lane reports 154/156 agreeing and 0 blocking; commit=c2fe16d7daecca88683c097dbd9f09a09db803b8]. The
-%multifile declaration that would let it live here is not available
-%either: this tree's seam scan reads any multifile under engine/ or lib/
-%as a seam needing a seam:kind/2 fact, and SWI's autoload table is not
-%one of this tree's seams.
+% Load wfs when a restraint needs call_delays/2. This declaration belongs to
+% lib_tabling and cannot replace metta_engine's library(uuid) autoload table.
+% Explicit autoload declarations also work when general autoload is disabled.
+% [tested: engine_modules:the_engines_autoload_table_survives_a_librarys,
+% sh check.sh no-autoload; commit=WORKTREE]
+
+:- autoload(library(wfs), [call_delays/2]).
 
 
 %A MeTTa call form arrives as a list, possibly under one quote; the

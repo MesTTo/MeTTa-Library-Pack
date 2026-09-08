@@ -21,6 +21,18 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_crypto,
+          [ crypto_hash/3,
+            crypto_random_hex/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 %The load and census are one act, as they are for library(json). A missing
 %crypto library records the capability absent without swallowing any failure
 %from a library that did resolve. library(sha) is part of the reduced seat and

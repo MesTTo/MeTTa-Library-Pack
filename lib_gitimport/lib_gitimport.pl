@@ -18,6 +18,25 @@
 %     never chose is not a pin [tested: tests/shell/test_git_import.sh, the two
 %     pin checks after the arity family; commit=ff4257005f562786e3ef7a5a37ce94b7d80e782d].
 
+
+:- module(lib_gitimport,
+          [ 'git-import!'/2,
+            'git-import!'/3,
+            'git-import!'/4,
+            'git-import!'/5,
+            acquire_declared_dependencies/1,
+            git_pinned_dependency/2,
+            % git_library_path/2 is read by engine/metta.pl's library/3, which resolves a
+            % (library <alias> <file>) spec against a fetched dependency's directory.
+            git_library_path/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(filesex)).
 %This file loads at BOOT, from engine/metta.pl's own ensure_loaded list, so it
 %cannot use the pre-load declaration lib/lib_thread/lib_thread.pl carries: nothing is

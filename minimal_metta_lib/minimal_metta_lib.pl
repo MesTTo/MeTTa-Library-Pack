@@ -36,6 +36,20 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_minimal_metta,
+          [ 'collapse-bind'/2,
+            'superpose-bind'/2,
+            'unify-mod'/5,
+            function/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 :- use_module(library(lists)).
 
 metta_function_limit(1000).

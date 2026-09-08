@@ -13,6 +13,20 @@
 % Owns resources: an imports descriptor owns no handle or copied rows.
 % Guarded by: metta_unimport/2 serializes source changes with metta_loader.
 
+
+:- module(lib_import,
+          [ 'static-import!'/3,
+            'unimport!'/3,
+            'use-module!'/2,
+            imports/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 :- multifile seam:foreign_space/1, seam:foreign_capability/2,
              seam:foreign_atoms/2, seam:foreign_refuse/2.
 
@@ -171,4 +185,6 @@ static_import_outcome(Outcome, MettaFile, PlFile) :-
     ).
 
 
-'use-module!'(Module, true) :- use_module(library(Module)).
+% The imported exports belong to the host tier that every space inherits.
+% [tested: lib_import:use_module_imports_into_the_shared_host_tier; commit=WORKTREE]
+'use-module!'(Module, true) :- user:use_module(library(Module)).

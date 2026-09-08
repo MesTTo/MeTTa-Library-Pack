@@ -43,6 +43,21 @@
 %   Hacks: None
 %   Future Enhancements: None
 
+
+:- module(lib_json,
+          [ 'dict-space'/2,
+            'get-keys'/2,
+            'get-value'/3,
+            'json-decode'/2,
+            'json-encode'/2
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 :- use_module('../../engine/json_codec',
               [ json_codec_read/3, json_codec_write/3 ]).
 :- use_module(library(lists)).

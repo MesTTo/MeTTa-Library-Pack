@@ -15,6 +15,18 @@
 %   measured 2026-09-05: engine boot 536,337 with the boot load against 532,641
 %   without; commit=b96e1a15260b7538a8e42be613bcc5dd0dddd136].
 
+
+:- module(lib_observe,
+          [ 'observe-source'/4,
+            'trace-source'/5
+          ]).
+
+% Guarantees: private helpers and autoload declarations belong to this module.
+% [tested: engine_modules; commit=WORKTREE]
+% Assumes: engine operations resolve through metta_engine's published exports.
+% [source: engine/metta.pl:metta_engine_reexport/2; commit=WORKTREE]
+:- set_module(base(metta_engine)).
+
 :- use_module('../../engine/tracer', [metta_trace_source/6]).
 :- use_module('../../engine/spaces', [metta_add_atoms/2, metta_release_space/1]).
 
