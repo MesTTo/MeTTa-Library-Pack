@@ -1,7 +1,7 @@
 ; Purpose: declare the type surface of MeTTa's shipped builtins, its type-kind
 ; markers included, for engine reflection and optional live typed dispatch.
 ; Guarantees: Kwargs holds zero or more pairs through one (:seg Atom) arrow
-;   [tested: variadic_arrows; commit=WORKTREE].
+;   [tested: variadic_arrows; commit=6031c83ab3002b5703cb6fcb10e70a60a89f4ad7].
 ; Guarantees:
 ;   - reader-token registration takes a regex string and readable constructor
 ;     symbol, while removal takes the same regex string [tested:
