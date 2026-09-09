@@ -1,5 +1,7 @@
 ; Purpose: declare the type surface of MeTTa's shipped builtins, its type-kind
 ; markers included, for engine reflection and optional live typed dispatch.
+; Guarantees: Kwargs holds zero or more pairs through one (:seg Atom) arrow
+;   [tested: variadic_arrows; commit=WORKTREE].
 ; Guarantees:
 ;   - reader-token registration takes a regex string and readable constructor
 ;     symbol, while removal takes the same regex string [tested:
@@ -187,7 +189,7 @@
 (: prog1 (-> Atom %Undefined%))
 (: forall (-> Atom Atom Bool))
 (: foldall (-> Atom Atom %Undefined% %Undefined%))
-(: nop (-> (%Rest% %Undefined%) (->)))
+(: nop (-> (:seg %Undefined%) (->)))
 
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
@@ -550,15 +552,9 @@
 ;; `reverse` builtin and the whole form vanished. The VALUE half is evaluated
 ;; at the call, so `(Kwargs (n (+ 1 2)))` passes 3.
 ;;
-;; One declaration per arity because MeTTa has no variadic type and the mask is
-;; per position. Six pairs is well past what any call site uses; a seventh
-;; simply gets the old behaviour rather than an error.
-(: Kwargs (-> Atom %Undefined%))
-(: Kwargs (-> Atom Atom %Undefined%))
-(: Kwargs (-> Atom Atom Atom %Undefined%))
-(: Kwargs (-> Atom Atom Atom Atom %Undefined%))
-(: Kwargs (-> Atom Atom Atom Atom Atom %Undefined%))
-(: Kwargs (-> Atom Atom Atom Atom Atom Atom %Undefined%))
+;; The final splice presents one held Atom parameter per pair, including an
+;; empty run. Its mask has no arity ceiling.
+(: Kwargs (-> (:seg Atom) %Undefined%))
 (: library (-> %Undefined% %Undefined%))
 (: git-import! (-> String Bool))
 ;; A library that rests on a seat says so, and the engine answers by name when
