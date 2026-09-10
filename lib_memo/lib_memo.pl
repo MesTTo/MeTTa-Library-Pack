@@ -1,5 +1,8 @@
 % Purpose: memoize MeTTa function calls with C-trie exact bags or bounded
 %   LRU/WTinyLFU storage and dependency-based invalidation.
+% Assumes: metta_function_cacheable/2 reads volatility at each defining home
+%   [tested: reference_loading:prolog_export_properties_belong_to_the_home_and_leave_with_its_source;
+%   commit=90ba93eb8f6e98ebfefc55416859bf13de6a8427].
 % Guarantees: a written declaration is honoured as written, whatever the body
 %   or its arrows say, and no annotation arriving later withdraws it; removing
 %   a cache owner retires its metadata and any remaining table [tested:
@@ -742,8 +745,8 @@ memo_cache_override(Fun, Mode) :-
 %the volatility test is one indexed lookup that fails for every name no library
 %declared, so it leads; below, the walk over the body is what the lookup can
 %save, so it follows.
-memo_automatic_unsafe_reason(Fun, _, [volatile, Fun]) :-
-    \+ metta_function_cacheable(Fun),
+memo_automatic_unsafe_reason(Fun, Module, [volatile, Fun]) :-
+    \+ metta_function_cacheable(Module, Fun),
     \+ memo_cache_override(Fun, force),
     !.
 memo_automatic_unsafe_reason(Fun, Module, 'explicit-tabling') :-

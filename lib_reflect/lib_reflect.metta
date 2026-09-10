@@ -1,3 +1,7 @@
+; Purpose: expose the engine's surface and defining origins as data.
+; Guarantees: origin-of projects get-property's occurrence origins, including
+;   deferred definitions [tested: head_properties:origin_of_delegates_without_forcing_a_definition; commit=90ba93eb8f6e98ebfefc55416859bf13de6a8427].
+;
 ;The engine's own surface, as data you can match.
 ;
 ;Two consumers want this and both currently guess. metta-lsp computes its
@@ -51,20 +55,14 @@
       (@return "True or False"))
 (= (knows? $name) (engine-knows $name))
 
-;Where a name came from: (builtin), (special-form), (prolog "file.pl"),
-;(python det), (specialization <name>), or (equation <module>). A flat list of
-;function names cannot tell an equation from a registered Prolog predicate,
-;which is the question a collision raises and the one a library asks to verify
-;its own installation.
-;
-;(specialization <name>) is the one the ENGINE wrote. Evaluating a
-;higher-order call stores a generated equation under a name like
-;twice_Spec_[inc], and those atoms save and digest like any other, so a tool
-;showing a program what it holds had no way to tell them from source and
-;presented engine bookkeeping as the program. The detail is the name being
-;specialized, which is what a reader wants next.
-(: origin-of (-> %Undefined% Expression))
-(= (origin-of $name) (engine-origin $name))
+;An origin names the defining space and the available source position. The
+;engine-origin compatibility door still reports implementation tiers.
+(@doc origin-of
+      (@desc "The (origin space file line) rows from get-property, one per defining occurrence; an unavailable line is -1"))
+(: origin-of (-> Atom Expression))
+(= (origin-of $name)
+   (let (origin $space $file $line) (get-property $name)
+     (origin $space $file $line)))
 
 ;Every extension point the engine declares, as (name arity kind). The kind
 ;says what a handler may do in it: an event or declaration seam has every
