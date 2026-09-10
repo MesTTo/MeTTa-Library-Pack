@@ -39,6 +39,10 @@
 :- metta_requires(redis).
 :- metta_platform_load(redis).
 :- use_module(library(broadcast)).
+% Guarantees: initialization, listener and readiness identifiers resolve
+% uuid/1 from its declared provider with autoload disabled
+% [tested: sh check.sh no-autoload; commit=WORKTREE].
+:- use_module(library(uuid), [uuid/1]).
 
 %Space, command connection, pub/sub connection, subscription thread,
 %listener identity, set key, channel.
