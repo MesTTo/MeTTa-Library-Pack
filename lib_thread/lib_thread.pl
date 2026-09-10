@@ -3,6 +3,10 @@
 %   channel backpressure and blocking host calls release those carriers.
 %   Every predicate follows the compiled convention, inputs then one output.
 % Assumes:
+%   - user:metta_py_dispatch/4 identifies the loaded Python seat for context
+%     capture [tested:
+%     test_context_snapshot_crosses_every_spawn_door_including_thread_workers;
+%     commit=8358dfc233bf299bb23eceddd94593a62372fe4b].
 %   - eval_metta_in_module/3 in engine/translator.pl evaluates one MeTTa
 %     expression under a named space's module, which is what a worker thread
 %     needs because SWI global variables are thread-local [source:
@@ -1484,7 +1488,7 @@ metta_capture_python_context(Context) :-
     scope_current_(Scope),
     (   nb_current('$metta_python_context', Parent), integer(Parent)
     ->  user:py_call(metta_ops:fork_context(Parent), Python)
-    ;   current_predicate(metta_py_dispatch_det/3)
+    ;   current_predicate(user:metta_py_dispatch/4)
     ->  user:py_call(metta_ops:capture_context(), Python)
     ;   Python = none
     ),
@@ -1497,7 +1501,7 @@ metta_capture_python_contexts(Count, Contexts) :-
     scope_current_(Scope),
     (   nb_current('$metta_python_context', Parent), integer(Parent)
     ->  user:py_call(metta_ops:fork_contexts(Parent, Count), Pythons)
-    ;   current_predicate(metta_py_dispatch_det/3)
+    ;   current_predicate(user:metta_py_dispatch/4)
     ->  user:py_call(metta_ops:capture_contexts(Count), Pythons)
     ;   length(Pythons, Count), maplist(=(none), Pythons)
     ),

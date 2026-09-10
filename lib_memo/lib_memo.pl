@@ -28,6 +28,11 @@
 %     places an equation in a space
 %     [source: engine/spaces.pl, metta_remove_atom/3]
 % Guarantees:
+%   - an inference limit cannot leave automatic reconciliation suppressed;
+%     unset worker-local markers are inactive [tested:
+%     memo_reconciliation_interrupt:every_budget_restores_the_guard,
+%     test_profile_counts_after_interrupted_reconciliation,
+%     test_occurrences_after_interrupted_reconciliation; commit=8358dfc233bf299bb23eceddd94593a62372fe4b].
 %   - A call this library answers from its cache is still a CALL to whatever is
 %     watching: the dispatcher declares itself through
 %     seam:interposed_dispatch/4, so a memoised head's reduction is recorded
@@ -599,8 +604,6 @@ memo_state_modules(Fun, Modules) :-
         Raw),
     sort(Raw, Modules).
 
-:- thread_local memo_automatic_reconciling/0.
-
 %A policy write is rare and may force a non-recursive function, so it takes
 %the wider function-view lookup. Equation changes stay on the candidate index
 %above, keeping unrelated source definitions off the decision path.
@@ -617,16 +620,19 @@ memo_automatic_mark_dirty(Module) :-
     ( memo_automatic_dirty(Module) -> true
     ; assertz(memo_automatic_dirty(Module)) ).
 
-memo_automatic_reconcile_dirty :- memo_automatic_reconciling, !.
+% Workaround: swi-cleanup-window - trail the active marker so an inference limit owes no guard cleanup.
+% A library can load after workers exist. A missing marker is inactive,
+% without requiring a thread-initialization default in those workers.
+memo_automatic_reconcile_dirty :-
+    nb_current('$metta_memo_reconciling', true), !.
 memo_automatic_reconcile_dirty :-
     findall(Module, retract(memo_automatic_dirty(Module)), Modules0),
     sort(Modules0, Modules),
     (   Modules == []
     ->  true
-    ;   setup_call_cleanup(
-            asserta(memo_automatic_reconciling, Ref),
-            memo_automatic_reconcile_modules(Modules),
-            erase(Ref))
+    ;   b_setval('$metta_memo_reconciling', true),
+        memo_automatic_reconcile_modules(Modules),
+        nb_setval('$metta_memo_reconciling', false)
     ).
 
 %Compute every dirty module before changing any dispatch. Then publish the
