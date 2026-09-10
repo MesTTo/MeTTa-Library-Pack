@@ -1,6 +1,6 @@
 ; Purpose: expose the engine's surface and defining origins as data.
 ; Guarantees: origin-of projects get-property's occurrence origins, including
-;   deferred definitions [tested: head_properties:origin_of_delegates_without_forcing_a_definition; commit=WORKTREE].
+;   deferred definitions [tested: head_properties:origin_of_delegates_without_forcing_a_definition; commit=90ba93eb8f6e98ebfefc55416859bf13de6a8427].
 ;
 ;The engine's own surface, as data you can match.
 ;

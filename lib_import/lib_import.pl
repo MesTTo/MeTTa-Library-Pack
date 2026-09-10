@@ -18,7 +18,7 @@
 %   commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
 % Guarded by: metta_loader serializes static payload use; metta_unimport/2
 %   owns a keyed source flight [source: engine/metta/interop.pl:metta_unimport/2;
-%   commit=WORKTREE].
+%   commit=90ba93eb8f6e98ebfefc55416859bf13de6a8427].
 
 
 :- module(lib_import,

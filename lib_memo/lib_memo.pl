@@ -2,7 +2,7 @@
 %   LRU/WTinyLFU storage and dependency-based invalidation.
 % Assumes: metta_function_cacheable/2 reads volatility at each defining home
 %   [tested: reference_loading:prolog_export_properties_belong_to_the_home_and_leave_with_its_source;
-%   commit=WORKTREE].
+%   commit=90ba93eb8f6e98ebfefc55416859bf13de6a8427].
 % Guarantees: a written declaration is honoured as written, whatever the body
 %   or its arrows say, and no annotation arriving later withdraws it; removing
 %   a cache owner retires its metadata and any remaining table [tested:
