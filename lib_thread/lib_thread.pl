@@ -15,7 +15,7 @@
 %     the wait began or another awaiter owns the native join; interruption
 %     propagates and a later await can take over; pool_stats/2 reads one manager
 %     snapshot [tested:
-%     lib_thread_completion; commit=WORKTREE].
+%     lib_thread_completion; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043].
 %   - scope_body/2 and scope_close/4 join their child tree, cancel siblings on
 %     failure, transfer explicitly kept spaces and revoke every released alias
 %     [tested: lib_thread_scope,
@@ -298,7 +298,7 @@
 %switch engines. This wait does not establish safety for a caller exit hook
 %that itself switches engines [source:
 %https://github.com/SWI-Prolog/swipl-devel/blob/V10.1.13/src/pl-thread.c:start_thread,freePrologThread
-%and library/thread_pool.pl:worker_exitted/3; commit=WORKTREE].
+%and library/thread_pool.pl:worker_exitted/3; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043].
 %
 %The wait POLLS, because SWI publishes thread completion only through
 %thread_property/2 and the blocking wait for it IS thread_join/2, the call that
@@ -1777,11 +1777,11 @@ future_join_(ThreadId) :-
 % Retry with metta_thread_settled_/2's backoff so an interrupted joiner can be
 % replaced. Await has no deadline of its own; external timeout, cancellation
 % and other exceptions propagate through both waits [tested:
-% lib_thread_completion; commit=WORKTREE]. The worker is the unaliased thread
+% lib_thread_completion; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043]. The worker is the unaliased thread
 % blob retained by a known future, so disappearance means an earlier join
 % finished, including a repeat await; a recycled integer id is never used
 % [source: lib/lib_thread/lib_thread.pl, pool_submit_context_/5 and
-% timer_dispatch_worker_/7; commit=WORKTREE]. The one-join rule is documented
+% timer_dispatch_worker_/7; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043]. The one-join rule is documented
 % at https://www.swi-prolog.org/pldoc/man?predicate=thread_join/2.
 future_join_recover_(Thread, error(existence_error(thread, Thread), _), _) :- !.
 future_join_recover_(Thread, Error, Delay) :-
