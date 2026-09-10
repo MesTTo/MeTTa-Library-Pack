@@ -15,6 +15,11 @@
 %     and calls each goal once [source 2026-08-15:
 %     /usr/lib/swi-prolog/library/thread.pl, workers/2 and once_in_module/5]
 % Guarantees:
+%   - await joins a native worker even when its result was published before
+%     the wait began or another awaiter owns the native join; interruption
+%     propagates and a later await can take over; pool_stats/2 reads one manager
+%     snapshot [tested:
+%     lib_thread_completion; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043].
 %   - scope_body/2 and scope_close/4 join their child tree, cancel siblings on
 %     failure, transfer explicitly kept spaces and revoke every released alias
 %     [tested: lib_thread_scope,
@@ -290,14 +295,14 @@
 %exactly such workers, straight after a thread_signal(_, abort) that a thread
 %inside engine_create/3 does not survive cleanly either.
 %
-%A thread whose status has left `running` has finished its goal, and SWI runs
-%no further Prolog on it, so its pthread_t is valid and stays valid: start_thread
-%calls set_thread_completion BEFORE the cleanup that ends the thread, and
-%nothing after that point calls PL_set_engine on it
-%[source: SWI-Prolog 10.1.13 src/pl-thread.c:2167 start_thread, :2139
-%set_thread_completion; commit=2421d06e697daffb0797c307a798131616ebdd8e].
-%Waiting for that is what makes the
-%join safe, and it is the whole of the difference.
+%A thread whose status has left `running` has finished its body. Waiting for
+%that excludes the body's engine-switch window. SWI still runs its exit hooks:
+%start_thread publishes completion before freePrologThread calls them. The
+%default pool hook sends exitted to the manager, then calls true; it does not
+%switch engines. This wait does not establish safety for a caller exit hook
+%that itself switches engines [source:
+%https://github.com/SWI-Prolog/swipl-devel/blob/V10.1.13/src/pl-thread.c:start_thread,freePrologThread
+%and library/thread_pool.pl:worker_exitted/3; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043].
 %
 %The wait POLLS, because SWI publishes thread completion only through
 %thread_property/2 and the blocking wait for it IS thread_join/2, the call that
@@ -316,7 +321,8 @@ metta_thread_join_settled(Thread, Status) :-
 %A thread that has gone entirely counts as settled: thread_join/2 then reports
 %the existence error, which is what every caller here already catches.
 metta_thread_settled_(Thread, Delay) :-
-    (   catch(thread_property(Thread, status(Status)), _, Status = gone),
+    (   catch(thread_property(Thread, status(Status)),
+              error(existence_error(thread, Thread), _), Status = gone),
         Status \== running
     ->  true
     ;   sleep(Delay),
@@ -1733,8 +1739,9 @@ scheduler_future_settle_(Task, Space, Outcome) :-
         scheduler_future_settle_(Task, Space, Outcome)
     ).
 
-scheduler_future_probe_(_, Space, ready(Outcome, none)) :-
-    metta_future_result(Space, Outcome), !.
+scheduler_future_probe_(_, Space, ready(Outcome, Worker)) :-
+    metta_future_result(Space, Outcome), !,
+    known_future_(Space, Worker, _).
 scheduler_future_probe_(_, Space, ready(Outcome, Worker)) :-
     known_future_(Space, Worker, Done),
     message_queue_property(Done, size(Pending)),
@@ -1749,10 +1756,10 @@ scheduler_future_probe_(Task, Space, pending) :-
     ).
 
 future_outcome_(Space, Outcome, Worker) :-
+    known_future_(Space, Worker, Done),
     (   metta_future_result(Space, Recorded)
-    ->  Outcome = Recorded, Worker = none
-    ;   known_future_(Space, Worker, Done),
-        thread_get_message(Done, Received),
+    ->  Outcome = Recorded
+    ;   thread_get_message(Done, Received),
         future_record_received_(Space, Received, Outcome)
     ).
 
@@ -1767,7 +1774,37 @@ future_join_(scheduler(_)) :- !.
 future_join_(async(_)) :- !.
 future_join_(none) :- !.
 future_join_(ThreadId) :-
-    catch(metta_thread_join_settled(ThreadId, _), _, true).
+    catch(metta_thread_join_settled(ThreadId, _), Error,
+          future_join_recover_(ThreadId, Error, 0.0005)).
+
+% SWI admits one joiner; a losing awaiter must still wait for worker cleanup.
+% Retry with metta_thread_settled_/2's backoff so an interrupted joiner can be
+% replaced. Await has no deadline of its own; external timeout, cancellation
+% and other exceptions propagate through both waits [tested:
+% lib_thread_completion; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043]. The worker is the unaliased thread
+% blob retained by a known future, so disappearance means an earlier join
+% finished, including a repeat await; a recycled integer id is never used
+% [source: lib/lib_thread/lib_thread.pl, pool_submit_context_/5 and
+% timer_dispatch_worker_/7; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043]. The one-join rule is documented
+% at https://www.swi-prolog.org/pldoc/man?predicate=thread_join/2.
+future_join_recover_(Thread, error(existence_error(thread, Thread), _), _) :- !.
+future_join_recover_(Thread, Error, Delay) :-
+    Error = error(permission_error(join, thread, Thread), _), !,
+    catch(( thread_property(Thread, detached(false)),
+            thread_self(Self), Thread \== Self
+          -> State = contended
+          ; State = invalid ),
+          error(existence_error(thread, Thread), _), State = joined),
+    (   State == joined
+    ->  true
+    ;   State == contended
+    ->  sleep(Delay),
+        Next is min(Delay * 2, 0.032),
+        catch(metta_thread_join_settled(Thread, _), RetryError,
+              future_join_recover_(Thread, RetryError, Next))
+    ;   throw(Error)
+    ).
+future_join_recover_(_, Error, _) :- throw(Error).
 
 known_future_(Space, ThreadId, Done) :-
     (   metta_future(Space, ThreadId, Done)
@@ -2094,11 +2131,16 @@ pool_stats(Name, Stats) :-
     ->  true
     ;   existence_error(metta_thread_pool, Name)
     ),
+    % An unbound property request copies all properties from one manager
+    % state. Separate requests can combine running and free from different
+    % states: SWI-Prolog thread_pool.pl, pool_properties/3 and pool_property/2.
+    % https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/library/thread_pool.pl
+    findall(Property, thread_pool_property(Name, Property), Properties),
     findall([Key, Value],
             % policy-inventory-exempt: mechanism-internal; reason=these are the fixed SWI thread_pool_property keys exposed by the pool statistics adapter; evidence=lib/lib_thread/lib_thread.pl:pool_stats/2
             ( member(Key, [size, running, backlog, free]),
               Property =.. [Key, Value],
-              catch(thread_pool_property(Name, Property), _, fail) ),
+              memberchk(Property, Properties) ),
             Stats).
 
 pool_destroy(Name, true) :-
