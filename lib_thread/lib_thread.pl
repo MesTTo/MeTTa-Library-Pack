@@ -298,7 +298,7 @@
 %A thread whose status has left `running` has finished its body. Waiting for
 %that excludes the body's engine-switch window. SWI still runs its exit hooks:
 %start_thread publishes completion before freePrologThread calls them. The
-%default pool hook sends exitted to the manager, then calls true; it does not
+%default pool hook reports exit to the manager, then calls true; it does not
 %switch engines. This wait does not establish safety for a caller exit hook
 %that itself switches engines [source:
 %https://github.com/SWI-Prolog/swipl-devel/blob/V10.1.13/src/pl-thread.c:start_thread,freePrologThread
