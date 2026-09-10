@@ -29,7 +29,7 @@
 %     unset worker-local markers are inactive [tested:
 %     memo_reconciliation_interrupt:every_budget_restores_the_guard,
 %     test_profile_counts_after_interrupted_reconciliation,
-%     test_occurrences_after_interrupted_reconciliation; commit=WORKTREE].
+%     test_occurrences_after_interrupted_reconciliation; commit=8358dfc233bf299bb23eceddd94593a62372fe4b].
 %   - A call this library answers from its cache is still a CALL to whatever is
 %     watching: the dispatcher declares itself through
 %     seam:interposed_dispatch/4, so a memoised head's reduction is recorded

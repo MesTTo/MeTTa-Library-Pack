@@ -41,7 +41,7 @@
 :- use_module(library(broadcast)).
 % Guarantees: initialization, listener and readiness identifiers resolve
 % uuid/1 from its declared provider with autoload disabled
-% [tested: sh check.sh no-autoload; commit=WORKTREE].
+% [tested: sh check.sh no-autoload; commit=8358dfc233bf299bb23eceddd94593a62372fe4b].
 :- use_module(library(uuid), [uuid/1]).
 
 %Space, command connection, pub/sub connection, subscription thread,

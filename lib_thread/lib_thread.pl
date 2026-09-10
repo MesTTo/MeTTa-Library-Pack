@@ -6,7 +6,7 @@
 %   - user:metta_py_dispatch/4 identifies the loaded Python seat for context
 %     capture [tested:
 %     test_context_snapshot_crosses_every_spawn_door_including_thread_workers;
-%     commit=WORKTREE].
+%     commit=8358dfc233bf299bb23eceddd94593a62372fe4b].
 %   - eval_metta_in_module/3 in engine/translator.pl evaluates one MeTTa
 %     expression under a named space's module, which is what a worker thread
 %     needs because SWI global variables are thread-local [source:
