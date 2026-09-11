@@ -2,14 +2,14 @@
 % Guarantees: current objects need no subprocess service; publication is atomic
 % and a failed rebuild preserves the previous object
 % [tested: test_native_build_is_atomic_and_reused,
-% test_warm_native_build_needs_no_process_library; commit=28c6146d805b5adba3047ffc72b2508c11816636].
+% test_warm_native_build_needs_no_process_library; commit=WORKTREE].
 % Owns resources: the file lock closes on every exit; cancellation joins the
 % compiler before removing its stage
-% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=28c6146d805b5adba3047ffc72b2508c11816636].
+% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=WORKTREE].
 % Guarded by: an object-path mutex protects threads; build.lock protects processes
-% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=28c6146d805b5adba3047ffc72b2508c11816636].
+% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=WORKTREE].
 
-:- module(native_build, [native_object/5]).
+:- module(native_build, [native_object/6]).
 :- use_module(library(filesex), [directory_file_path/3, make_directory_path/1]).
 :- use_module(library(lists), [append/3]).
 :- if(absolute_file_name(library(process), _,
@@ -17,7 +17,7 @@
 :- autoload(library(process), [process_create/3, process_wait/2]).
 :- endif.
 
-native_object(Source, Recipe, Stem, Links, Object) :-
+native_object(Source, Dependencies, Recipe, Stem, Links, Object) :-
     file_directory_name(Recipe, Support),
     directory_file_path(Support, '../.native', Cache),
     current_prolog_flag(arch, Arch),
@@ -25,8 +25,8 @@ native_object(Source, Recipe, Stem, Links, Object) :-
     current_prolog_flag(shared_object_extension, Extension),
     format(atom(Name), '~w-~w-~d.~w', [Stem, Arch, Version, Extension]),
     directory_file_path(Cache, Name, Object),
-    source_file(native_object(_, _, _, _, _), Builder),
-    Inputs = [Source, Recipe, Builder],
+    source_file(native_object(_, _, _, _, _, _), Builder),
+    Inputs = [Source, Recipe, Builder|Dependencies],
     with_mutex(Object, ensure_object(Inputs, Links, Cache, Object)).
 
 ensure_object(Inputs, _, _, Object) :- current_object(Inputs, Object), !.
