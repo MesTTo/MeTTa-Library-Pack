@@ -1,15 +1,15 @@
 % Purpose: compute numeric vectors through native exact arithmetic.
 % Assumes: SWI-Prolog has unbounded integers and rational arithmetic.
-% [source: lib/lib_vector/lib_vector.pl:require_exact_runtime/0; commit=WORKTREE].
+% [source: lib/lib_vector/lib_vector.pl:require_exact_runtime/0; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 % Guarantees: complete numeric inputs are validated, finite reductions round
 % only their final result, and named errors retain their formal terms.
-% [tested: lib_vector_surface, test_vector_exact_reductions; commit=WORKTREE].
+% [tested: lib_vector_surface, test_vector_exact_reductions; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 % Owns resources: random construction consumes the caller thread's existing
 % generator; numeric results and temporaries require no explicit release.
-% [tested: lib_vector_surface:random_draw_order_and_state; commit=WORKTREE].
+% [tested: lib_vector_surface:random_draw_order_and_state; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 % Decides: exact scalar inputs stay exact, floating scalar inputs round once,
 % zero directions retain IEEE NaNs, and negative random counts draw nothing.
-% [tested: lib_vector_surface, test_vector_ieee_arithmetic; commit=WORKTREE].
+% [tested: lib_vector_surface, test_vector_ieee_arithmetic; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 
 :- module(lib_vector,
           [dot/3, norm/2, cosine/3, 'cosine-of-normalized'/3,
