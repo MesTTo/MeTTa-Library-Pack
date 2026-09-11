@@ -1,12 +1,12 @@
 /* Purpose: provide length-aware literal operations and exact String metrics.
    Assumes: public wrappers coerce text; foreign entry points still check types.
-   [source: lib/lib_string/lib_string.pl:metta_text/2, lib/lib_string/support/string_native.cpp:text_codes; commit=WORKTREE].
+   [source: lib/lib_string/lib_string.pl:metta_text/2, lib/lib_string/support/string_native.cpp:text_codes; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
    Guarantees: NUL and supplementary scalars retain their codepoint positions.
-   [tested: lib_string_surface, test_string_unicode_oracles; commit=WORKTREE].
+   [tested: lib_string_surface, test_string_unicode_oracles; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
    Owns resources: local RAII buffers are released on success, failure and exception.
-   No query state survives a call. [source: lib/lib_string/support/string_native.cpp:boundary; commit=WORKTREE].
+   No query state survives a call. [source: lib/lib_string/support/string_native.cpp:boundary; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
    Decides: literal matching shares KMP; pending signals are checked during owned
-   walks and at RapidFuzz's call boundaries. [tested: lib_string_surface; commit=WORKTREE].
+   walks and at RapidFuzz's call boundaries. [tested: lib_string_surface; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
 */
 #include <SWI-Prolog.h>
 #include <algorithm>

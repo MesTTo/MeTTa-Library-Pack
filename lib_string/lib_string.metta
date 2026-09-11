@@ -1,6 +1,6 @@
 ; Purpose: expose String operations through their Prolog declarations.
 ; Guarantees: each carried head has generated arrow types and documentation.
-; [tested: prolog-face; commit=WORKTREE].
+; [tested: prolog-face; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
 ; Text accepts Strings, Symbols and Numbers; text results remain Strings.
 ; See README.md for codepoint, overlap, empty-input and native-provider contracts.
 ; Positional formatting remains the engine's format-args operation.
