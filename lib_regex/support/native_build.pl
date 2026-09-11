@@ -1,15 +1,15 @@
 % Purpose: build and locate lib_regex's private PCRE2 binding.
 % Guarantees: a successful build replaces the object atomically; failed builds
 % leave no stage and preserve an existing object
-% [tested: test_native_build_is_atomic_and_reused; commit=WORKTREE].
+% [tested: test_native_build_is_atomic_and_reused; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 % Owns resources: the file lock closes on every exit. An interrupted caller
 % waits for its compiler before removing the temporary object
-% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=WORKTREE].
+% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 % Guarded by: lib_regex_native_build serializes threads; build.lock serializes
 % processes sharing the same library directory
-% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=WORKTREE].
+% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 % Decides: the native object is local to the library and host SWI ABI
-% [source: lib/lib_regex/support/native_build.pl:native_object; commit=WORKTREE].
+% [source: lib/lib_regex/support/native_build.pl:native_object; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 
 :- module(lib_regex_native_build, [native_object/1]).
 :- use_module(library(filesex), [directory_file_path/3, make_directory_path/1]).

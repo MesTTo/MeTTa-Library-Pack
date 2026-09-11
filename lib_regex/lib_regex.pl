@@ -1,15 +1,15 @@
 % Purpose: expose compiled PCRE2 matching, captures, ranges and substitution.
 % Guarantees: zero-width matches retain valid nonempty alternatives; ranges use
 % Unicode character offsets; matching operations accept the same compiled blob
-% [tested: lib_regex; commit=WORKTREE].
+% [tested: lib_regex; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 % Owns resources: compiled blobs are immutable and reclaimed by atom collection;
 % native matching frees its match data and optional boundary index on every exit
-% [source: lib/lib_regex/vendor/pcre4pl.c:release_pcre; commit=WORKTREE].
+% [source: lib/lib_regex/vendor/pcre4pl.c:release_pcre; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 % Guarded by: the provider's shared tables own pattern and replacement caches
-% [source: lib/lib_regex/vendor/lib_regex_pcre.pl:re_compiled_; commit=WORKTREE].
+% [source: lib/lib_regex/vendor/lib_regex_pcre.pl:re_compiled_; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 % Decides: capture scans enumerate answers in match order; scans materialize their
 % answers before enumeration. Flags are inline PCRE2 syntax such as (?i)
-% [source: lib/lib_regex/lib_regex.pl:regex_dicts; commit=WORKTREE].
+% [source: lib/lib_regex/lib_regex.pl:regex_dicts; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 
 :- module(lib_regex,
           [regex_match/3, regex_find/3, regex_captures/3, regex_split/3,

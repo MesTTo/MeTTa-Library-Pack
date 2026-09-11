@@ -2,7 +2,7 @@
 % Assumes: the host provides library(pcre) and a compiler for the local binding.
 % Decides: compare identical two-capture Unicode scans at three input sizes;
 % each CPU time is the minimum of three runs with a precompiled pattern
-% [source: lib/lib_regex/support/benchmark.pl:benchmark_size; commit=WORKTREE].
+% [source: lib/lib_regex/support/benchmark.pl:benchmark_size; commit=7dcfe83fcf74742a1e944db240aa918596c8d4b0].
 
 :- module(lib_regex_benchmark, [regex_benchmark/0]).
 :- use_module(library(pcre), []).
