@@ -1,2 +1,0 @@
-# Purpose: keep host-specific regex build output out of source control.
-.native/
