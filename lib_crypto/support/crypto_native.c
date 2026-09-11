@@ -1,16 +1,16 @@
 /* Purpose: check OpenSSL operations at the SWI foreign-function boundary.
  * Guarantees: provider failures raise even with an empty error queue; file
  * digests read bounded buffers; password comparison uses CRYPTO_memcmp
- * [tested: test_native_provider_failures_raise, lib_crypto_surface; commit=WORKTREE].
+ * [tested: test_native_provider_failures_raise, lib_crypto_surface; commit=28c6146d805b5adba3047ffc72b2508c11816636].
  * Owns resources: each call frees its contexts and cleanses temporary secret
  * buffers on success, failure and output mismatch; stream locks are released
  * without closing the caller's stream
- * [tested: lib_crypto_surface; commit=WORKTREE].
+ * [tested: lib_crypto_surface; commit=28c6146d805b5adba3047ffc72b2508c11816636].
  * Guarded by: state is call-local; OpenSSL owns the default thread-safe DRBG
- * [source: https://github.com/openssl/openssl/blob/openssl-3.5.0/doc/man3/RAND_bytes.pod; commit=WORKTREE].
+ * [source: https://github.com/openssl/openssl/blob/openssl-3.5.0/doc/man3/RAND_bytes.pod; commit=28c6146d805b5adba3047ffc72b2508c11816636].
  * Decides: PBKDF2-SHA512 derives SHA512_DIGEST_LENGTH bytes, matching SWI's
  * existing password record format
- * [tested: test_password_records_interoperate_with_swi_and_hashlib; commit=WORKTREE].
+ * [tested: test_password_records_interoperate_with_swi_and_hashlib; commit=28c6146d805b5adba3047ffc72b2508c11816636].
  */
 
 #include <SWI-Prolog.h>

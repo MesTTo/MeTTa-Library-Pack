@@ -2,12 +2,12 @@
 % Guarantees: current objects need no subprocess service; publication is atomic
 % and a failed rebuild preserves the previous object
 % [tested: test_native_build_is_atomic_and_reused,
-% test_warm_native_build_needs_no_process_library; commit=WORKTREE].
+% test_warm_native_build_needs_no_process_library; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 % Owns resources: the file lock closes on every exit; cancellation joins the
 % compiler before removing its stage
-% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=WORKTREE].
+% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 % Guarded by: an object-path mutex protects threads; build.lock protects processes
-% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=WORKTREE].
+% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 
 :- module(native_build, [native_object/5]).
 :- use_module(library(filesex), [directory_file_path/3, make_directory_path/1]).

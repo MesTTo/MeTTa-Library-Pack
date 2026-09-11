@@ -1,13 +1,13 @@
 % Purpose: native digests, HMAC, secure values and password records.
 % Guarantees: provider failures raise; the reduced platform retains five SHA
 % digests and two HMAC algorithms; password mismatches return False
-% [tested: lib_crypto_surface, test_native_provider_failures_raise; commit=WORKTREE].
+% [tested: lib_crypto_surface, test_native_provider_failures_raise; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 % Owns resources: file hashing closes its binary stream on success, failure
 % and output mismatch; native temporary buffers remain within each call
-% [tested: lib_crypto_surface; commit=WORKTREE].
+% [tested: lib_crypto_surface; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 % Decides: byte lists are integers 0..255; integer intervals are [Lower, Upper).
 % Password records use PBKDF2-SHA512, 16 random salt bytes and default cost 18
-% [tested: test_password_records_interoperate_with_swi_and_hashlib; commit=WORKTREE].
+% [tested: test_password_records_interoperate_with_swi_and_hashlib; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 
 :- module(lib_crypto,
           [crypto_hash/3, 'crypto-hash'/3, crypto_random_hex/2,
