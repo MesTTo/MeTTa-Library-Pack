@@ -1,12 +1,13 @@
 % Purpose: JSON values, object spaces, document files and streaming JSON Lines.
 % Guarantees: duplicate fields remain separate answers; failed construction
-% releases its allocations; encoding refuses cycles and unrepresentable fields
-% [tested: lib_json_surface; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd].
+% releases its allocations and combines primary and cleanup errors; encoding
+% refuses cycles and unrepresentable fields
+% [tested: lib_json_surface; commit=WORKTREE].
 % Owns resources: returned objects follow the engine's space ownership; the
 % decoder does not reclaim successful answers. Readers close on exhaustion,
 % cut and error. Writers publish only after closing their staging file and
 % remove staging on every exit
-% [tested: lib_json_surface; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd].
+% [tested: lib_json_surface; commit=WORKTREE].
 % Guarded by: '$metta_native_storage' protects allocation and name reservation;
 % each encoder snapshots an object once, with a call-local library(assoc) map.
 % Concurrent changes to different objects are not one transaction
@@ -27,6 +28,7 @@
 :- use_module('../../engine/json_codec',
               [json_codec_read/3, json_codec_write/3, json_codec_write/4]).
 :- use_module('../lib_string/lib_string', [metta_text/2]).
+:- use_module('../_support/owned_resources', [with_outcome_cleanup/3]).
 :- use_module(library(apply), [maplist/2]).
 :- use_module(library(assoc), [empty_assoc/1, get_assoc/3, put_assoc/4]).
 :- use_module(library(error), [must_be/2, type_error/2, instantiation_error/1]).
@@ -46,12 +48,12 @@ lib_json_options([shape(classic), true(@(true)), false(@(false)), null(@(null))]
     json_acyclic(Pairs),
     must_be(list, Pairs),
     maplist(json_pair, Pairs),
-    setup_call_catcher_cleanup(
+    with_outcome_cleanup(
         Owned = owned([]),
         ( json_new_space(Owned, New),
           maplist(add_sexp(New), Pairs),
           Space = New ),
-        How, json_release_unreturned(How, Owned)).
+        json_release_unreturned(Owned)).
 
 json_pair(Pair) :-
     ( is_list(Pair), Pair = [_, _]
@@ -79,10 +81,10 @@ json_pair(Pair) :-
     metta_text(Text, Json),
     lib_json_options(Options),
     json_codec_read(Json, Term, Options),
-    setup_call_catcher_cleanup(
+    with_outcome_cleanup(
         Owned = owned([]),
         ( json_to_metta(Term, Decoded, Owned), Value = Decoded ),
-        How, json_release_unreturned(How, Owned)).
+        json_release_unreturned(Owned)).
 
 % The engine's allocator uses this mutex too, including foreign claims. Reserve
 % a vacant name and record ownership before creation hooks can throw.
@@ -103,8 +105,8 @@ json_available_name(Space) :-
     -> json_available_name(Space)
     ;  Space = Candidate ).
 
-json_release_unreturned(exit, _) :- !.
-json_release_unreturned(How, Owned) :-
+json_release_unreturned(_, exit) :- !.
+json_release_unreturned(Owned, How) :-
     arg(1, Owned, Spaces),
     json_release_all(Spaces, Errors),
     ( Errors == []
