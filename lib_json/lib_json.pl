@@ -1,226 +1,386 @@
-% Purpose: JSON, and the dict-as-space it decodes into. MeTTa HE's surface
-%   exactly: json-decode, json-encode, dict-space, get-keys and get-value
-%   [source 2026-08-15: MeTTa HE stdlib, JSON].
-%
-%   HE's decision is the interesting one and it is right: a JSON object becomes
-%   a SPACE of (key value) atoms, not an opaque dict value. So looking a key up
-%   is a match, a decoded document is queryable with the same operations as any
-%   other space, and there is no new type to learn.
-% Assumes:
-%   - a MeTTa string is an SWI string and a space is an atom beginning with &
-%     [source: engine/metta.pl, 'is-space'/2]
-%   - the JSON itself is engine/json_codec.pl's, the one JSON door in this
-%     repository, so this file and the Python binding's wire codec cannot
-%     disagree about what a document means or how one is spelled
-% Guarantees:
-%   - decode and encode round-trip an object, an array, a string, a number and
-%     the three literals [tested: lib_json]
-%   - encoding answers ONE LINE, the same text the wire codec produces for the
-%     same value. It used to answer library(json)'s default width(72) layout,
-%     which indents a document over many lines once it passes 72 columns: the
-%     shipped json-wire payload came back as 32,643 characters of tab-indented
-%     text where the document itself is 25,017 [measured 2026-08-28]
-%   - text after one JSON value is refused rather than silently dropped, which
-%     is what the wire codec has always done [tested:
-%     lib_json:trailing_content_after_a_document_is_refused]
-%   - the conversions are deterministic, so a recursive decode keeps last call
-%     optimisation and does not retain a frame per element [measured
-%     2026-08-15: a walk whose step leaves a choice point holds 81,600,096
-%     bytes of local stack over 300,000 elements where a deterministic step
-%     holds 0; verified here by plunit reporting no choicepoint on any
-%     lib_json test]
-%   - an unhandled shape raises existence_error(matching_rule, _) rather than
-%     failing silently, because the conversions are =>/2 rules [tested: lib_json:malformed_json_raises_rather_than_answering_empty]
-% Fails when:
-%   - the text is not JSON. That is an error naming the position, from SWI's
-%     own reader, rather than a silent failure that reads as an empty document.
-% Owns:
-%   - one storage module per decoded object, named &json-N. These live as long
-%     as the process; a decoded document is data, and dropping it silently
-%     while a caller still held the handle would be worse than keeping it.
-% Open Obligations:
-%   To Do: None
-%   Hacks: None
-%   Future Enhancements: None
-
+% Purpose: JSON values, object spaces, document files and streaming JSON Lines.
+% Guarantees: duplicate fields remain separate answers; failed construction
+% releases its allocations; encoding refuses cycles and unrepresentable fields
+% [tested: lib_json_surface; commit=WORKTREE].
+% Owns resources: returned objects follow the engine's space ownership; the
+% decoder does not reclaim successful answers. Readers close on exhaustion,
+% cut and error. Writers publish only after closing their staging file and
+% remove staging on every exit
+% [tested: lib_json_surface; commit=WORKTREE].
+% Guarded by: '$metta_native_storage' protects allocation and name reservation;
+% each encoder snapshots an object once, with a call-local library(assoc) map.
+% Concurrent changes to different objects are not one transaction
+% [source: lib/lib_json/lib_json.pl:json_new_space/2,
+% lib/lib_json/lib_json.pl:json_space_value/4; commit=WORKTREE].
+% Decides: objects are spaces, arrays are expressions, null is Null. Object
+% lookup retains get-value's key unification and answer multiplicity. JSON Lines
+% uses UTF-8 without a BOM, one value per physical line, and no blank lines
+% [tested: lib_json_surface; commit=WORKTREE].
 
 :- module(lib_json,
-          [ 'dict-space'/2,
-            'get-keys'/2,
-            'get-value'/3,
-            'json-decode'/2,
-            'json-encode'/2
-          ]).
-
-% Guarantees: private helpers and autoload declarations belong to this module.
-% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
-% Assumes: engine operations resolve through metta_engine's published exports.
-% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+          ['dict-space'/2, 'get-keys'/2, 'get-value'/3,
+           'json-decode'/2, 'json-encode'/2, 'json-pretty'/2, 'json-pretty'/3,
+           'json-read!'/2, 'json-write!'/3,
+           'json-lines-decode'/2, 'json-lines-encode'/2,
+           'json-lines-read!'/2, 'json-lines-write!'/3, 'json-at'/3]).
 :- set_module(base(metta_engine)).
-
 :- use_module('../../engine/json_codec',
-              [ json_codec_read/3, json_codec_write/3 ]).
-:- use_module(library(lists)).
+              [json_codec_read/3, json_codec_write/3, json_codec_write/4]).
+:- use_module('../lib_string/lib_string', [metta_text/2]).
+:- use_module(library(apply), [maplist/2]).
+:- use_module(library(assoc), [empty_assoc/1, get_assoc/3, put_assoc/4]).
+:- use_module(library(error), [must_be/2, type_error/2, instantiation_error/1]).
+:- use_module(library(filesex), [directory_file_path/3, delete_directory_and_contents/1]).
+:- use_module(library(lists), [nth0/3]).
+:- use_module(library(readutil), [read_stream_to_codes/2, read_line_to_codes/2]).
+:- meta_predicate json_file_write(+, 1).
 
-%The classic json([Name=Value|...]) shape, and MeTTa HE's literal vocabulary
-%read back through json_literal/2 below. One list, named once, because the
-%decode and the encode must agree about it. The name says lib_json because
-%this file is consulted INTO a space's own module, where a MeTTa equation of
-%the same name would replace it.
 lib_json_options([shape(classic), true(@(true)), false(@(false)), null(@(null))]).
 
-%The counter is a FLAG rather than a dynamic fact, and the difference is a
-%WRONG ANSWER rather than a style. A fact is source, and importing this
-%library into a SECOND space consults the file again, which put the counter
-%back to zero and made the next mint hand out a name that was already in use:
-%`(dict-space ((a 1) (b 2)))` in a second space answered a size of four,
-%because it had added its two entries on top of the first dict's two in
-%`&json-1` [tested: test_a_dict_is_a_space_a_comprehension_can_build;
-%commit=657ae9672c07b628f8a20c7fe39aa43e58b0014f]. A flag lives outside the source, so re-loading cannot
-%reset it, and its update is atomic, which is the whole of what the mutex was
-%for [source: SWI-Prolog 10.1 Reference Manual, flag/3, "The update is
-%atomic. This predicate can be used to create a shared global counter"].
-next_json_space(Space) :-
-    flag('$metta_json_space', Previous, Previous + 1),
-    Next is Previous + 1,
-    atom_concat('&json-', Next, Space).
+%! 'dict-space'(+Pairs:list, -Space:'SpaceType') is det.
+%
+% Build a fresh object space from (Key Value) pairs. Keys and values are data,
+% including from and internal. Duplicate pairs stay distinct. Validate the whole
+% list before allocation; failed construction releases every space it created.
+'dict-space'(Pairs, Space) :-
+    json_acyclic(Pairs),
+    must_be(list, Pairs),
+    maplist(json_pair, Pairs),
+    setup_call_catcher_cleanup(
+        Owned = owned([]),
+        ( json_new_space(Owned, New),
+          maplist(add_sexp(New), Pairs),
+          Space = New ),
+        How, json_release_unreturned(How, Owned)).
 
-% ------------------------------------------------------------------ decode
+json_pair(Pair) :-
+    ( is_list(Pair), Pair = [_, _]
+    -> true
+    ;  type_error(key_value_pair, Pair) ).
 
-'json-decode'(Text, Out) :-
+%! 'get-keys'(+Space:'SpaceType', -Key:any) is nondet.
+%
+% Enumerate object keys in storage order, preserving duplicates. Use collapse
+% to collect them. Non-pair atoms do not participate in this pattern query.
+'get-keys'(Space, Key) :- 'get-atoms'(Space, [Key, _]).
+
+%! 'get-value'(+Space:'SpaceType', +Key:any, -Value:any) is nondet.
+%
+% Enumerate values whose keys unify with Key. A missing key has no answers.
+% Symbols and Strings are distinct keys, as in an ordinary space query.
+'get-value'(Space, Key, Value) :- 'get-atoms'(Space, [Key, Value]).
+
+%! 'json-decode'(+Text:any, -Value:any) is det.
+%
+% Decode one JSON document. Objects become spaces, arrays become expressions,
+% strings and numbers retain their types, and literals become True, False and
+% Null. Duplicate fields remain queryable. Malformed or trailing content raises.
+'json-decode'(Text, Value) :-
     metta_text(Text, Json),
     lib_json_options(Options),
     json_codec_read(Json, Term, Options),
-    json_to_metta(Term, Out).
+    setup_call_catcher_cleanup(
+        Owned = owned([]),
+        ( json_to_metta(Term, Decoded, Owned), Value = Decoded ),
+        How, json_release_unreturned(How, Owned)).
 
-%One rule per JSON shape, as single sided unification rules. The earlier
-%version claimed first-argument indexing made these deterministic without a
-%cut. That was wrong, and plunit had been reporting it as eight tests
-%"succeeded with choicepoint": a clause whose first argument is a variable
-%cannot be excluded by any index, and the manual is blunter still, that a
-%predicate with more than 10% such clauses is not considered for indexing on
-%that argument at all [source: SWI-Prolog 10.1 Reference Manual, section 2.17].
-%With one variable-headed clause in four, this predicate was a linear scan.
-%
-%What that cost is memory, not time. A leftover choice point defeats last call
-%optimisation, so a recursive walk retains every frame [measured 2026-08-15,
-%300,000 elements: 81,600,096 bytes of local stack against 0]. Time was within
-%noise at min-of-7.
-%
-%=>/2 rather than a cut because these are single moded (+,-) conversions where
-%an unhandled shape should be an error, not a silent failure, and because the
-%head of an =>/2 rule cannot bind the caller's term. That is the steadfastness
-%trap: adding a cut to a clause that binds its output in the head is what makes
-%max(5,2,2) succeed [source: same manual, section 5.6, citing The Craft of
-%Prolog]. Output is unified in the body here for that reason.
-json_to_metta(json(Pairs), Space) =>
-    next_json_space(Space),
-    forall(member(Key = Value, Pairs),
-           ( json_to_metta(Value, MettaValue),
-             'add-atom'(Space, [Key, MettaValue], _) )).
-json_to_metta(@(Literal), Out) =>
-    json_literal(Literal, Out).
-json_to_metta([Head|Tail], Out) =>
-    Out = [MettaHead|MettaTail],
-    json_to_metta(Head, MettaHead),
-    json_to_metta_list(Tail, MettaTail).
-json_to_metta(Value, Out), atomic(Value) =>
-    Out = Value.
+% The engine's allocator uses this mutex too, including foreign claims. Reserve
+% a vacant name and record ownership before creation hooks can throw.
+% nb_setarg copies the new cell and shares its old tail on SWI >= 9.3.18.
+% https://github.com/SWI-Prolog/swipl-devel/commit/7de5ef58661b9d776627ad0f1167197a89430d0c
+json_new_space(Owned, Space) :-
+    with_mutex('$metta_native_storage',
+        sig_atomic(( json_available_name(Space),
+                     arg(1, Owned, Before),
+                     nb_setarg(1, Owned, [Space|Before]),
+                     ensure_native_storage_module(Space, _) ))).
 
-json_to_metta_list([], []).
-json_to_metta_list([Head|Tail], [MettaHead|MettaTail]) :-
-    json_to_metta(Head, MettaHead),
-    json_to_metta_list(Tail, MettaTail).
+json_available_name(Space) :-
+    flag('$metta_json_space', Previous, Previous + 1),
+    Next is Previous + 1,
+    atom_concat('&json-', Next, Candidate),
+    ( metta_space_operand(Candidate)
+    -> json_available_name(Space)
+    ;  Space = Candidate ).
 
-%MeTTa's booleans are lowercase: the reader normalises True to true and False
-%to false, and every engine predicate answers true/false, so JSON's literals
-%map onto those rather than onto HE's capitalised spelling. Null has no MeTTa
-%equivalent and the reader leaves it alone, so it stays as written
-%[verified 2026-08-15: sread("(True False Null true)", T) gives
-%[true,false,'Null',true]].
+json_release_unreturned(exit, _) :- !.
+json_release_unreturned(How, Owned) :-
+    arg(1, Owned, Spaces),
+    json_release_all(Spaces, Errors),
+    ( Errors == []
+    -> true
+    ;  throw(error(json_space_cleanup_failed(Errors), context(lib_json, How))) ).
+
+json_release_all([], []).
+json_release_all([Space|Rest], Errors) :-
+    catch(( spaces:metta_release_space(Space)
+          -> true
+          ;  throw(error(json_space_release_failed(Space), _)) ), Error, true),
+    ( var(Error) -> Errors = Tail ; Errors = [Space-Error|Tail] ),
+    json_release_all(Rest, Tail).
+
+json_to_metta(json(Pairs), Space, Owned) =>
+    json_new_space(Owned, Space),
+    json_object_fields(Pairs, Space, Owned).
+json_to_metta(@(Literal), Value, _) => json_literal(Literal, Value).
+json_to_metta([], Value, _) => Value = [].
+json_to_metta([Head|Tail], Value, Owned) =>
+    Value = [First|Rest],
+    json_to_metta(Head, First, Owned),
+    json_to_metta_list(Tail, Rest, Owned).
+json_to_metta(Value, Out, _), atomic(Value) => Out = Value.
+
+json_to_metta_list([], [], _).
+json_to_metta_list([Head|Tail], [Value|Rest], Owned) :-
+    json_to_metta(Head, Value, Owned),
+    json_to_metta_list(Tail, Rest, Owned).
+
+json_object_fields([], _, _).
+json_object_fields([Key=Value|Rest], Space, Owned) :-
+    json_to_metta(Value, Metta, Owned),
+    add_sexp(Space, [Key, Metta]),
+    json_object_fields(Rest, Space, Owned).
+
 json_literal(true, true).
 json_literal(false, false).
 json_literal(null, 'Null').
 
-% ------------------------------------------------------------------ encode
-
+%! 'json-encode'(+Value:any, -Text:string) is det.
+%
+% Encode one compact JSON document. Objects are spaces of (Key Value) fields;
+% every stored atom must be a pair. Repeated aliases are valid, but cyclic
+% objects or expressions raise cyclic_json_value. Non-finite numbers raise.
 'json-encode'(Value, Text) :-
     metta_to_json(Value, Term),
     lib_json_options(Options),
     json_codec_write(Term, Text, Options).
 
-%Rules rather than clauses, for the reasons on json_to_metta/2 above. The
-%three literals are named atoms and are matched before the general atom rule.
-metta_to_json(true, Out) => Out = @(true).
-metta_to_json(false, Out) => Out = @(false).
-metta_to_json('Null', Out) => Out = @(null).
-metta_to_json([], Out) => Out = [].
-metta_to_json([Head|Tail], Out) =>
-    Out = [JsonHead|JsonTail],
-    metta_to_json(Head, JsonHead),
-    metta_to_json_list(Tail, JsonTail).
-metta_to_json(Value, Out), atom(Value) =>
-    (   'is-space'(Value, true)
-    ->  space_to_json(Value, Out)
-    ;   Out = Value
-    ).
-metta_to_json(Value, Out), ( string(Value) ; number(Value) ) =>
-    Out = Value.
-
-metta_to_json_list([], []).
-metta_to_json_list([Head|Tail], [JsonHead|JsonTail]) :-
-    metta_to_json(Head, JsonHead),
-    metta_to_json_list(Tail, JsonTail).
-
-%A space encodes as an object, which is the inverse of decoding one into a
-%space. Only (key value) pairs are members; anything else in the space is not
-%representable as a JSON field and is left out rather than guessed at.
-space_to_json(Space, json(Pairs)) :-
-    findall(Key = JsonValue,
-            ( 'get-atoms'(Space, [Key, Value]),
-              metta_to_json(Value, JsonValue) ),
-            Pairs).
-
-% -------------------------------------------------------------- dict as space
-
-%HE's dict-space: (dict-space ((k1 v1) (k2 v2))) builds a space of those pairs.
-'dict-space'(Pairs, Space) :-
-    must_be(list, Pairs),
-    next_json_space(Space),
-    forall(member(Pair, Pairs),
-           ( Pair = [Key, Value]
-           ->  'add-atom'(Space, [Key, Value], _)
-           ;   throw(error(type_error(key_value_pair, Pair),
-                           context('dict-space'/1,
-                                   'each entry is a (key value) pair')))
-           )).
-
-%Nondeterministic, one key per solution, because that is how get-atoms answers
-%in MeTTa and an answer set is the MeTTa reading of "all of them". Wrap it in
-%collapse for a tuple.
-'get-keys'(Space, Key) :-
-    'get-atoms'(Space, [Key, _]).
-
-%No answer when the key is absent, which is HE's "empty if no such key".
-'get-value'(Space, Key, Value) :-
-    'get-atoms'(Space, [Key, Value]).
-
-%Every operation here succeeds exactly once, and det/1 makes that a checked
-%claim rather than a comment: a predicate declared det raises
-%determinism_error if it fails or returns holding a choice point. It costs
-%nothing, measured 2026-08-15 over 200,000 calls at 0.0186s undeclared against
-%0.0191s declared with identical inference counts.
+%! 'json-pretty'(+Value:any, -Text:string) is det.
 %
-%get-keys and get-value are deliberately absent. get-keys is nondeterministic
-%BY DESIGN, one key per solution, which is how get-atoms answers in MeTTa; and
-%get-value has no answer when the key is absent, which is HE's "empty if no
-%such key". Declaring either would raise on the behaviour they are for.
-:- det('json-decode'/2).
-:- det('json-encode'/2).
-:- det('dict-space'/2).
-:- det(json_to_metta/2).
-:- det(json_to_metta_list/2).
-:- det(metta_to_json/2).
-:- det(metta_to_json_list/2).
-:- det(next_json_space/1).
-:- det(lib_json_options/1).
+% Format JSON with SWI's default target width of 72 columns and two-space
+% indentation. Short documents can remain on one line; long strings are not split.
+'json-pretty'(Value, Text) :- 'json-pretty'(Value, 72, Text).
+
+%! 'json-pretty'(+Value:any, +Width:nonneg, -Text:string) is det.
+%
+% Format JSON with a nonnegative target column width. Zero selects compact
+% encoding; one puts nonempty containers on multiple lines. Width is a layout
+% target, not a truncation limit. The value and error contracts match json-encode.
+'json-pretty'(Value, Width, Text) :-
+    must_be(nonneg, Width),
+    metta_to_json(Value, Term),
+    lib_json_options(Options),
+    json_codec_write(Term, Text, Options, Width).
+
+metta_to_json(Value, Term) :-
+    json_acyclic(Value),
+    empty_assoc(Empty),
+    json_value(Value, Term, Empty, _),
+    json_acyclic(Term).
+
+json_acyclic(Value) :-
+    ( acyclic_term(Value)
+    -> true
+    ;  throw(error(representation_error(cyclic_json_value),
+                   context('json-encode', 'JSON values cannot contain cycles'))) ).
+
+% Memoize before recursion so cycles become rational terms and aliases reuse a
+% snapshot. Native acyclic_term checks the resulting graph without expanding it.
+% CPython's check_circular makes the same cycle/alias distinction:
+% https://github.com/python/cpython/blob/v3.14.0/Lib/json/encoder.py
+json_value(Value, Term, Before, After) :-
+    (   var(Value)
+    ->  instantiation_error(Value)
+    ;   Value == true
+    ->  Term = @(true), After = Before
+    ;   Value == false
+    ->  Term = @(false), After = Before
+    ;   Value == 'Null'
+    ->  Term = @(null), After = Before
+    ;   json_space(Value)
+    ->  json_space_value(Value, Term, Before, After)
+    ;   is_list(Value)
+    ->  json_array(Value, Term, Before, After)
+    ;   atomic(Value)
+    ->  Term = Value, After = Before
+    ;   type_error(json_value, Value)
+    ).
+
+json_space(Value) :-
+    ( atom(Value)
+    -> sub_atom(Value, 0, 1, _, '&')
+    ;  metta_space_operand(Value) ).
+
+json_space_value(Space, Term, Before, After) :-
+    (   get_assoc(Space, Before, Known)
+    ->  Term = Known, After = Before
+    ;   put_assoc(Space, Before, Term, Added),
+        findall(Atom, 'get-atoms'(Space, Atom), Atoms),
+        json_acyclic(Atoms),
+        Term = json(Pairs),
+        json_fields(Atoms, Pairs, Added, After)
+    ).
+
+json_fields([], [], Cache, Cache).
+json_fields([Atom|Rest], [Key=Term|Pairs], Before, After) :-
+    ( is_list(Atom), Atom = [Key, Value]
+    -> json_value(Value, Term, Before, Next)
+    ;  type_error(json_object_field, Atom) ),
+    json_fields(Rest, Pairs, Next, After).
+
+json_array([], [], Cache, Cache).
+json_array([Value|Rest], [Term|Terms], Before, After) :-
+    json_value(Value, Term, Before, Next),
+    json_array(Rest, Terms, Next, After).
+
+%! 'json-at'(+Value:any, +Path:list, -Found:any) is nondet.
+%
+% Follow object keys and zero-based array indexes. An empty Path returns Value.
+% Object keys use get-value's unification and preserve duplicate alternatives.
+% Missing keys or indexes have no answers; invalid indexes and scalar traversal raise.
+'json-at'(Value, Path, Found) :-
+    json_acyclic(Path),
+    must_be(list, Path),
+    json_path(Path, Value, Found).
+
+json_path([], Value, Value).
+json_path([Key|Rest], Value, Found) :-
+    (   nonvar(Value), json_space(Value)
+    ->  'get-value'(Value, Key, Next)
+    ;   is_list(Value)
+    ->  must_be(nonneg, Key), nth0(Key, Value, Next)
+    ;   type_error(json_container, Value)
+    ),
+    json_path(Rest, Next, Found).
+
+%! 'json-read!'(+Path:any, -Value:any) is det.
+%
+% Read one UTF-8 JSON file, closing it before creating object spaces. Malformed
+% UTF-8, a BOM, invalid JSON and trailing content raise; no partial value is returned.
+'json-read!'(Path, Value) :-
+    metta_text(Path, File),
+    setup_call_cleanup(open(File, read, Stream, [type(binary)]),
+                       read_stream_to_codes(Stream, Bytes), close(Stream)),
+    json_utf8(Bytes, Text),
+    'json-decode'(Text, Value).
+
+%! 'json-write!'(+Path:any, +Value:any, -Written:boolean) is det.
+%
+% Atomically replace Path with one compact UTF-8 JSON document. Stage beside
+% the destination and publish after close succeeds. A failed conversion, write,
+% close or rename preserves an existing destination and removes staging.
+'json-write!'(Path, Value, Written) :-
+    json_file_write(Path, json_write_document(Value)),
+    Written = true.
+
+json_write_document(Value, Stream) :-
+    'json-encode'(Value, Text),
+    json_unicode(Text),
+    write(Stream, Text).
+
+%! 'json-lines-decode'(+Text:any, -Value:any) is nondet.
+%
+% Enumerate JSON values from LF or CRLF lines. Empty input has no records;
+% blank lines and a BOM are errors naming the line. A final newline is optional.
+% Returned objects remain caller-owned when enumeration advances or is cut.
+'json-lines-decode'(Text, Value) :-
+    metta_text(Text, Lines),
+    setup_call_cleanup(open_string(Lines, Stream),
+                       json_lines(Stream, json_codes, 1, Value), close(Stream)).
+
+%! 'json-lines-encode'(+Values:list, -Text:string) is det.
+%
+% Encode each value as one compact JSON line, ending every record with LF.
+% Empty Values returns the empty String. Validate the complete proper list;
+% each record follows json-encode's value and error contracts.
+'json-lines-encode'(Values, Text) :-
+    json_records(Values),
+    with_output_to(string(Text), json_write_lines(Values, current_output)).
+
+%! 'json-lines-read!'(+Path:any, -Value:any) is nondet.
+%
+% Stream UTF-8 JSON Lines from Path, reading at most one record ahead. Invalid
+% bytes, JSON and blank lines raise with their line number. Close on exhaustion,
+% cut or error; already returned object spaces remain caller-owned.
+'json-lines-read!'(Path, Value) :-
+    metta_text(Path, File),
+    setup_call_cleanup(open(File, read, Stream, [type(binary)]),
+                       json_lines(Stream, json_utf8, 1, Value), close(Stream)).
+
+%! 'json-lines-write!'(+Path:any, +Values:list, -Written:boolean) is det.
+%
+% Atomically replace Path with UTF-8 JSON Lines, serializing one record at a
+% time. Every record ends in LF; empty Values writes an empty file. Publication
+% and failure cleanup follow json-write!.
+'json-lines-write!'(Path, Values, Written) :-
+    json_records(Values),
+    json_file_write(Path, json_write_lines(Values)),
+    Written = true.
+
+json_records(Values) :- json_acyclic(Values), must_be(list, Values).
+
+json_lines(Stream, Decode, Line, Value) :-
+    catch(read_line_to_codes(Stream, Codes), Error, json_line_error(Line, Error)),
+    Codes \== end_of_file,
+    (   catch(( call(Decode, Codes, Text), 'json-decode'(Text, Value) ),
+              Error, json_line_error(Line, Error))
+    ;   Next is Line + 1,
+        json_lines(Stream, Decode, Next, Value)
+    ).
+
+json_codes(Codes, Text) :- string_codes(Text, Codes).
+
+json_line_error(Line, Error) :-
+    throw(error(json_line(Line, Error),
+                context('json-lines', 'Each line must contain one UTF-8 JSON value'))).
+
+% Keep structured causes while using the same message hook as lib_file and lib_csv.
+:- multifile prolog:error_message//1.
+prolog:error_message(json_line(Line, Error)) -->
+    { message_to_string(Error, Message) },
+    ['Could not read JSON Lines record ~d: ~s'-[Line, Message]].
+prolog:error_message(json_space_cleanup_failed(Errors)) -->
+    ['Could not release JSON object spaces: ~q; the error context retains the construction outcome'
+     -[Errors]].
+prolog:error_message(json_space_release_failed(Space)) -->
+    ['Release of JSON object space ~q failed'-[Space]].
+
+json_write_lines([], _).
+json_write_lines([Value|Rest], Stream) :-
+    json_write_document(Value, Stream),
+    nl(Stream),
+    json_write_lines(Rest, Stream).
+
+% Native decoding is permissive. Canonical round-trip rejects replacement and
+% overlong sequences; scalar bounds reject surrogates and obsolete code points.
+% https://www.rfc-editor.org/rfc/rfc3629#section-3
+json_utf8(Bytes, Text) :-
+    string_bytes(Text, Bytes, utf8),
+    string_bytes(Text, Canonical, utf8),
+    ( Bytes == Canonical
+    -> json_unicode(Text)
+    ;  throw(error(representation_error(utf8), context('json-read!', _))) ).
+
+json_unicode(Text) :-
+    string_codes(Text, Codes),
+    ( maplist(json_scalar_code, Codes)
+    -> true
+    ;  throw(error(representation_error(unicode_scalar_value), context(lib_json, _))) ).
+
+json_scalar_code(Code) :- Code =< 0x10ffff, (Code < 0xd800 ; Code > 0xdfff).
+
+% Match lib_file:metta_copy_file/2's close-before-publication protocol.
+% [source: lib/lib_file/lib_file.pl:metta_copy_file/2; commit=WORKTREE]
+json_file_write(Path, Writer) :-
+    metta_text(Path, File),
+    file_directory_name(File, Parent),
+    tmp_file(metta_json, Temporary),
+    file_base_name(Temporary, Base),
+    directory_file_path(Parent, Base, Directory),
+    setup_call_cleanup(make_directory(Directory),
+        ( directory_file_path(Directory, contents, Stage),
+          setup_call_cleanup(
+              open(Stage, write, Stream, [encoding(utf8), newline(posix), bom(false)]),
+              call(Writer, Stream), close(Stream)),
+          rename_file(Stage, File) ),
+        delete_directory_and_contents(Directory)).
