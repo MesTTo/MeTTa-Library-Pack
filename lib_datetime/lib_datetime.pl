@@ -1,7 +1,7 @@
 % Purpose: expose native clocks, calendar conversion, parsing and arithmetic.
 % Guarantees: dates round-trip through visible records; calendar addition
 % normalizes overflow and re-resolves local daylight saving
-% [tested: lib_datetime; commit=WORKTREE].
+% [tested: lib_datetime; commit=9b22993447a5ddba93643895e3025661ba9f693e].
 % Decides: legacy formatting returns Symbols; format-datetime returns String.
 % Numeric timezone offsets are seconds west of Greenwich, as in SWI.
 
