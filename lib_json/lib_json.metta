@@ -4,7 +4,7 @@
 ; objects; writers reject cycles and publish files only after successful close.
 
 ; Keep the established string-library import available to JSON consumers.
-; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/14-reflect_lib.metta; commit=WORKTREE]
+; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/14-reflect_lib.metta; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd]
 !(import! &self (library lib_string))
 
 ; begin generated Prolog face

@@ -1,21 +1,21 @@
 % Purpose: JSON values, object spaces, document files and streaming JSON Lines.
 % Guarantees: duplicate fields remain separate answers; failed construction
 % releases its allocations; encoding refuses cycles and unrepresentable fields
-% [tested: lib_json_surface; commit=WORKTREE].
+% [tested: lib_json_surface; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd].
 % Owns resources: returned objects follow the engine's space ownership; the
 % decoder does not reclaim successful answers. Readers close on exhaustion,
 % cut and error. Writers publish only after closing their staging file and
 % remove staging on every exit
-% [tested: lib_json_surface; commit=WORKTREE].
+% [tested: lib_json_surface; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd].
 % Guarded by: '$metta_native_storage' protects allocation and name reservation;
 % each encoder snapshots an object once, with a call-local library(assoc) map.
 % Concurrent changes to different objects are not one transaction
 % [source: lib/lib_json/lib_json.pl:json_new_space/2,
-% lib/lib_json/lib_json.pl:json_space_value/4; commit=WORKTREE].
+% lib/lib_json/lib_json.pl:json_space_value/4; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd].
 % Decides: objects are spaces, arrays are expressions, null is Null. Object
 % lookup retains get-value's key unification and answer multiplicity. JSON Lines
 % uses UTF-8 without a BOM, one value per physical line, and no blank lines
-% [tested: lib_json_surface; commit=WORKTREE].
+% [tested: lib_json_surface; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd].
 
 :- module(lib_json,
           ['dict-space'/2, 'get-keys'/2, 'get-value'/3,
@@ -370,7 +370,7 @@ json_unicode(Text) :-
 json_scalar_code(Code) :- Code =< 0x10ffff, (Code < 0xd800 ; Code > 0xdfff).
 
 % Match lib_file:metta_copy_file/2's close-before-publication protocol.
-% [source: lib/lib_file/lib_file.pl:metta_copy_file/2; commit=WORKTREE]
+% [source: lib/lib_file/lib_file.pl:metta_copy_file/2; commit=5e212d77a567d6d6c118529e4a226e5047ec2cfd]
 json_file_write(Path, Writer) :-
     metta_text(Path, File),
     file_directory_name(File, Parent),
