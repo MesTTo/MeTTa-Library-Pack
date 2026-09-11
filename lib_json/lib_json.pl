@@ -2,12 +2,12 @@
 % Guarantees: duplicate fields remain separate answers; failed construction
 % releases its allocations and combines primary and cleanup errors; encoding
 % refuses cycles and unrepresentable fields
-% [tested: lib_json_surface; commit=WORKTREE].
+% [tested: lib_json_surface; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Owns resources: returned objects follow the engine's space ownership; the
 % decoder does not reclaim successful answers. Readers close on exhaustion,
 % cut and error. Writers publish only after closing their staging file and
 % remove staging on every exit
-% [tested: lib_json_surface; commit=WORKTREE].
+% [tested: lib_json_surface; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Guarded by: '$metta_native_storage' protects allocation and name reservation;
 % each encoder snapshots an object once, with a call-local library(assoc) map.
 % Concurrent changes to different objects are not one transaction

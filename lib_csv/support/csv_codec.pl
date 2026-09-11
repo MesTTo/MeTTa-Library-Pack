@@ -35,13 +35,13 @@
 % Purpose: parse and emit one lossless CSV record over UTF-8 bytes.
 % Assumes: syntax(Separator, Quote, Newline) holds validated UTF-8 byte lists;
 % separators and present quotes encode distinct single Unicode scalars.
-% [source: lib/lib_csv/lib_csv.pl:csv_compile/4; commit=WORKTREE].
+% [source: lib/lib_csv/lib_csv.pl:csv_compile/4; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Guarantees: quoted newlines and NUL survive; malformed UTF-8 is refused;
 % zero fields and one empty field have different encodings.
-% [tested: lib_csv_surface; commit=WORKTREE].
+% [tested: lib_csv_surface; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Decides: adapt the field, doubled-quote and emitter grammar from SWI's
 % pinned csv.pl, retaining its license. VENDOR.md records the changes.
-% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/library/csv.pl; commit=WORKTREE].
+% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/library/csv.pl; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 
 :- module(csv_codec, [record//2, encoded_record/3, utf8_text/2, utf8_bytes/2]).
 :- use_module(library(error), [must_be/2, domain_error/2]).

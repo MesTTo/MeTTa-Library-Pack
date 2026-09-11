@@ -1,14 +1,14 @@
 % Purpose: preserve an operation's outcome while its owner releases resources.
 % Assumes: Goal is deterministic or semideterministic; streaming enumeration
 % uses setup_call_cleanup/3 directly. An accidental choice point is refused.
-% [tested: lib_csv_surface:resource_guard_refuses_nondeterministic_operations; commit=WORKTREE].
+% [tested: lib_csv_surface:resource_guard_refuses_nondeterministic_operations; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Guarantees: Cleanup receives exit, fail or exception(Error) before that
 % outcome is restored, so a combined cleanup error is not suppressed by SWI.
 % [tested: lib_json_surface:cleanup_retains_a_write_exception_beside_release_failures,
-% lib_csv_surface:snapshot_release_failure_keeps_the_primary_outcome; commit=WORKTREE].
+% lib_csv_surface:snapshot_release_failure_keeps_the_primary_outcome; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Owns resources: Setup establishes the owner's scope; Cleanup runs once
 % after successful Setup, including asynchronous interruption of Goal.
-% [tested: lib_csv_surface:cancelling_a_writer_rolls_back_and_releases_its_lock; commit=WORKTREE].
+% [tested: lib_csv_surface:cancelling_a_writer_rolls_back_and_releases_its_lock; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 
 :- module(owned_resources, [with_outcome_cleanup/3]).
 :- meta_predicate with_outcome_cleanup(0, 0, 1).

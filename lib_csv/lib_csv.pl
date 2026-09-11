@@ -1,20 +1,20 @@
 % Purpose: parse, encode, stream and store lossless UTF-8 CSV records.
 % Guarantees: fields remain Strings, duplicate answers survive, widths are
 % checked before filtering, and live descriptors own no mutable registry.
-% [tested: lib_csv, lib_csv_surface; commit=WORKTREE].
+% [tested: lib_csv, lib_csv_surface; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Streaming traversal and append validation retain bounded input storage.
 % [measured 2026-09-11: 98808/101568 peak live global bytes at 1000 to 100000 records;
 % command=swipl --on-error=status -q -s tests/prolog/lib_csv_stream_bench.pl;
-% fixture=20-byte UTF-8 records, SWI-Prolog 10.1.13; commit=WORKTREE].
+% fixture=20-byte UTF-8 records, SWI-Prolog 10.1.13; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Owns resources: traversal streams close on exhaustion, cut or exception;
 % unreturned snapshots and unpublished staging files are released on failure.
-% [tested: lib_csv_surface; commit=WORKTREE].
+% [tested: lib_csv_surface; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Guarded by: snapshot allocation uses $metta_native_storage; writers use
 % the canonical path mutex and the persistent .metta-csv.lock advisory lock.
-% [tested: lib_csv_surface, test_csv_concurrent_process_appends; commit=WORKTREE].
+% [tested: lib_csv_surface, test_csv_concurrent_process_appends; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 % Decides: preserve text, use explicit dialects, distinguish blank records
 % from singleton empty fields, and publish complete file replacements.
-% [source: lib/lib_csv/lib_csv.pl:csv_config/2, csv_publish/5; commit=WORKTREE].
+% [source: lib/lib_csv/lib_csv.pl:csv_config/2, csv_publish/5; commit=bd027d8b7a9ef1d96fb4cdb160c9b3eb4157d52e].
 
 :- module(lib_csv,
           ['csv-space'/2, 'csv-space'/3,
