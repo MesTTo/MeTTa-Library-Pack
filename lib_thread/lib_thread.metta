@@ -1,5 +1,8 @@
 ; Purpose: publish parallel data operations, M:N engine futures, timers,
 ;   channels, pools, Linda waits and locks over SWI-Prolog primitives.
+; Guarantees: scope-defer transfers cleanup with a returned owned value;
+;   drop-space releases through the scope-aware native door
+;   [tested: lib_thread_scope_deferred; commit=WORKTREE].
 ; Guarantees:
 ;   - scope joins children and returns their retained spaces; capture holds an
 ;     expression in its current space [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
@@ -93,7 +96,7 @@
    channel_size channel_close
    pool_create pool_submit pool_stats pool_destroy
    timer_after timer_every
-   scope_body capture
+   scope_body scope_defer space_drop capture
    space_await space_take space_await_where space_take_where
    with_lock cpu_count thread_count))
 
@@ -108,6 +111,10 @@
 (: scope (-> Atom %Undefined%))
 (: capture (-> Atom Atom))
 (: scope_body (-> Atom %Undefined%))
+(: scope-defer (-> %Undefined% Atom Bool))
+(: scope_defer (-> %Undefined% Atom Bool))
+(: drop-space (-> SpaceType Bool))
+(: space_drop (-> SpaceType Bool))
 (: submit (-> %Undefined% Atom %Undefined%))
 (: with-lock (-> %Undefined% Atom %Undefined%))
 (: after (-> Number Atom %Undefined%))
@@ -154,6 +161,8 @@
 
 (= (spawn $expr) (thread_spawn $expr))
 (= (scope $expr) (scope_body $expr))
+(= (scope-defer $value $cleanup) (scope_defer $value $cleanup))
+(= (drop-space $space) (space_drop $space))
 (= (await $handle) (thread_await $handle))
 (= (settled? $handle) (thread_settled $handle))
 (= (cancel $handle) (thread_cancel $handle))
@@ -192,3 +201,7 @@
 
 (@doc scope (@desc "Join children and release resources created by the body; child failure cancels siblings; returned spaces transfer to the enclosing scope") (@params ((@param "the held body"))) (@return "each body answer"))
 (@doc capture (@desc "Hold an expression with its current evaluation space as an evalc value") (@params ((@param "the held expression"))) (@return "(evalc expression space)"))
+(@doc scope-defer (@desc "Register held cleanup in the current scope; returning its value transfers cleanup to the enclosing scope; outside a scope no cleanup is registered") (@params ((@param "the owned ground value") (@param "the held cleanup expression in its defining space"))) (@return "True"))
+(@doc scope_defer (@desc "Native spelling of scope-defer") (@params ((@param "the owned ground value") (@param "the held cleanup expression"))) (@return "True"))
+(@doc drop-space (@desc "Release a space through its scope owner, including owned children and deferred cleanup") (@params ((@param "the space to release"))) (@return "True"))
+(@doc space_drop (@desc "Native spelling of drop-space") (@params ((@param "the space to release"))) (@return "True"))

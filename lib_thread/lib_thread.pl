@@ -2,6 +2,9 @@
 %   suspended SWI engines multiplexed over one bounded carrier pool; waits,
 %   channel backpressure and blocking host calls release those carriers.
 %   Every predicate follows the compiled convention, inputs then one output.
+% Guarantees: deferred native expressions follow owned values through Scope
+%   transfer; rolled-back descriptors perform no cleanup
+%   [tested: lib_thread_scope_deferred; commit=WORKTREE].
 % Assumes:
 %   - user:metta_py_dispatch/4 identifies the loaded Python seat for context
 %     capture [tested:
@@ -221,6 +224,8 @@
             scope_host_resource/4,
             scope_host_done/2,
             scope_body/2,
+            scope_defer/3,
+            space_drop/2,
             capture/2,
             space_await/3,
             space_await/4,
@@ -355,6 +360,7 @@ next_metta_handle(Id) :-
 % [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
 :- meta_predicate scope_call(+, 0).
 :- meta_predicate scope_publish(+, 0).
+:- dynamic scope_deferred_/5.
 :- multifile seam:engine_context/1, seam:space_created/1,
              seam:space_access/1, seam:space_releasing/1,
              seam:host_engine_created/1, seam:host_engine_released/1,
@@ -660,6 +666,22 @@ scope_host_done(Token, Error) :-
        recorded(Token, queue(Queue), _), thread_send_message(Queue, done)
     ; true ).
 
+% This is the native counterpart of a host cleanup callback. The descriptor
+% belongs to the database transaction; its child entry belongs to Scope.
+% Rollback can remove the former without orphaning a host resource because
+% the held expression owns database facts, not a running computation.
+scope_defer(Value, Expr, true) :-
+    scope_current_(Id),
+    ( Id == none -> true
+    ; must_be(ground, Value),
+      current_metta_module(Module),
+      with_mutex('$metta_scopes', sig_atomic((
+          scope_checkpoint_(Id), scope_id_('$metta_scope_deferred_', Token),
+          assertz(scope_deferred_(Token, Id, Value, Module, Expr)),
+          recordz(Id, child(deferred, Token), _) ))) ).
+
+space_drop(Space, true) :- scope_drop_space(Space).
+
 scope_fault_(Id, Error) :-
     with_mutex('$metta_scopes', recordz(Id, fault(Error), _)).
 
@@ -679,7 +701,23 @@ scope_keep(Id, Owner, Value) :-
     scope_owner_(Id, Owner), scope_checkpoint_(Id),
     forall(( sub_term(Space, Value), ground(Space),
              scope_space_owner_(Space, Id, _) ),
-           scope_keep_space_(Id, Space)).
+           scope_keep_space_(Id, Space)),
+    forall(( sub_term(Part, Value), ground(Part),
+             scope_deferred_(Token, Id, Part, _, _) ),
+           scope_keep_deferred_(Id, Token)).
+
+% A retained cleanup needs both its lexical module and the spaces captured by
+% its held expression. Use the same dependency traversal as a returned space.
+scope_keep_deferred_(Id, Token) :-
+    ( recorded(Id, keep_deferred(Token), _) -> true
+    ; recordz(Id, keep_deferred(Token), _),
+      scope_deferred_(Token, Id, _, Module, Expr),
+      forall(( sub_term(Space, Expr), ground(Space),
+               scope_space_owner_(Space, Id, _) ),
+             scope_keep_space_(Id, Space)),
+      forall(( spaces:metta_module_space(Module, Home),
+               scope_space_owner_(Home, Id, _) ),
+             scope_keep_space_(Id, Home)) ).
 
 scope_keep_space_(Id, Space) :-
     ( recorded(Id, keep(Space), _) -> true
@@ -724,7 +762,11 @@ scope_finish_(Id, Reason, Errors) :-
     partition(scope_returning_(Id, Reason), Reverse, Returning, Releasing),
     scope_release_all_(Id, Parent, cleanup, Releasing, FirstErrors),
     ( FirstErrors == [] -> Transfer = Reason ; Transfer = cleanup ),
-    scope_release_all_(Id, Parent, Transfer, Returning, LastErrors),
+    % Adoption preserves acquisition order in the parent's child list, so its
+    % eventual reverse cleanup still runs dependants before their inputs.
+    ( Transfer == none -> reverse(Returning, Transferring)
+    ; Transferring = Returning ),
+    scope_release_all_(Id, Parent, Transfer, Transferring, LastErrors),
     append(FirstErrors, LastErrors, CleanupErrors),
     findall(Error, recorded(Id, fault(Error), _), Faults),
     append(Faults, CleanupErrors, Errors),
@@ -738,6 +780,7 @@ scope_finish_(Id, Reason, Errors) :-
     ; true ).
 
 scope_returning_(Id, none, space-Space) :- recorded(Id, keep(Space), _).
+scope_returning_(Id, none, deferred-Token) :- recorded(Id, keep_deferred(Token), _).
 
 scope_release_all_(Id, Parent, Reason, Resources, Errors) :-
     findall([prolog, Text],
@@ -787,6 +830,8 @@ scope_join_engines_(Id) :-
        scope_join_engines_(Id)
     ; true ).
 
+scope_release_(_, _, _, space-Space) :-
+    scope_space_owner_(Space, dead, _), !.
 scope_release_(Id, Parent, none, space-Space) :-
     recorded(Id, keep(Space), _), !,
     with_mutex('$metta_scopes', sig_atomic((
@@ -804,6 +849,22 @@ scope_release_(_, _, _, host-Token) :-
        forall(recorded(Token, queue(Queue), _), message_queue_destroy(Queue)),
        scope_erase_(Token)
     ; true ).
+scope_release_(Id, Parent, none, deferred-Token) :-
+    recorded(Id, keep_deferred(Token), _), !,
+    with_mutex('$metta_scopes', sig_atomic((
+        scope_unlink_(Id, deferred, Token),
+        ( retract(scope_deferred_(Token, Id, Value, Module, Expr))
+        -> ( Parent == none -> true
+           ; assertz(scope_deferred_(Token, Parent, Value, Module, Expr)),
+             recordz(Parent, child(deferred, Token), _) )
+        ; true ) ))).
+scope_release_(_, _, _, deferred-Token) :-
+    ( scope_deferred_(Token, _, _, Module, Expr)
+    -> findall(Answer, eval_metta_in_module(Module, Expr, Answer), Answers),
+       Answers \== [],
+       forall(member(Answer, Answers), scope_cleanup_answer_(Answer)),
+       retractall(scope_deferred_(Token, _, _, _, _))
+    ; true ).
 scope_release_(_, _, _, pool-Name) :- pool_destroy(Name, _).
 scope_release_(_, _, _, engine-Engine) :- metta_host_hold_close(Engine).
 scope_release_(_, _, _, scope-Id) :-
@@ -814,6 +875,11 @@ scope_release_(_, _, _, scope-Id) :-
 
 scope_host_release_(future, _).
 scope_host_release_(cleanup, Object) :- user:py_call(Object:'__call__'()).
+
+scope_cleanup_answer_(Answer) :-
+    ( nonvar(Answer), Answer = [Head|Tail], Head == 'Error', nonvar(Tail)
+    -> throw(error(scope_cleanup_answer(Answer), none))
+    ; true ).
 
 scope_unlink_(Id, Kind, Value) :-
     forall(recorded(Id, child(Kind, Value), Ref), erase(Ref)).
