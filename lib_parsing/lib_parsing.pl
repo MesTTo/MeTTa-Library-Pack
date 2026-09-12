@@ -7,33 +7,33 @@
 %   interpreter is one DCG over code lists that dispatches on the form's head, so
 %   a grammar costs what the equivalent hand-written DCG costs plus one dispatch
 %   per node [source: /usr/lib/swi-prolog/library/dcg/basics.pl, whose number//1
-%   and eos//0 the primitives use; commit=WORKTREE].
+%   and eos//0 the primitives use; commit=7bdd5ace3f8272c2806ac0b925e56a78dc0894a8].
 % Assumes:
 %   - the grammar argument is a well-formed grammar. It is walked before any text
 %     is read, and a form the library does not know is refused naming it and
 %     listing the forms, because a misspelled combinator would otherwise be a
 %     grammar that matches nothing, silently
 %     [tested: lib_parsing:a_malformed_grammar_is_refused_before_parsing;
-%     commit=WORKTREE]
+%     commit=7bdd5ace3f8272c2806ac0b925e56a78dc0894a8]
 %   - the character classes are ASCII: digits are 0-9 and blanks are the six
 %     ASCII whitespace codes, so nothing here consults the process locale, and a
 %     Unicode class is written as (char-if F) over lib_unicode's unicode-is
-%     [tested: lib_parsing:the_classes_are_ascii_and_locale_free; commit=WORKTREE]
+%     [tested: lib_parsing:the_classes_are_ascii_and_locale_free; commit=7bdd5ace3f8272c2806ac0b925e56a78dc0894a8]
 % Guarantees:
 %   - a parse that consumes the whole text answers the grammar's value, one
 %     answer per way the grammar matches, and a prefix parse answers the value
 %     with the unread rest; many and sep-by answer their longest match first
 %     [tested: lib_parsing:whole_and_prefix_parses_agree_with_phrase;
-%     commit=WORKTREE]
+%     commit=7bdd5ace3f8272c2806ac0b925e56a78dc0894a8]
 %   - the primitives answer what dcg/basics answers over the same text where the
 %     host has the primitive, and the combinators obey their algebra: cat is
 %     associative in its values, alt of one branch is that branch, many is
 %     optional over many1 [tested: lib_parsing:the_primitives_agree_with_dcg_basics,
-%     lib_parsing:the_combinators_obey_their_algebra; commit=WORKTREE]
+%     lib_parsing:the_combinators_obey_their_algebra; commit=7bdd5ace3f8272c2806ac0b925e56a78dc0894a8]
 %   - a grammar may refer to itself through ref, which evaluates a MeTTa function
 %     of no arguments to a grammar when it is reached, so recursive languages are
 %     expressible and left recursion is the caller's own contract
-%     [tested: lib_parsing:a_grammar_may_recurse_through_ref; commit=WORKTREE]
+%     [tested: lib_parsing:a_grammar_may_recurse_through_ref; commit=7bdd5ace3f8272c2806ac0b925e56a78dc0894a8]
 % Fails when: a caller wants error positions or a longest-failing-prefix report.
 %   A failed match is no answer, which is what makes alt and optional compose; a
 %   diagnostic parser is written as a grammar whose alt's last branch is (rest).
