@@ -3,7 +3,7 @@
 %   A graph IS a collection of (Vertex Neighbours) pairs, vertices in the standard
 %   order of terms and each neighbour collection a set, which is lib_pairs'
 %   multimap shape and SWI's own graph representation with its pairs written as
-%   expressions [source: /usr/lib/swi-prolog/library/ugraphs.pl; commit=WORKTREE].
+%   expressions [source: /usr/lib/swi-prolog/library/ugraphs.pl; commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14].
 %   Every vertex a neighbour names is itself a vertex of the graph, which is what
 %   makes a walk total: graph-of adds the vertices its edges mention.
 % Assumes:
@@ -11,25 +11,25 @@
 %     the host's walks read the representation as an invariant and answer nothing
 %     or the wrong thing when it does not hold
 %     [tested: lib_graph:a_value_that_is_not_a_graph_is_refused_by_every_head;
-%     commit=WORKTREE]
+%     commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14]
 %   - a vertex is compared as a TERM, so graph-neighbours of a vertex the graph
 %     does not hold is a refusal naming it rather than an empty answer, which
 %     would read as a sink [tested: lib_graph:an_unknown_vertex_is_named;
-%     commit=WORKTREE]
+%     commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14]
 % Guarantees:
 %   - every answer that is a graph is itself in the representation, so the
 %     operations compose with no repair between them
-%     [tested: lib_graph:every_answer_is_a_graph; commit=WORKTREE]
+%     [tested: lib_graph:every_answer_is_a_graph; commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14]
 %   - the operations answer what library(ugraphs) answers over the same graph, and
 %     the reachability, closure and ordering agree with each other: a vertex is
 %     reachable exactly when the closure holds the edge, and a topological order
 %     puts every edge's tail before its head
 %     [tested: lib_graph:the_operations_agree_with_library_ugraphs,
-%     lib_graph:the_walks_agree_with_each_other; commit=WORKTREE]
+%     lib_graph:the_walks_agree_with_each_other; commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14]
 %   - graph-topological-order refuses a graph with a cycle and NAMES a vertex on
 %     one, where the host's top_sort/2 fails silently
 %     [tested: lib_graph:a_cycle_refuses_the_ordering_and_names_a_vertex_on_it;
-%     commit=WORKTREE]
+%     commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14]
 % Fails when: a caller wants edge weights, a path with a cost, or an undirected
 %   graph. An undirected graph is this one with both directions added, which
 %   graph-union over the transpose gives; weights belong to a relation of their
@@ -86,7 +86,7 @@
 % topological-order claim]. The import is injected into the host module's own
 % namespace, which is idempotent and is what lib_constraints and lib_memo already
 % do for their own reach into library(ugraphs) [source:
-% lib/lib_constraints/lib_constraints.pl:`:- ugraphs:use_module`; commit=WORKTREE].
+% lib/lib_constraints/lib_constraints.pl:`:- ugraphs:use_module`; commit=a5738e9390f2941d8f1c3207b5a28310a22e1f14].
 :- ugraphs:use_module(library(lists), [append/2]).
 
 %! 'graph-of'(+Vertices:list, +Edges:list, -Graph:list) is det.
