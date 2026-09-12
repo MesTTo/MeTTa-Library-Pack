@@ -2,7 +2,7 @@
 ;   channels, pools, Linda waits and locks over SWI-Prolog primitives.
 ; Guarantees: scope-defer transfers cleanup with a returned owned value;
 ;   drop-space releases through the scope-aware native door
-;   [tested: lib_thread_scope_deferred; commit=WORKTREE].
+;   [tested: lib_thread_scope_deferred; commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
 ; Guarantees:
 ;   - scope joins children and returns their retained spaces; capture holds an
 ;     expression in its current space [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]

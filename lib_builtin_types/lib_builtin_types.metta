@@ -2,7 +2,7 @@
 ; markers included, for engine reflection and optional live typed dispatch.
 ; Guarantees: add-atom holds its occurrence-output binder as written
 ;   [tested: spaces_tokens:an_atom_can_contain_its_own_occurrence_token;
-;   commit=WORKTREE].
+;   commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
 ; Guarantees: Kwargs holds zero or more pairs through one (:seg Atom) arrow
 ;   [tested: variadic_arrows; commit=6031c83ab3002b5703cb6fcb10e70a60a89f4ad7].
 ; Guarantees:

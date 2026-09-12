@@ -4,7 +4,7 @@
 %   Every predicate follows the compiled convention, inputs then one output.
 % Guarantees: deferred native expressions follow owned values through Scope
 %   transfer; rolled-back descriptors perform no cleanup
-%   [tested: lib_thread_scope_deferred; commit=WORKTREE].
+%   [tested: lib_thread_scope_deferred; commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
 % Assumes:
 %   - user:metta_py_dispatch/4 identifies the loaded Python seat for context
 %     capture [tested:
