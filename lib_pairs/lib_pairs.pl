@@ -12,20 +12,20 @@
 %     checks and names the element that is not one, because the projections are
 %     the operations most often handed a half-built collection
 %     [tested: lib_pairs:a_collection_that_is_not_pairs_is_refused_by_name;
-%     commit=WORKTREE]
+%     commit=40b3353b9ae721bf42b832fb953e93a5dc230e6c]
 %   - a key is compared as a TERM, so a lookup asks identity rather than
 %     unification and a variable key matches nothing
-%     [tested: lib_pairs:a_lookup_compares_keys_as_terms; commit=WORKTREE]
+%     [tested: lib_pairs:a_lookup_compares_keys_as_terms; commit=40b3353b9ae721bf42b832fb953e93a5dc230e6c]
 % Guarantees:
 %   - duplicates are kept everywhere: a relation may hold one key many times, and
 %     the grouping gathers every value it has, in the collection's own order
-%     [tested: lib_pairs:duplicates_survive_every_operation; commit=WORKTREE]
+%     [tested: lib_pairs:duplicates_survive_every_operation; commit=40b3353b9ae721bf42b832fb953e93a5dc230e6c]
 %   - both orderings are STABLE, so pairs with equal keys keep their relative
 %     order, and sorting by key then grouping is the same as grouping
-%     [tested: lib_pairs:the_orderings_are_stable; commit=WORKTREE]
+%     [tested: lib_pairs:the_orderings_are_stable; commit=40b3353b9ae721bf42b832fb953e93a5dc230e6c]
 %   - grouping and ungrouping are inverses over any relation: ungrouping a
 %     grouping answers the relation sorted by key
-%     [tested: lib_pairs:grouping_and_ungrouping_are_inverses; commit=WORKTREE]
+%     [tested: lib_pairs:grouping_and_ungrouping_are_inverses; commit=40b3353b9ae721bf42b832fb953e93a5dc230e6c]
 % Fails when: a caller wants a mutable mapping. That is lib_dict, a dictionary
 %   that IS a space, or lib_datastructures' sorted map, an immutable value with
 %   logarithmic lookup; a relation is a collection walked in full.
@@ -35,7 +35,7 @@
 %   relation answers the same key twice and nothing says so; the sort is stable,
 %   so the values still arrive in the collection's own order
 %   [source: /usr/lib/swi-prolog/library/pairs.pl:group_pairs_by_key/2;
-%   commit=WORKTREE].
+%   commit=40b3353b9ae721bf42b832fb953e93a5dc230e6c].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
