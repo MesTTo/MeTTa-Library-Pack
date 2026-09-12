@@ -3,7 +3,7 @@
 % its captured execution module remains alive until that server stops.
 % Guarantees: non-2xx statuses remain data, framing is owned by the transport,
 % repeated fields survive, and scopes release on exhaustion, cut and exception.
-% [tested: lib_http; commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
+% [tested: lib_http; commit=WORKTREE].
 % Owns resources: http-open! transfers its response stream to File's handle table.
 % A started server belongs to its caller until http-server-stop!; with-http and
 % with-http-server retain ownership for the lifetime of their answer streams.
@@ -22,7 +22,7 @@
 :- set_module(base(metta_engine)).
 :- metta_requires(http).
 :- use_module('../lib_file/lib_file',
-              [adopt_file_stream/2,'file-close!'/2,'file-read-bytes!'/2]).
+              [adopt_file_stream/2,release_file_stream/1,'file-close!'/2,'file-read-bytes!'/2]).
 :- use_module(library(http/http_open), [http_open/3]).
 :- use_module(library(http/thread_httpd),
               [http_server/2,http_stop_server/2,http_current_server/2,http_current_worker/2]).
@@ -65,13 +65,10 @@
 'http-open!'(Method, URL, Options, ['http-response',Status,Fields,Handle]) :-
     client_arguments(Method,URL,Options,Native),
     setup_call_catcher_cleanup(
-        http_open(URL,Stream,[method(Method),status_code(Status),headers(Headers),
-                             connection(close),authenticate(false)|Native]),
-        ( header_rows(Headers,Fields),
-          response_stream(Method,Status,Stream,BodyStream),
-          adopt_file_stream(BodyStream,Handle) ),
+        response_stream(Method,URL,Native,Status,Headers,Stream),
+        ( header_rows(Headers,Fields),adopt_file_stream(Stream,Handle) ),
         Outcome,
-        ( Outcome == exit -> true ; close_if_open(Stream) )).
+        ( Outcome == exit -> true ; release_file_stream(Stream) )).
 
 %! 'http-request!'(+Method:atom, +URL:string, +Options:list, -Response:list) is det.
 %
@@ -95,11 +92,18 @@
 
 close_response(['http-response',_,_,Handle]) :- 'file-close!'(Handle,_).
 
-response_stream(Method,Status,Stream,BodyStream) :-
-    set_stream(Stream,type(binary)),
-    ( ( Method == head ; no_body_status(Status) )
-    -> stream_range_open(Stream,BodyStream,[size(0),onclose(close_http_parent)])
-    ; BodyStream=Stream ).
+% Keep the final owned stream in Setup so cancellation after adoption can
+% still withdraw its File record, including a range filter and its parent.
+% [tested: lib_http:post_adoption_cancellation_releases_filtered_responses; commit=WORKTREE].
+response_stream(Method,URL,Native,Status,Headers,BodyStream) :-
+    setup_call_catcher_cleanup(
+        http_open(URL,Stream,[method(Method),status_code(Status),headers(Headers),
+                             connection(close),authenticate(false)|Native]),
+        ( set_stream(Stream,type(binary)),
+          ( ( Method == head ; no_body_status(Status) )
+          -> stream_range_open(Stream,BodyStream,[size(0),onclose(close_http_parent)])
+          ; BodyStream=Stream ) ),
+        Outcome,( Outcome==exit -> true ; close_if_open(Stream) )).
 
 close_http_parent(Stream,_) :- close(Stream).
 

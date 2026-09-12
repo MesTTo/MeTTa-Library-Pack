@@ -127,7 +127,9 @@
             stderr/1,
             stdin/1,
             stdout/1,
-            adopt_file_stream/2
+            adopt_file_stream/2,
+            release_file_stream/1,
+            known_file/2
           ]).
 
 % Guarantees: private helpers and autoload declarations belong to this module.
@@ -205,6 +207,13 @@ next_file_handle(Handle) :-
     flag('$metta_file_handle', Previous, Previous + 1),
     Handle is Previous + 3.
 
+%! known_file(+Handle:integer, -Stream:stream) is det.
+%
+% Borrow a registered stream without transferring ownership. The returned
+% stream remains subject to concurrent close; native consumers acquire it
+% with PL_get_stream before reading its descriptor.
+% [tested: lib_socket:borrowed_stream_refuses_after_close; commit=WORKTREE].
+% @private
 known_file(Handle, Stream) :-
     (   metta_file(Handle, Stream)
     ->  true
@@ -216,7 +225,7 @@ known_file(Handle, Stream) :-
 % Transfer a newly owned stream into the shared handle table. Callers supply
 % a fresh Handle and a stream not already registered. A failed registration
 % withdraws its entry and closes the stream, including cancellation.
-% [tested: lib_http:adoption_failure_releases_stream; commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
+% [tested: lib_http:adoption_failure_releases_stream; commit=WORKTREE].
 % @private
 adopt_file_stream(Stream, Handle) :-
     setup_call_catcher_cleanup(true,
@@ -224,8 +233,19 @@ adopt_file_stream(Stream, Handle) :-
           with_mutex('$metta_files', assertz(metta_file(Handle, Stream))) ),
         Outcome,
         ( Outcome == exit -> true
-        ; with_mutex('$metta_files', retractall(metta_file(_, Stream))),
-          close(Stream) )).
+        ; release_file_stream(Stream) )).
+
+%! release_file_stream(+Stream:stream) is det.
+%
+% Roll back an unpublished stream transfer, whether adoption already registered
+% its handle or has not started. The acquiring operation still owns Stream.
+% Withdraw its entry before closing; an already closed stream needs no action.
+% [tested: lib_socket:adoption_cancellation_rolls_back_the_new_socket,
+% lib_http:post_adoption_cancellation_releases_filtered_responses; commit=WORKTREE].
+% @private
+release_file_stream(Stream) :-
+    with_mutex('$metta_files', retractall(metta_file(_, Stream))),
+    ( is_stream(Stream) -> close(Stream) ; true ).
 
 % The host's stream type check is loose: read_string/3 and write/2 accept a
 % binary stream and would decode or encode octets as text without a word, so
