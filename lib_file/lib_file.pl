@@ -14,7 +14,7 @@
 %     [verified 2026-08-15, see lib_string.pl]
 %   - bytes are an expression of integers 0 to 255; the host's binary streams
 %     write a string of such codes as exactly those bytes
-%     [tested: lib_file_surface:bytes_round_trip_every_value; commit=WORKTREE]
+%     [tested: lib_file_surface:bytes_round_trip_every_value; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 % Guarantees:
 %   - a handle is a small integer, so it prints, compares and crosses the [tested: lib_file:the_handle_surface_reads_and_seeks]
 %     Python boundary as an ordinary MeTTa value rather than as a blob
@@ -28,21 +28,21 @@
 %     commit=42b5d28232e75c32b20a1d5bf1f740fec134938d].
 %   - a text operation on a binary handle and a byte operation on a text handle
 %     refuse by name, because the host's loose stream type check would decode
-%     octets as text [tested: lib_file_surface:handle_kinds_are_checked; commit=WORKTREE]
+%     octets as text [tested: lib_file_surface:handle_kinds_are_checked; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 %   - replace-file! and copy-dir! publish with one rename after every staged
 %     stream closed, so a reader sees the old entry or the complete new one
 %     [tested: lib_file_surface:replace_preserves_destination_on_failure,
-%     lib_file_surface:copy_dir_publishes_a_complete_tree; commit=WORKTREE]
+%     lib_file_surface:copy_dir_publishes_a_complete_tree; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 %   - dir-walk and dir-glob report symbolic links and enter them only under
 %     (follow-links True), where a link back to the current chain is reported
 %     and not entered [tested: lib_file_surface:walk_reports_links_without_entering,
-%     lib_file_surface:walk_follows_links_without_looping; commit=WORKTREE]
+%     lib_file_surface:walk_follows_links_without_looping; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 %   - path-normalize, path-absolute, path-relative and path-resolve answer
 %     what CPython's posixpath answers [tested: test_normalize_agrees_with_posixpath,
 %     test_relative_agrees_with_posixpath, test_absolute_agrees_with_posixpath,
-%     test_resolve_agrees_with_posixpath; commit=WORKTREE]
+%     test_resolve_agrees_with_posixpath; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 %   - with-file and with-temp-dir release their resource on exhaustion, cut
-%     and exception [tested: lib_file_surface:with_file_closes_on_every_exit; commit=WORKTREE]
+%     and exception [tested: lib_file_surface:with_file_closes_on_every_exit; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 % Fails when:
 %   - the file is missing and the options do not say to create it. That is an
 %     error, not a failure, so it cannot be mistaken for an empty file.
@@ -341,7 +341,7 @@ read_bytes_up_to(Stream, Count, Bytes) :-
 
 % The host writes a string of codes 0 to 255 on a binary stream as exactly
 % those bytes, one write for the whole expression rather than one call a byte
-% [tested: lib_file_surface:bytes_round_trip_every_value; commit=WORKTREE].
+% [tested: lib_file_surface:bytes_round_trip_every_value; commit=e40ef941310bddd1f57074eb559e78aac8a263b0].
 put_bytes(Stream, Bytes) :-
     string_codes(Text, Bytes),
     write(Stream, Text).
@@ -784,7 +784,7 @@ collapse_recursive([Component|More], [Component|Components]) :-
 % without a listing, a wildcard component lists one directory and filters it,
 % and ** recurses through directories while the same tail stays pending
 % [source: https://github.com/python/cpython/blob/823f0323ee6ec1402088b73bce1a38473cac36dc/Lib/glob.py;
-% commit=WORKTREE]. Rel is the matched relative components so far, reversed.
+% commit=e40ef941310bddd1f57074eb559e78aac8a263b0]. Rel is the matched relative components so far, reversed.
 glob_select([], Root, Rel, _, _, _, Full) :-
     relative_path(Root, Rel, Full),
     path_exists(Full).
@@ -1044,7 +1044,7 @@ path_exists(Path) :-
     normalize_text(Text, Normalized).
 
 % [source: https://github.com/python/cpython/blob/823f0323ee6ec1402088b73bce1a38473cac36dc/Lib/posixpath.py,
-% normpath; commit=WORKTREE]. A .. is kept at the start of a relative path or
+% normpath; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]. A .. is kept at the start of a relative path or
 % after another .., pops a component otherwise, and is dropped at the root.
 normalize_text("", ".") :- !.
 normalize_text(Text, Normalized) :-
@@ -1142,7 +1142,7 @@ absolute_text(Text, Absolute) :-
     ).
 
 % [source: https://github.com/python/cpython/blob/823f0323ee6ec1402088b73bce1a38473cac36dc/Lib/posixpath.py,
-% relpath; commit=WORKTREE]. The absolute paths are already normalized, so
+% relpath; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]. The absolute paths are already normalized, so
 % stripping the root and splitting gives the component lists relpath compares.
 absolute_components(Absolute, Parts) :-
     path_root(Absolute, _, Rest),
@@ -1175,7 +1175,7 @@ common_prefix(_, _, []).
     normalize_text(ResolvedText, Resolved).
 
 % [source: https://github.com/python/cpython/blob/823f0323ee6ec1402088b73bce1a38473cac36dc/Lib/posixpath.py,
-% realpath; commit=WORKTREE]. The pending components are a stack; a link's
+% realpath; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]. The pending components are a stack; a link's
 % target components are pushed in front of the rest, behind a marker that
 % records the link's fully resolved target when the target has been consumed.
 % A link met again while still unresolved is a loop and stays as written.

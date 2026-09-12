@@ -6,7 +6,7 @@
 ; dir-glob answer one path per answer, and with-file and with-temp-dir apply a
 ; function to a resource that closes on every exit. A missing file is an
 ; ERROR rather than a failure, so it can never be mistaken for an empty file.
-; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/19-file_lib.metta; commit=WORKTREE]
+; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/19-file_lib.metta; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
 
 ; The text coercions and the NUL-safe line split come from lib_string.
 !(import! &self (library lib_string))
