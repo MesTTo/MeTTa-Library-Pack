@@ -5,28 +5,28 @@
 %   and its arguments are a collection, so a file called `; rm -rf /` is an argument
 %   and never a second command; that is the difference this library exists to keep
 %   [source: lib/lib_system/lib_system.pl's own Fails-when field, which points here;
-%   commit=WORKTREE].
+%   commit=623a2848ef49a936cd82b07adfbed2999d8548a4].
 % Assumes:
 %   - the program is found on PATH unless the name holds a separator, in which case
 %     it is a path. That is the host's own rule, and the refusal for a program that
 %     is not there names it [tested: lib_process:a_program_that_is_not_there_is_named;
-%     commit=WORKTREE]
+%     commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
 %   - the build has library(process). The `subprocess` capability already in the
 %     engine's census is what says so, and the declaration below refuses this library
 %     before it loads where it is absent
-%     [source: engine/metta.pl:metta_platform_capability/3; commit=WORKTREE]
+%     [source: engine/metta.pl:metta_platform_capability/3; commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
 % Guarantees:
 %   - a nonzero exit is a STATUS and not an error: process-run! answers
 %     (process-result Code Output Error) whatever the program exited with, and only a
 %     launch that could not happen raises
-%     [tested: lib_process:a_nonzero_exit_is_a_status; commit=WORKTREE]
+%     [tested: lib_process:a_nonzero_exit_is_a_status; commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
 %   - every stream process-run! opens it closes, on every path, so a program that
 %     writes megabytes and one that writes nothing both leave no descriptor behind
-%     [tested: lib_process:every_captured_stream_is_closed; commit=WORKTREE]
+%     [tested: lib_process:every_captured_stream_is_closed; commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
 %   - a started process is waited for or signalled through its own identifier, and
 %     process-status answers without blocking, so a program can poll one and kill it
 %     [tested: lib_process:a_started_process_is_watched_and_signalled;
-%     commit=WORKTREE]
+%     commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
 % Fails when: a caller wants a pipeline, a pseudo-terminal or a shell's expansion.
 %   Those are the shell's own features, and running a shell is the caller's explicit
 %   choice: (process-run! "sh" ("-c" "...")) says so in the program's own name.
