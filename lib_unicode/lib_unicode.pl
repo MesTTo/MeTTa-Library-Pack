@@ -5,29 +5,29 @@
 %   Every answer comes from the host's own database, which is utf8proc's, so the
 %   version that produced it is a head of its own: a normalization is only
 %   reproducible beside the version that did it
-%   [source: /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl; commit=WORKTREE].
+%   [source: /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl; commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b].
 % Assumes:
 %   - text is a String and a CHARACTER is either a one-character String or the
 %     Number of a code point, because a program reaching for a property has one
 %     or the other in hand [tested: lib_unicode:a_character_is_a_string_or_a_code;
-%     commit=WORKTREE]
+%     commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b]
 %   - the build has library(unicode). The declaration below refuses the library
 %     before it loads where it does not, naming what is lost
-%     [source: engine/metta.pl:metta_platform_capability/3; commit=WORKTREE]
+%     [source: engine/metta.pl:metta_platform_capability/3; commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b]
 % Guarantees:
 %   - the five normalization forms are the five UAX#15 and UAX#31 compositions of
 %     unicode-map's flags, and each is that one line rather than a second
 %     implementation [tested: lib_unicode:each_form_is_a_composition_of_flags;
-%     commit=WORKTREE]
+%     commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b]
 %   - a property with no value for a character has NO answer, where an unknown
 %     property NAME is refused: the first is data about the character and the
 %     second is a mistake in the program
 %     [tested: lib_unicode:an_absent_property_has_no_answer_and_a_wrong_name_is_refused;
-%     commit=WORKTREE]
+%     commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b]
 %   - graphemes are the user-perceived characters of UAX#29, so a base character
 %     and its combining marks are ONE answer where string-chars answers each code
 %     point [tested: lib_unicode:graphemes_group_what_code_points_split;
-%     commit=WORKTREE]
+%     commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b]
 % Fails when: a caller wants case CONVERSION or any other operation over whole
 %   strings. lib_string's string-upper and string-lower are that; case FOLDING
 %   here is the different operation UAX#31 defines for caseless comparison, which
@@ -97,7 +97,7 @@
 % The five forms as the flag sets the host's own convenience predicates use, so
 % the library states each derivation rather than calling a second predicate for
 % it [source: /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl:unicode_nfc/2
-% and its four siblings; commit=WORKTREE].
+% and its four siblings; commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b].
 normalization(nfc, [stable, compose]).
 normalization(nfd, [stable, decompose]).
 normalization(nfkc, [stable, compose, compat]).
@@ -165,7 +165,7 @@ flags_agree(Flags) :-
 
 % utf8proc's own flag set, which the host passes through unchanged
 % [source: /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl:unicode_map/3;
-% commit=WORKTREE].
+% commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b].
 map_flag(stable).
 map_flag(compat).
 map_flag(compose).
@@ -204,7 +204,7 @@ map_flag(stripmark).
 % The database's properties under MeTTa's own spelling, which is hyphenated where
 % the host's is underscored [source:
 % /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl:unicode_property/2;
-% commit=WORKTREE].
+% commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b].
 property_name(category, category).
 property_name('combining-class', combining_class).
 property_name('bidi-class', bidi_class).
