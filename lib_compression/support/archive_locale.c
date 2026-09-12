@@ -2,15 +2,15 @@
  * Assumes: the private callback is a synchronous native archive operation;
  * it does not change the thread's C locale or retain an answer cursor.
  * Guarantees: nested calls restore their caller's locale, including exceptions.
- * [tested: test_archive_locale_restoration; commit=WORKTREE].
+ * [tested: test_archive_locale_restoration; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
  * Owns resources: each C frame restores its locale and frees its duplicate after
  * PL_call_predicate closes the callback query; no locale handles escape.
  * Guarded by: locale changes affect only the calling OS thread.
- * [source: https://pubs.opengroup.org/onlinepubs/9799919799/functions/uselocale.html; commit=WORKTREE].
+ * [source: https://pubs.opengroup.org/onlinepubs/9799919799/functions/uselocale.html; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
  * Decides: C.UTF-8 on POSIX, UTF-8 on macOS and .UTF8 on Windows name the
  * required character locale; other locale categories keep their caller's values.
  * Windows uses UCRT's per-thread mode; Linux supplies the runtime test evidence.
- * [source: https://github.com/MicrosoftDocs/cpp-docs/blob/643eebdd20762af785a8f4303dec445d0cd93d2f/docs/c-runtime-library/reference/configthreadlocale.md; commit=WORKTREE].
+ * [source: https://github.com/MicrosoftDocs/cpp-docs/blob/643eebdd20762af785a8f4303dec445d0cd93d2f/docs/c-runtime-library/reference/configthreadlocale.md; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
  */
 
 #ifndef _GNU_SOURCE

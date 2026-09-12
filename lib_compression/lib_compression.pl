@@ -3,7 +3,7 @@
 % Guarantees: gzip/zlib decoding checks complete members; file outputs publish
 % after successful decoding and close. Extraction refuses escaping names and
 % unsupported entry kinds before publishing its complete tree.
-% [tested: lib_compression; commit=WORKTREE].
+% [tested: lib_compression; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % Owns resources: memory files, input/decoder/entry streams, intermediate files
 % and staging trees close or disappear on success, failure and exception.
 % File's metta_staged_publish/2 owns final publication and staging cleanup.
@@ -12,7 +12,7 @@
 % Decides: formats are gzip and zlib; levels are 0..9; complete concatenated
 % members are accepted. Extraction restores regular file data and directories,
 % using portable relative names and refusing links and special files.
-% [tested: lib_compression; commit=WORKTREE].
+% [tested: lib_compression; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 
 :- module(lib_compression,
           ['compression-formats'/1,'compress-bytes'/4,'decompress-bytes'/3,

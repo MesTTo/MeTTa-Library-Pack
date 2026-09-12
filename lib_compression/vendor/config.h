@@ -1,6 +1,6 @@
 /* Purpose: select the archive APIs declared by the bundled 3.8.5 headers.
  * The linker verifies these entry points in the host libarchive installation.
- * [source: lib/lib_compression/vendor/archive.h:archive_read_support_format_zip; commit=WORKTREE].
+ * [source: lib/lib_compression/vendor/archive.h:archive_read_support_format_zip; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
  */
 #define HAVE_ARCHIVE_READ_SUPPORT_FILTER_BZIP2 1
 #define HAVE_ARCHIVE_READ_SUPPORT_FILTER_COMPRESS 1

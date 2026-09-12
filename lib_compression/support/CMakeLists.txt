@@ -1,7 +1,7 @@
 # Purpose: compile the pinned archive provider and its private SWI binding.
 # Owns resources: the calling native build recipe owns this temporary build tree.
 # Decides: archive symbols stay local to the resulting SWI object.
-# [tested: test_archive_legacy_zip_names; commit=WORKTREE].
+# [tested: test_archive_legacy_zip_names; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 cmake_minimum_required(VERSION 3.18)
 project(metta_compression C)
 

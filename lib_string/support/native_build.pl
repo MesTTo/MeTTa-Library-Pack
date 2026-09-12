@@ -1,8 +1,8 @@
 % Purpose: build the private String provider and track every included header.
 % Guarantees: header changes invalidate the shared atomic build cache.
-% [tested: test_native_header_change_rebuilds_the_object; commit=WORKTREE].
+% [tested: test_native_header_change_rebuilds_the_object; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % Decides: missing native tools raise string_native_build with a prebuild remedy.
-% [tested: test_native_build_is_atomic_and_reused; commit=WORKTREE].
+% [tested: test_native_build_is_atomic_and_reused; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 
 :- module(lib_string_native_build, [native_object/1]).
 :- use_module(library(filesex), [directory_file_path/3]).

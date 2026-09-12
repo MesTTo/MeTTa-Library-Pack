@@ -1,10 +1,10 @@
 % Purpose: locate and build the checked OpenSSL adapter for lib_crypto.
 % Guarantees: builds use the shared atomic publication and cancellation protocol
 % [tested: test_native_build_is_atomic_and_reused,
-% test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=WORKTREE].
+% test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % Decides: OpenSSL 3 supplies the algorithms; missing build dependencies raise
 % crypto_native_build with the installation and prebuild commands
-% [tested: test_native_build_is_atomic_and_reused; commit=WORKTREE].
+% [tested: test_native_build_is_atomic_and_reused; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 
 :- module(lib_crypto_native_build, [native_object/1]).
 :- use_module(library(filesex), [directory_file_path/3]).

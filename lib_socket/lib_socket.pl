@@ -3,7 +3,7 @@
 % returned socket; functions accept its integer handle in the calling module.
 % Guarantees: TCP bytes use File; datagrams retain packet boundaries, bytes and
 % complete IPv4/IPv6 endpoints; scoped handles close on every exit.
-% [tested: lib_socket; commit=WORKTREE].
+% [tested: lib_socket; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % Owns resources: openers transfer streams to File; file-close! releases them.
 % with-socket owns its handle until exhaustion, cut or exception. The native
 % adapter owns accepted descriptors until their two stream halves close.
@@ -12,7 +12,7 @@
 % call-local allocation set until the returned handle enters its callback scope.
 % Decides: endpoint families are explicit, binding port zero asks the OS, waits
 % use nonnegative seconds or infinite, and empty wait sets return immediately.
-% [tested: lib_socket; commit=WORKTREE].
+% [tested: lib_socket; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 
 :- module(lib_socket,
           ['tcp-connect!'/2,'tcp-listen!'/3,'tcp-accept!'/2,

@@ -1,9 +1,9 @@
 % Purpose: own private archive readers and load their UTF8 call adapter.
 % Guarantees: import loads the adapter or raises a named build refusal.
-% [tested: lib_compression; commit=WORKTREE].
+% [tested: lib_compression; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % Owns resources: with_archive/4 closes its preallocated archive even if opening
 % fails, then closes an owned parent file; stream(Input) borrows its parent.
-% [tested: archive_scope_releases_failed_acquisitions; commit=WORKTREE].
+% [tested: archive_scope_releases_failed_acquisitions; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 
 :- module(lib_compression_native,
           [with_utf8/1,with_archive/4,archive_property/2,archive_next_header/2,

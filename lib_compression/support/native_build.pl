@@ -1,6 +1,6 @@
 % Purpose: build the private archive reader with the shared atomic builder.
 % Guarantees: a failed build raises with a repair and prebuild command.
-% [tested: lib_compression; commit=WORKTREE].
+% [tested: lib_compression; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % Owns resources: native_build:native_object/6 owns compiler, stage and locks.
 % Each CMake subprocess is joined before its output closes; its temporary tree
 % is removed on success, failure and cancellation. Warm objects need no compiler.

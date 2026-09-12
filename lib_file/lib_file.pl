@@ -32,7 +32,7 @@
 %   - replace-file! and copy-dir! publish with one rename after every staged
 %     stream closed, so a reader sees the old entry or the complete new one
 %     [tested: lib_file_surface:replace_preserves_destination_on_failure,
-%     lib_file_surface:copy_dir_publishes_a_complete_tree; commit=WORKTREE]
+%     lib_file_surface:copy_dir_publishes_a_complete_tree; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268]
 %   - dir-walk and dir-glob report symbolic links and enter them only under
 %     (follow-links True), where a link back to the current chain is reported
 %     and not entered [tested: lib_file_surface:walk_reports_links_without_entering,
@@ -1343,7 +1343,7 @@ metta_copy_file(From, To) :-
 % Writer closes its streams before returning. Publish with one rename and
 % remove staging on every exit. A failed Writer preserves Destination.
 % [tested: lib_file_surface:replace_preserves_destination_on_failure,
-% lib_file_surface:copy_dir_publishes_a_complete_tree, lib_compression; commit=WORKTREE].
+% lib_file_surface:copy_dir_publishes_a_complete_tree, lib_compression; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 % @private
 metta_staged_publish(To, Writer) :-
     file_directory_name(To, Parent),
