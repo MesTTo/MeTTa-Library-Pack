@@ -3,13 +3,13 @@
 % the first answer is its verdict. The payload itself is held.
 % Guarantees: disabled topics invoke no handler; enabled messages follow the
 % host hook order, preserve payload syntax and propagate handler exceptions.
-% [tested: lib_logging; commit=WORKTREE].
+% [tested: lib_logging; commit=cf6b111ffad74477d9fa7169b215379dcabe721c].
 % Owns resources: topic settings persist in the host debug registry until
 % changed. A handler and its module are arguments owned by one message call.
 % Guarded by: prolog_debug serializes topic declaration, changes and snapshots.
 % Decides: topics start disabled; debug, informational, warning and error use
 % the corresponding host message kinds, including host printing and halt policy.
-% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/boot/messages.pl:print_message_guarded/2; commit=WORKTREE].
+% [source: https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/boot/messages.pl:print_message_guarded/2; commit=cf6b111ffad74477d9fa7169b215379dcabe721c].
 
 :- module(lib_logging,
           [ 'log!'/4, 'log-to!'/5, 'log-topic!'/3, 'log-enabled'/2,
