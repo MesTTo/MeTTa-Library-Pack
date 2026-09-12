@@ -5,25 +5,25 @@
 %   Null. That is lib_json's own decision, and it is taken here rather than
 %   invented so that one traversal walks both formats: lib_json's json-at follows
 %   a path through a YAML value, and dict-space builds the mappings
-%   [source: lib/lib_json/lib_json.pl:'dict-space'/2; commit=WORKTREE].
+%   [source: lib/lib_json/lib_json.pl:'dict-space'/2; commit=672e5be181839a8301ba70bc6ead69678f3735bd].
 % Assumes:
 %   - one document per call. The host's yaml_read/2 loads exactly one and FAILS on
 %     a stream holding more, whatever markers it carries, so a multi-document
 %     stream is refused by name rather than answered wrongly
-%     [tested: lib_yaml:a_multi_document_stream_is_refused_by_name; commit=WORKTREE]
+%     [tested: lib_yaml:a_multi_document_stream_is_refused_by_name; commit=672e5be181839a8301ba70bc6ead69678f3735bd]
 %   - the build has library(yaml), which is SWI's ext/yaml pack over libyaml. The
 %     declaration below refuses the library before it loads where it does not
-%     [source: engine/metta.pl:metta_platform_capability/3; commit=WORKTREE]
+%     [source: engine/metta.pl:metta_platform_capability/3; commit=672e5be181839a8301ba70bc6ead69678f3735bd]
 % Guarantees:
 %   - decoding and encoding round-trip every value this library can decode, so
 %     the text a value encodes to decodes back to that value
-%     [tested: lib_yaml:decoding_and_encoding_round_trip; commit=WORKTREE]
+%     [tested: lib_yaml:decoding_and_encoding_round_trip; commit=672e5be181839a8301ba70bc6ead69678f3735bd]
 %   - an unsupported tag is refused NAMING the tag, where the host answers an
 %     opaque tag(Tag, Text) term that no MeTTa form can read
-%     [tested: lib_yaml:an_unknown_tag_is_refused_by_name; commit=WORKTREE]
+%     [tested: lib_yaml:an_unknown_tag_is_refused_by_name; commit=672e5be181839a8301ba70bc6ead69678f3735bd]
 %   - a duplicate key, malformed text and an unreadable number are each refused
 %     with the host's own line number where it has one
-%     [tested: lib_yaml:malformed_text_is_refused_with_its_line; commit=WORKTREE]
+%     [tested: lib_yaml:malformed_text_is_refused_with_its_line; commit=672e5be181839a8301ba70bc6ead69678f3735bd]
 % Fails when: a caller wants anchors preserved as sharing, comments kept, or key
 %   order preserved. libyaml resolves an alias into a copy before this library
 %   sees it, comments are not part of the data model, and a mapping is a space,
@@ -34,7 +34,7 @@
 %   means null writes `~` or `null`
 %   [measured 2026-09-12: yaml_read/2 over "k:\n" answers yaml{k:""} and over
 %   "k: ~\n" answers yaml{k:null}; tested:
-%   lib_yaml:an_omitted_value_is_the_empty_string_and_not_null; commit=WORKTREE].
+%   lib_yaml:an_omitted_value_is_the_empty_string_and_not_null; commit=672e5be181839a8301ba70bc6ead69678f3735bd].
 % Owns resources: every mapping is a space this library created and the caller
 %   owns, exactly as lib_json's decoder hands one over; a failed decode releases
 %   every space it made before raising.
@@ -129,7 +129,7 @@ document_value(Document, Value) :-
 % no space of this one behind: dict-space allocates last and owns what it made,
 % which is lib_json's own protocol for the same job
 % [source: lib/lib_json/lib_json.pl:'dict-space'/2, whose with_outcome_cleanup
-% releases every space it created on a failed construction; commit=WORKTREE].
+% releases every space it created on a failed construction; commit=672e5be181839a8301ba70bc6ead69678f3735bd].
 mapping_space(Dict, Space) :-
     dict_pairs(Dict, _, Pairs),
     findall([Key, Value],

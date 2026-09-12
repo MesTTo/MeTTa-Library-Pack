@@ -17,7 +17,7 @@
 ;
 ; The library declares the `yaml` platform capability, so a build without SWI's
 ; yaml pack refuses it by name before it loads.
-; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/28-yaml_lib.metta; commit=WORKTREE]
+; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/28-yaml_lib.metta; commit=672e5be181839a8301ba70bc6ead69678f3735bd]
 
 ; lib_json holds the object shape and the path walk, and lib_file holds the file
 ; doors, so the two file forms below are one line each rather than a second copy
