@@ -130,3 +130,120 @@
            (or (isinf-math $p) (or (< $p 0.0) (> $p 1.0))))
        (Error $p "ws-add-bernoulli-independent requires p in [0, 1]; provide a valid Bernoulli probability")
        (ws-map2-independent + $ps (((- 1.0 $p) 0) ($p 1)))))
+
+;The moments and the order statistics of a numeric distribution. Each one is a
+;fold over the normalized support, so nothing is sampled and the answer is
+;exactly what the finite law says; ws-expect is the first moment and the rest
+;are written over it.
+
+;The variance, the second moment about the mean. The one-pass form
+;E[X^2] - E[X]^2 is not used: it subtracts two nearly equal numbers when the
+;mean is large, which loses every significant digit. Two passes over a finite
+;support cost twice nothing.
+(= (ws-variance $ps)
+   (let $dist (ws-normalize $ps)
+     (if-error $dist
+       $dist
+       (let $mean (ws-expect $dist)
+         (ws-expect (ws-map (|-> ($x) (let $d (- $x $mean) (* $d $d))) $dist))))))
+
+;The standard deviation, the square root of the variance, in the values' own
+;units.
+(= (ws-deviation $ps)
+   (let $variance (ws-variance $ps)
+     (if-error $variance $variance (sqrt-math $variance))))
+
+;The nth moment about the mean, so 2 is the variance and 3 and 4 are what skew
+;and kurtosis are computed from. The first central moment is 0.0 by definition,
+;and this answers exactly that rather than a rounding of it.
+(= (ws-central-moment $ps $n)
+   (let $dist (ws-normalize $ps)
+     (if-error $dist
+       $dist
+       (let $mean (ws-expect $dist)
+         (ws-expect (ws-map (|-> ($x) (pow-math (- $x $mean) $n)) $dist))))))
+
+;The probability that a draw is at most the threshold, which is the cumulative
+;distribution function at that point; ws-mass-at-least is its inclusive upper
+;tail.
+(= (ws-mass-at-most $ps $threshold)
+   (ws-expect (ws-map (|-> ($x) (if (<= $x $threshold) 1.0 0.0)) $ps)))
+
+;The smallest value whose cumulative mass reaches the level, which is the
+;quantile function: the median is the quantile at 0.5. A level outside (0, 1]
+;refuses, because no value answers it.
+(= (ws-quantile $ps $level)
+   (let $dist (ws-normalize $ps)
+     (if-error $dist
+       $dist
+       (if (or (<= $level 0.0) (> $level 1.0))
+           (Error $level "ws-quantile takes a level in (0, 1]; 0.5 is the median")
+           (ws-quantile-walk (sort-atom (ws-flip $dist)) $level 0.0)))))
+
+;The walk the quantile is defined by: values in increasing order, mass added
+;until the level is reached. The last value answers whatever rounding leaves,
+;so a level of 1.0 always has an answer.
+(= (ws-quantile-walk $pairs $level $seen)
+   (let $pair (car-atom $pairs)
+     (let $rest (cdr-atom $pairs)
+       (let $mass (+ $seen (index-atom $pair 1))
+         (if (or (>= $mass $level) (== $rest ()))
+             (index-atom $pair 0)
+             (ws-quantile-walk $rest $level $mass))))))
+
+;The median, which is the quantile at one half.
+(= (ws-median $ps) (ws-quantile $ps 0.5))
+
+;The support as an ordered expression of values, weights dropped: what the
+;distribution can answer, once each, smallest first.
+(= (ws-support $ps)
+   (let $dist (ws-normalize $ps)
+     (if-error $dist
+       $dist
+       (sort-atom (map-atom $dist (|-> ($p) (index-atom $p 1)))))))
+
+;n independent draws, summed: the distribution of a total rather than of one
+;draw. Zero draws are the point mass at 0, and the convolution is exact, so
+;this is the law and not a simulation of it.
+(= (ws-sum-independent $ps $n)
+   (if (< $n 0)
+       (Error $n "ws-sum-independent takes a nonnegative count of independent draws")
+       (if (== $n 0)
+           ((1.0 0))
+           (let $one (ws-normalize $ps)
+             (if-error $one
+               $one
+               (ws-map2-independent + $one (ws-sum-independent $one (- $n 1))))))))
+
+(@doc ws-variance
+  (@desc "The variance of a numeric distribution, computed about the mean in two passes over the finite support, because the one-pass E[X^2]-E[X]^2 form loses its significant digits when the mean is large.")
+  (@params ((@param "a distribution of (weight value) pairs")))
+  (@return "the variance"))
+(@doc ws-deviation
+  (@desc "The standard deviation, the square root of the variance, in the values' own units.")
+  (@params ((@param "a distribution of (weight value) pairs")))
+  (@return "the standard deviation"))
+(@doc ws-central-moment
+  (@desc "The nth moment about the mean: 2 is the variance, and 3 and 4 are what skew and kurtosis are computed from. The first is exactly 0.0.")
+  (@params ((@param "a distribution of (weight value) pairs") (@param "which moment")))
+  (@return "the moment"))
+(@doc ws-mass-at-most
+  (@desc "The probability that a draw is at most the threshold, which is the cumulative distribution function at that point. ws-mass-at-least is the inclusive upper tail.")
+  (@params ((@param "a distribution of (weight value) pairs") (@param "the threshold, included")))
+  (@return "the mass at or below it"))
+(@doc ws-quantile
+  (@desc "The smallest value whose cumulative mass reaches the level, the quantile function. A level outside (0, 1] refuses, because no value answers it.")
+  (@params ((@param "a distribution of (weight value) pairs") (@param "a level in (0, 1]")))
+  (@return "the value at that level"))
+(@doc ws-median
+  (@desc "The median, which is the quantile at one half.")
+  (@params ((@param "a distribution of (weight value) pairs")))
+  (@return "the median value"))
+(@doc ws-support
+  (@desc "The values the distribution can answer, once each, smallest first, with the weights dropped.")
+  (@params ((@param "a distribution of (weight value) pairs")))
+  (@return "the ordered support"))
+(@doc ws-sum-independent
+  (@desc "The distribution of the sum of n independent draws, by exact convolution rather than simulation. Zero draws are the point mass at 0; a negative count refuses.")
+  (@params ((@param "a distribution of (weight value) pairs") (@param "how many independent draws")))
+  (@return "the distribution of the total"))
