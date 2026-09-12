@@ -4,26 +4,26 @@
 %   no duplicates, which is SWI's own ordered-set representation, so every
 %   operation here is a linear merge rather than a quadratic scan and no separate
 %   value type is introduced [source: /usr/lib/swi-prolog/library/ordsets.pl;
-%   commit=WORKTREE].
+%   commit=e3e8c891065765765ee8fe567c5eb6864e79b652].
 % Assumes:
 %   - a set argument really is one. Every head checks, because the host's merges
 %     answer nonsense on unsorted input rather than failing: ord_union/3 over
 %     ([2 1], [1]) answers (2 1 1), with nothing said
 %     [tested: lib_sets:an_unordered_argument_is_refused_by_every_head;
-%     commit=WORKTREE]
+%     commit=e3e8c891065765765ee8fe567c5eb6864e79b652]
 %   - elements are compared as TERMS. A variable is not a member of a set of
 %     numbers, where member/2 would unify it with the first one
 %     [tested: lib_sets:membership_compares_terms_rather_than_unifying;
-%     commit=WORKTREE]
+%     commit=e3e8c891065765765ee8fe567c5eb6864e79b652]
 % Guarantees:
 %   - every answer is itself a set, so the operations compose without a
 %     normalisation step, and set-of is the only head that has to sort
-%     [tested: lib_sets:every_answer_is_a_set; commit=WORKTREE]
+%     [tested: lib_sets:every_answer_is_a_set; commit=e3e8c891065765765ee8fe567c5eb6864e79b652]
 %   - the merges agree with the same operations computed over lists for
 %     generated inputs, and the laws they obey (commutativity, associativity,
 %     distribution, De Morgan over a universe) hold
 %     [tested: lib_sets:the_merges_agree_with_their_list_definitions,
-%     lib_sets:the_laws_of_the_algebra_hold; commit=WORKTREE]
+%     lib_sets:the_laws_of_the_algebra_hold; commit=e3e8c891065765765ee8fe567c5eb6864e79b652]
 % Fails when: a caller wants duplicates or insertion order kept. That is an
 %   expression, and lib_functional's group-by, sort-by and flatten-once are what
 %   work over one; lib_roman's `/?\`, `\?` and `\?/` take the COMPARISON as an
