@@ -1,10 +1,10 @@
 % Purpose: compute finite descriptive statistics from exact stored observations.
 % Assumes: math-float rounds exact results; fraction_sqrt accepts a nonnegative
 % rational and rounds its root, including final IEEE saturation.
-% [source: lib/lib_vector/lib_vector.pl:fraction_sqrt/2; commit=WORKTREE].
+% [source: lib/lib_vector/lib_vector.pl:fraction_sqrt/2; commit=84824f5cf870f5cd7ac89d6580093d0459d91a9b].
 % Guarantees: algebraic reductions stay exact until final floating conversion,
 % and invalid domains raise with the operation's name.
-% [tested: lib_statistics, test_statistics_exact_reductions; commit=WORKTREE].
+% [tested: lib_statistics, test_statistics_exact_reductions; commit=84824f5cf870f5cd7ac89d6580093d0459d91a9b].
 % Owns resources: immutable query-local terms; no streams or mutable state.
 % Decides: numeric observations are finite; degrees of freedom is explicit;
 % modes use term identity; geometric mean retains native log/exp precision.

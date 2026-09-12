@@ -1,6 +1,6 @@
 ; Purpose: descriptive statistics over the shared exact numeric providers.
 ; Guarantees: the generated declarations match the native half.
-; [tested: sh check.sh prolog-face; commit=WORKTREE].
+; [tested: sh check.sh prolog-face; commit=84824f5cf870f5cd7ac89d6580093d0459d91a9b].
 !(import! &self (library lib_math))
 
 ; begin generated Prolog face

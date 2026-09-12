@@ -282,7 +282,7 @@ positive_float(N, D, Out) :-
 %
 % Native numeric service: callers supply a nonnegative exact rational. Return
 % its correctly rounded binary64 root, including final IEEE overflow/underflow.
-% [tested: lib_vector_surface, lib_statistics; commit=WORKTREE].
+% [tested: lib_vector_surface, lib_statistics; commit=84824f5cf870f5cd7ac89d6580093d0459d91a9b].
 % Translate CPython's fraction square root with a 109-bit round-to-odd
 % intermediate; vendor/ records the license. No MeTTa head is registered.
 % https://github.com/python/cpython/blob/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Lib/statistics.py#L1695-L1721
