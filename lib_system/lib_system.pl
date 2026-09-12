@@ -6,22 +6,22 @@
 %   also what keeps the relation inert, where a Symbol named like a function would
 %   be evaluated where the relation is written
 %   [source: docs/journal/2026-09-11-a-standard-library-for-a-language.md, the
-%   2026-09-12 markup entry measuring that; commit=WORKTREE].
+%   2026-09-12 markup entry measuring that; commit=b109f59a8095add8ecf264b011e683184274acbb].
 % Assumes:
 %   - a variable that is not set has NO answer rather than an empty String, because
 %     unset and empty are different states and a program that defaults one has to
 %     be able to tell [tested: lib_system:an_unset_variable_has_no_answer;
-%     commit=WORKTREE]
+%     commit=b109f59a8095add8ecf264b011e683184274acbb]
 %   - the environment is process-wide. A write is visible to every space and to
 %     every child process this one starts, which is the point of writing one, and
 %     the library says so rather than pretending otherwise
 % Guarantees:
 %   - what env-set! writes, env-get answers and env-all holds, and what env-unset!
 %     removes has no answer again
-%     [tested: lib_system:a_write_is_visible_to_every_reader; commit=WORKTREE]
+%     [tested: lib_system:a_write_is_visible_to_every_reader; commit=b109f59a8095add8ecf264b011e683184274acbb]
 %   - platform-info answers what the host's own flags say, and an unknown key is
 %     refused with every key listed, so a typo is not an absent platform
-%     [tested: lib_system:platform_info_is_the_hosts_own_flags; commit=WORKTREE]
+%     [tested: lib_system:platform_info_is_the_hosts_own_flags; commit=b109f59a8095add8ecf264b011e683184274acbb]
 % Fails when: a caller wants a shell. There is no head here that hands text to a
 %   shell to interpret: lib_process runs an executable with an argument vector,
 %   which is the difference between running a program and letting a string become
@@ -61,7 +61,7 @@
 % answers one variable a caller can already name. The census load records the
 % absence rather than leaving the call to the autoloader, and env-all refuses by
 % name where the capability is lost [source: engine/metta.pl:metta_platform_load/2;
-% commit=WORKTREE].
+% commit=b109f59a8095add8ecf264b011e683184274acbb].
 :- metta_platform_load('environment-listing', [environ/1]).
 
 %! 'env-get'(+Name:string, -Value:string) is semidet.
