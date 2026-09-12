@@ -7,22 +7,22 @@
 %   host's own, adapted to that shape in vendor/structures.pl, because a host
 %   COMPOUND crosses into MeTTa and back unchanged but leaves a written form
 %   unreduced when it is substituted into one
-%   [tested: lib_datastructures:a_map_survives_bind; commit=WORKTREE].
+%   [tested: lib_datastructures:a_map_survives_bind; commit=2072899a9f6ba36f92faabb92f9e0b12e6e0f666].
 % Assumes:
 %   - keys and priorities are compared by the standard order of terms, which is
 %     what the two upstream libraries use, so 1 and 1.0 are different keys and
 %     a Number orders before a Symbol
-%     [tested: lib_datastructures:keys_use_the_standard_order; commit=WORKTREE]
+%     [tested: lib_datastructures:keys_use_the_standard_order; commit=2072899a9f6ba36f92faabb92f9e0b12e6e0f666]
 % Guarantees:
 %   - every operation answers a NEW value and leaves its input alone, because
 %     the host's structures are immutable [tested:
-%     lib_datastructures:a_put_leaves_its_input_alone; commit=WORKTREE]
+%     lib_datastructures:a_put_leaves_its_input_alone; commit=2072899a9f6ba36f92faabb92f9e0b12e6e0f666]
 %   - a lookup, a minimum and a removal of something absent have NO answer
 %     rather than a made-up one, so a caller can tell absence from a stored
-%     value [tested: lib_datastructures:absence_has_no_answer; commit=WORKTREE]
+%     value [tested: lib_datastructures:absence_has_no_answer; commit=2072899a9f6ba36f92faabb92f9e0b12e6e0f666]
 %   - map-pairs, map-keys and map-values answer in key order and pq-pairs in
 %     priority order [tested: lib_datastructures:order_is_the_standard_order;
-%     commit=WORKTREE]
+%     commit=2072899a9f6ba36f92faabb92f9e0b12e6e0f666]
 % Fails when: given something that is not a map or a heap. The host's own type
 %   check raises, naming the argument, rather than answering nonsense.
 % Owns resources: none; every value is an immutable term the caller holds.
