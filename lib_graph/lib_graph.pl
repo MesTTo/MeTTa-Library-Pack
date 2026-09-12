@@ -314,7 +314,8 @@ edge_list(Head, Edges) :-
                (   is_list(Edge), Edge = [_, _]
                ->  true
                ;   throw(error(type_error(edge, Edge),
-                               context(Head, 'every edge is a two-element expression, (From To)')))
+                               context(Head,
+                                       'every edge is a two-element expression, (From To); an edge whose TAIL names a function, as (id b) does, is evaluated as a call before this head sees it, so write such a vertex as a String')))
                ))
     ;   throw(error(type_error(list, Edges),
                     context(Head, 'the edges are a collection of (From To) pairs')))

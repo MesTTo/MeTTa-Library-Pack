@@ -190,7 +190,7 @@ pairs_argument(Head, Pairs) :-
                ->  true
                ;   throw(error(type_error(pair, Pair),
                                context(Head,
-                                       'every element is a two-element expression, (Key Value)')))
+                                       'every element is a two-element expression, (Key Value); a row whose KEY names a function, as (id 1) and (map 2) do, is evaluated as a call before this head sees it, so write such a key as a String or tag the row')))
                ))
     ;   throw(error(type_error(list, Pairs),
                     context(Head, 'a relation is a collection of (Key Value) pairs')))
