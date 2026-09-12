@@ -5,7 +5,7 @@
 %   Strings. A text node is a String, so a program pattern-matches a document with
 %   no library call at all, and the host's element/3 compound never reaches MeTTa,
 %   where it would be a value no written form could hold
-%   [source: /usr/lib/swi-prolog/library/ext/sgml/sgml.pl; commit=WORKTREE].
+%   [source: /usr/lib/swi-prolog/library/ext/sgml/sgml.pl; commit=ed976b0e70c1176a7ef9feabb0359313105c786e].
 %
 %   The attribute row is TAGGED for a measured reason: an untagged (Name Value)
 %   pair whose name is also a function's, which `id`, `class`, `type` and `value`
@@ -20,24 +20,24 @@
 %     on stderr and answers a DOM anyway, so both parses pass max_errors(0) and
 %     the first complaint becomes a refusal naming it
 %     [tested: lib_markup:a_malformed_document_is_refused_rather_than_repaired;
-%     commit=WORKTREE]
+%     commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
 %   - the build has library(sgml) and library(xpath), which are SWI's ext/sgml
 %     pack. The declaration below refuses the library before it loads where they
 %     are absent [source: engine/metta.pl:metta_platform_capability/3;
-%     commit=WORKTREE]
+%     commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
 % Guarantees:
 %   - an external entity is never fetched: the host refuses a SYSTEM entity by
 %     default and this library turns that refusal into an error rather than the
 %     silently empty element the warning leaves behind
 %     [tested: lib_markup:an_external_entity_is_refused_and_never_fetched;
-%     commit=WORKTREE]
+%     commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
 %   - writing an element answers text that parses back to the same element, up to
 %     text MERGING: two adjacent text nodes are one run of characters in the markup
 %     and come back as one node, and an empty text node has no markup at all
-%     [tested: lib_markup:writing_and_parsing_round_trip; commit=WORKTREE]
+%     [tested: lib_markup:writing_and_parsing_round_trip; commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
 %   - every selector answers once per match, in document order, and a selector
 %     that matches nothing has no answer
-%     [tested: lib_markup:every_selector_answers_once_per_match; commit=WORKTREE]
+%     [tested: lib_markup:every_selector_answers_once_per_match; commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
 % Fails when: a caller wants namespaces resolved into prefixes of their own, a
 %   DTD validated, or an HTML5 tree builder. The host's parser reports a namespace
 %   as part of the name, validates only what the document declares, and repairs
@@ -236,7 +236,7 @@ selected_form(Found, Form) :-
 % STEP or a path of them, and the three MODIFIERS attach to the step they follow:
 % xpath spells a modifier as an extra argument on the step's own term, `//(item(text))`
 % rather than `//(item)/text`, which is why they are not steps of their own
-% [source: /usr/lib/swi-prolog/library/ext/sgml/xpath.pl:xpath/3; commit=WORKTREE].
+% [source: /usr/lib/swi-prolog/library/ext/sgml/xpath.pl:xpath/3; commit=ed976b0e70c1176a7ef9feabb0359313105c786e].
 selector_spec(Head, Selector, Spec) :-
     selector_forms(Head, Selector, Forms),
     folded_steps(Head, Forms, Steps),
