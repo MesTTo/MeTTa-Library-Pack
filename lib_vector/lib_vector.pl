@@ -1,4 +1,4 @@
-% Purpose: compute numeric vectors through native exact arithmetic.
+% Purpose: compute numeric vectors and share their exact fractional square root.
 % Assumes: SWI-Prolog has unbounded integers and rational arithmetic.
 % [source: lib/lib_vector/lib_vector.pl:require_exact_runtime/0; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 % Guarantees: complete numeric inputs are validated, finite reductions round
@@ -16,7 +16,7 @@
            'random-normal-vector'/2, 'random-normal-vector'/3,
            'vector-add'/3, 'vector-subtract'/3, 'vector-multiply'/3,
            'vector-divide'/3, 'vector-scale'/3, 'vector-normalize'/2,
-           'vector-distance'/3, 'vector-fill'/3]).
+           'vector-distance'/3, 'vector-fill'/3, fraction_sqrt/2]).
 :- set_module(base(metta_engine)).
 :- use_module(library(error), [must_be/2, domain_error/2, representation_error/1]).
 :- use_module(library(apply), [maplist/2, maplist/3, maplist/4, foldl/4, foldl/5]).
@@ -278,9 +278,15 @@ positive_float(N, D, Out) :-
       ; scale_ratio(Rounded, 1, Shift, ResultN, ResultD),
         Dyadic is ResultN rdiv ResultD, exact_result(Dyadic), Out is float(Dyadic) ) ).
 
-% Translate CPython statistics' fraction square root and round-to-odd root.
-% The 109-bit intermediate makes final rounding correct; vendor/ records the license.
+%! fraction_sqrt(+Value:rational, -Out:float) is det.
+%
+% Native numeric service: callers supply a nonnegative exact rational. Return
+% its correctly rounded binary64 root, including final IEEE overflow/underflow.
+% [tested: lib_vector_surface, lib_statistics; commit=WORKTREE].
+% Translate CPython's fraction square root with a 109-bit round-to-odd
+% intermediate; vendor/ records the license. No MeTTa head is registered.
 % https://github.com/python/cpython/blob/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Lib/statistics.py#L1695-L1721
+% @private
 fraction_sqrt(Value, Out) :-
     ( Value =:= 0 -> Out = 0.0
     ; N is numerator(Value), D is denominator(Value),
