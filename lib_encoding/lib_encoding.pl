@@ -4,30 +4,30 @@
 %   Bytes are an expression of Numbers from 0 to 255, which is lib_file's own byte
 %   shape, so what read-bytes! answers is what these heads take and what they
 %   answer is what write-bytes! writes [source: lib/lib_file/lib_file.pl's byte
-%   doors; commit=WORKTREE]. Text is a String throughout.
+%   doors; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]. Text is a String throughout.
 % Assumes:
 %   - a byte collection really holds bytes. Every head checks, and a number outside
 %     0..255 or a non-number is refused naming the value, because the host's own
 %     writers turn a code point above 255 into several bytes and a caller who meant
 %     bytes would never see it
 %     [tested: lib_encoding:a_value_that_is_not_a_byte_is_refused_by_name;
-%     commit=WORKTREE]
+%     commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
 %   - malformed input is refused rather than repaired: a hex string of odd length or
 %     with a character outside the alphabet, and base64 text the host's decoder
 %     rejects, each raise
-%     [tested: lib_encoding:malformed_text_is_refused_by_name; commit=WORKTREE]
+%     [tested: lib_encoding:malformed_text_is_refused_by_name; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
 % Guarantees:
 %   - every encoding round-trips: the bytes of a text are that text again, the hex
 %     of bytes is those bytes again, and so is the base64, in both alphabets, over
 %     generated inputs
-%     [tested: lib_encoding:every_encoding_round_trips; commit=WORKTREE]
+%     [tested: lib_encoding:every_encoding_round_trips; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
 %   - UTF-8 is the host's own encoding of the same text, byte for byte, which is
 %     what makes a byte count a length in bytes rather than in characters
-%     [tested: lib_encoding:utf8_is_the_hosts_own_encoding; commit=WORKTREE]
+%     [tested: lib_encoding:utf8_is_the_hosts_own_encoding; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
 %   - hex answers lower case and accepts either case, which is what every hash and
 %     every wire format that carries hex does
 %     [tested: lib_encoding:hex_answers_lower_case_and_reads_either;
-%     commit=WORKTREE]
+%     commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
 % Fails when: a caller wants a struct layout, a protocol buffer or an integer of a
 %   named width and endianness. Those are a host FFI concern and stay one; what is
 %   here is the byte-level plumbing every such format is built out of.
@@ -60,7 +60,7 @@
 % The UTF-8 codec is lib_csv's, which vendored SWI's own and is the tree's one
 % implementation of it: a fourth copy of "text to bytes" would be a fourth place
 % for it to disagree [source: lib/lib_csv/support/csv_codec.pl:utf8_bytes/2;
-% commit=WORKTREE].
+% commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e].
 :- use_module('../lib_csv/support/csv_codec', [utf8_bytes/2, utf8_text/2]).
 :- use_module(library(base64), [base64_encoded/3]).
 :- use_module(library(error), [must_be/2]).
