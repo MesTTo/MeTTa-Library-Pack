@@ -14,8 +14,9 @@ this engine, so a list-shaped node is a value every position accepts: `bind!`
 stores one, a program prints and compares one, and a pattern can walk one. The
 host's own compound crosses into MeTTa and back unchanged, but substituting one
 into a written form leaves the form unreduced, because the translator reads the
-compound as a nested call. That is measured rather than assumed
-[tested: lib_datastructures:a_map_survives_bind; commit=WORKTREE].
+compound as a nested call. That is measured rather than assumed: the library's
+own header carries the evidence tag, and `lib_datastructures:a_map_survives_bind`
+is the test.
 
 Because the adaptation is mechanical, the check is a differential against the
 sources: for generated key sequences and insertion orders,

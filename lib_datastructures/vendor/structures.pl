@@ -11,15 +11,15 @@
 %   program prints and compares it, and a pattern can walk it. A compound
 %   crosses into MeTTa and back unchanged as an opaque Grounded value, but
 %   substituting one into a written form leaves the form unreduced, because the
-%   translator reads the compound as a nested call
-%   [tested: lib_datastructures:a_map_survives_bind; commit=WORKTREE].
+%   translator reads the compound as a nested call. The library's own header
+%   carries that claim's evidence tag; a vendored file states the reason and
+%   leaves the checked claims to the file that is ours.
 % Assumes: keys and priorities are compared with compare/3 and (@<)/2, the
 %   standard order of terms, exactly as the two upstream libraries do.
 % Guarantees:
 %   - every operation answers what library(assoc) and library(heaps) answer for
-%     the same inputs, which is what the differential asserts over generated
-%     key sequences [tested: test_maps_agree_with_library_assoc,
-%     test_queues_agree_with_library_heaps; commit=WORKTREE]
+%     the same inputs, which tests/prolog/suites/libraries/lib_datastructures.plt
+%     asserts over generated key sequences in both directions
 %   - the structures are immutable: an insert or a delete answers a new value
 %     and shares the untouched parts with the old one
 % Owns resources: none.
@@ -66,8 +66,8 @@
 % node that would go two deep on one side is rotated. The clauses below are
 % that code with t(K,V,B,L,R) written as (MapNode K V B L R) and the empty tree
 % t written as MapEmpty.
-% [source: /usr/lib/swi-prolog/library/assoc.pl, SWI-Prolog 10.1.13, insert/5
-% through table2/3; VENDOR.md pins the upstream revision; commit=WORKTREE]
+% Upstream: /usr/lib/swi-prolog/library/assoc.pl, SWI-Prolog 10.1.13, insert/5
+% through table2/3. VENDOR.md pins the revision and its checksum.
 
 map_empty('MapEmpty').
 
@@ -234,9 +234,9 @@ map_max(['MapNode', _, _, _, _, Right], Key, Value) :- map_max(Right, Key, Value
 % library(heaps)'s pairing heap: a tree whose root is the minimum, melded in
 % constant time, and a pop that pairs up the root's children in two passes,
 % which is where the amortised logarithm comes from.
-% [source: /usr/lib/swi-prolog/library/heaps.pl, SWI-Prolog 10.1.13,
-% add_to_heap/4 through pairing/2; VENDOR.md pins the upstream revision;
-% commit=WORKTREE]
+% Upstream: /usr/lib/swi-prolog/library/heaps.pl, SWI-Prolog 10.1.13,
+% add_to_heap/4 through pairing/2. VENDOR.md pins the revision and its
+% checksum.
 
 pq_empty(['PqHeap', 'PqNil', 0]).
 
