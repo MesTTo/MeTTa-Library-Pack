@@ -212,7 +212,7 @@ next_file_handle(Handle) :-
 % Borrow a registered stream without transferring ownership. The returned
 % stream remains subject to concurrent close; native consumers acquire it
 % with PL_get_stream before reading its descriptor.
-% [tested: lib_socket:borrowed_stream_refuses_after_close; commit=WORKTREE].
+% [tested: lib_socket:borrowed_stream_refuses_after_close; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
 % @private
 known_file(Handle, Stream) :-
     (   metta_file(Handle, Stream)
@@ -225,7 +225,7 @@ known_file(Handle, Stream) :-
 % Transfer a newly owned stream into the shared handle table. Callers supply
 % a fresh Handle and a stream not already registered. A failed registration
 % withdraws its entry and closes the stream, including cancellation.
-% [tested: lib_http:adoption_failure_releases_stream; commit=WORKTREE].
+% [tested: lib_http:adoption_failure_releases_stream; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
 % @private
 adopt_file_stream(Stream, Handle) :-
     setup_call_catcher_cleanup(true,
@@ -241,7 +241,7 @@ adopt_file_stream(Stream, Handle) :-
 % its handle or has not started. The acquiring operation still owns Stream.
 % Withdraw its entry before closing; an already closed stream needs no action.
 % [tested: lib_socket:adoption_cancellation_rolls_back_the_new_socket,
-% lib_http:post_adoption_cancellation_releases_filtered_responses; commit=WORKTREE].
+% lib_http:post_adoption_cancellation_releases_filtered_responses; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
 % @private
 release_file_stream(Stream) :-
     with_mutex('$metta_files', retractall(metta_file(_, Stream))),

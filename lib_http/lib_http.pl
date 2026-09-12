@@ -3,7 +3,7 @@
 % its captured execution module remains alive until that server stops.
 % Guarantees: non-2xx statuses remain data, framing is owned by the transport,
 % repeated fields survive, and scopes release on exhaustion, cut and exception.
-% [tested: lib_http; commit=WORKTREE].
+% [tested: lib_http; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
 % Owns resources: http-open! transfers its response stream to File's handle table.
 % A started server belongs to its caller until http-server-stop!; with-http and
 % with-http-server retain ownership for the lifetime of their answer streams.
@@ -94,7 +94,7 @@ close_response(['http-response',_,_,Handle]) :- 'file-close!'(Handle,_).
 
 % Keep the final owned stream in Setup so cancellation after adoption can
 % still withdraw its File record, including a range filter and its parent.
-% [tested: lib_http:post_adoption_cancellation_releases_filtered_responses; commit=WORKTREE].
+% [tested: lib_http:post_adoption_cancellation_releases_filtered_responses; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
 response_stream(Method,URL,Native,Status,Headers,BodyStream) :-
     setup_call_catcher_cleanup(
         http_open(URL,Stream,[method(Method),status_code(Status),headers(Headers),

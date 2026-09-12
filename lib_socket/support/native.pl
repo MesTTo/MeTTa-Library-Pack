@@ -1,6 +1,6 @@
 % Purpose: load socket ownership, metadata, shutdown and complete datagram input.
 % Guarantees: import loads the complete adapter or raises a named build refusal.
-% [tested: lib_socket; commit=WORKTREE].
+% [tested: lib_socket; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
 
 :- module(lib_socket_native,
           [kind/2,endpoint/5,receive/5,shutdown/2,accept_owner/1,try_accept/4,

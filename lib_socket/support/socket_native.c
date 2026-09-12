@@ -3,16 +3,16 @@
  * publication, so receive never waits while holding a foreign stream lock.
  * Guarantees: numeric endpoints retain their actual ports; oversized packets
  * raise instead of returning a truncated payload.
- * [tested: lib_socket; commit=WORKTREE].
+ * [tested: lib_socket; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
  * Owns resources: accept_owner roots partial streams until finish_accept;
  * stream halves then share one descriptor, closed after the final reference.
  * Unpublished owners abort and release their resources during cleanup.
  * Guarded by: PL_get_stream locks borrowed descriptors; accepted halves use
  * atomic reference counts. Each unpublished owner belongs to its acquiring thread.
- * [tested: lib_socket; commit=WORKTREE].
+ * [tested: lib_socket; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
  * Decides: signal checks use the host socket provider's 250ms wait interval;
  * accepted descriptors are nonblocking and do not use positive linger.
- * [source: https://github.com/SWI-Prolog/packages-clib/blob/a69cf00dcf0dd2e3ac1aa9565fbebf4aa4ceb5da/nonblockio.c#L452; commit=WORKTREE].
+ * [source: https://github.com/SWI-Prolog/packages-clib/blob/a69cf00dcf0dd2e3ac1aa9565fbebf4aa4ceb5da/nonblockio.c#L452; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
  */
 
 #ifndef _GNU_SOURCE
