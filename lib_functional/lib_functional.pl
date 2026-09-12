@@ -215,9 +215,16 @@ partition(Test, Items, [Yes, No]) :-
     current_metta_module(Module),
     partition_(Items, Module, Test, Yes, No).
 
+% The verdict is READ and then compared, never asked for: passing `true` in as
+% the expected answer threads it into the compiled call, and a test whose own
+% head is declared det then FAILS with its output already bound rather than
+% answering false, which SWI reports as `Deterministic procedure ... failed`
+% [measured 2026-09-12: (partition (|-> ($c) (unicode-is $c letter)) ("a" "1"))
+% raised that for lib_unicode:'unicode-is'/3, where the same test written as an
+% equation over == answered]. Anything but True still lands in the second side.
 partition_([], _, _, [], []).
 partition_([Item|Items], Module, Test, Yes, No) :-
-    (   applied(Module, Test, Item, true)
+    (   applied(Module, Test, Item, Verdict), Verdict == true
     ->  Yes = [Item|MoreYes], No = MoreNo
     ;   Yes = MoreYes, No = [Item|MoreNo]
     ),
