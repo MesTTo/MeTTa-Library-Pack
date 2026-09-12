@@ -1,6 +1,6 @@
 % Purpose: build the stream-owned database lock with the shared atomic builder.
 % Guarantees: build failures name the dependency repair and prebuild command.
-% [tested: lib_database; commit=WORKTREE].
+% [tested: lib_database; commit=060bea3199e9f504c6d425f60841f229fc96e861].
 % Owns resources: native_build:native_object/6 owns compiler, stage and locks.
 
 :- module(lib_database_native_build, [native_object/1]).

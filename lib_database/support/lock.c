@@ -1,7 +1,7 @@
 /* Purpose: claim a store's lock file through its owning SWI stream.
  * Guarantees: separate descriptors compete for one exclusive claim; closing
  * the stream releases it. Native errors retain their OS code.
- * [tested: lib_database; commit=WORKTREE].
+ * [tested: lib_database; commit=060bea3199e9f504c6d425f60841f229fc96e861].
  * Owns resources: borrows and releases the stream lock; the caller owns the
  * descriptor and its lifetime. No resource is allocated by this adapter.
  * Guarded by: PL_get_stream protects the borrowed stream; the OS owns the claim.
