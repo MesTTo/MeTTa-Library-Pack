@@ -1,4 +1,4 @@
-% Purpose: file input and output, MeTTa HE's handle surface, whole-file text and
+% Purpose: file input and output, shared stream handles, whole-file text and
 %   byte operations, staged publication, renaming, tree copy and removal,
 %   traversal and globbing, lexical and resolved paths, entry kinds, links,
 %   scoped resources, temporary files and directories, standard streams and
@@ -18,7 +18,7 @@
 % Guarantees:
 %   - a handle is a small integer, so it prints, compares and crosses the [tested: lib_file:the_handle_surface_reads_and_seeks]
 %     Python boundary as an ordinary MeTTa value rather than as a blob
-%   - every operation on an unknown or closed handle raises an existence error
+%   - reading or writing an unknown or closed handle raises an existence error
 %     naming the handle, rather than failing silently [tested: lib_file:using_a_closed_handle_raises]
 %   - file-open! refuses a contradictory option set loudly, HE's own rule:
 %     'c' demands 'w', so "rc" is an error rather than a silent read [tested: lib_file:create_without_write_is_refused, an_unknown_option_letter_is_refused]
@@ -54,7 +54,9 @@
 %     of replace-file!, copy-file! and copy-dir!.
 %   - the handle or directory a scope acquires, released by the scope's cleanup.
 % Guarded by:
-%   - '$metta_files' serialises handle allocation and the handle table.
+%   - '$metta_files' serialises the handle table and each close claims its entry
+%     once before releasing the stream [tested: lib_http:concurrent_file_close_claims_once;
+%     commit=WORKTREE].
 % Decides:
 %   - list-dir!, dir-walk and dir-glob order entries by codepoint within each
 %     directory; a walk and a glob are depth first.
@@ -124,7 +126,8 @@
             'write-file!'/3,
             stderr/1,
             stdin/1,
-            stdout/1
+            stdout/1,
+            adopt_file_stream/2
           ]).
 
 % Guarantees: private helpers and autoload declarations belong to this module.
@@ -208,6 +211,22 @@ known_file(Handle, Stream) :-
     ;   existence_error(metta_file_handle, Handle)
     ).
 
+%! adopt_file_stream(+Stream:stream, -Handle:integer) is det.
+%
+% Transfer a newly owned stream into the shared handle table. Callers supply
+% a fresh Handle and a stream not already registered. A failed registration
+% withdraws its entry and closes the stream, including cancellation.
+% [tested: lib_http:adoption_failure_releases_stream; commit=WORKTREE].
+% @private
+adopt_file_stream(Stream, Handle) :-
+    setup_call_catcher_cleanup(true,
+        ( must_be(var, Handle), next_file_handle(Handle),
+          with_mutex('$metta_files', assertz(metta_file(Handle, Stream))) ),
+        Outcome,
+        ( Outcome == exit -> true
+        ; with_mutex('$metta_files', retractall(metta_file(_, Stream))),
+          close(Stream) )).
+
 % The host's stream type check is loose: read_string/3 and write/2 accept a
 % binary stream and would decode or encode octets as text without a word, so
 % the library asks the stream what it is before every text or byte operation.
@@ -263,8 +282,7 @@ binary_handle(Operation, Handle, Stream) :-
     ;   StreamOptions = [encoding(utf8)]
     ),
     open(PathText, Mode, Stream, StreamOptions),
-    next_file_handle(Handle),
-    with_mutex('$metta_files', assertz(metta_file(Handle, Stream))).
+    adopt_file_stream(Stream, Handle).
 
 %append wins over write because a caller asking for both means "add to it",
 %and read plus write is SWI's update mode, which keeps the existing content.
@@ -391,9 +409,11 @@ bytes_list(Operation, Bytes) :-
                 context('file-close!',
                         'The process owns it; close a stream file-open! gave you'))).
 'file-close!'(Handle, true) :-
-    (   metta_file(Handle, Stream)
-    ->  with_mutex('$metta_files', retractall(metta_file(Handle, _))),
-        catch(close(Stream), Error, metta_file_refusal('file-close!', Error))
+    with_mutex('$metta_files',
+               ( retract(metta_file(Handle, Stream)) -> Claimed = true
+               ; Claimed = false )),
+    (   Claimed == true
+    ->  catch(close(Stream), Error, metta_file_refusal('file-close!', Error))
     ;   true
     ).
 
