@@ -10,7 +10,7 @@
 ; here are TRANSLATOR RULES, like `for`: a rule rewrites the written form before
 ; anything in it is evaluated, which is the only way a loop can decide whether
 ; to run its body at all.
-; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/22-functional_lib.metta; commit=WORKTREE]
+; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/22-functional_lib.metta; commit=a2a80061cd8264d8f714b14c76b94d00f44a0755]
 
 ; The three control forms hold their body and their condition, which is what
 ; `(: while (-> Atom Atom %Undefined%))` says: a loop that evaluated its body

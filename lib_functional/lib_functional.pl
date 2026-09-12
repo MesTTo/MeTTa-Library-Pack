@@ -6,7 +6,7 @@
 %   is what those three cannot say in one call. Each head that takes a FUNCTION
 %   applies it through the evaluator, so a lambda, a defined name and a partial
 %   application all work, exactly as par-map takes one
-%   [source: lib/lib_thread/lib_thread.pl:par_map/3; commit=WORKTREE].
+%   [source: lib/lib_thread/lib_thread.pl:par_map/3; commit=a2a80061cd8264d8f714b14c76b94d00f44a0755].
 % Assumes:
 %   - a collection is an expression; a function argument is anything the
 %     evaluator can apply, and it is applied once per element
@@ -15,14 +15,14 @@
 % Guarantees:
 %   - every operation is one pass over its input plus the cost of the function
 %     it applies, so nothing here is quadratic
-%     [tested: lib_functional:one_pass_costs_scale_linearly; commit=WORKTREE]
+%     [tested: lib_functional:one_pass_costs_scale_linearly; commit=a2a80061cd8264d8f714b14c76b94d00f44a0755]
 %   - group-by keeps the keys in first-appearance order and the members in the
 %     collection's order, and sort-by is stable, so equal keys keep their
 %     relative order [tested: lib_functional:grouping_and_sorting_are_stable;
-%     commit=WORKTREE]
+%     commit=a2a80061cd8264d8f714b14c76b94d00f44a0755]
 %   - zip truncates at the shorter collection and unzip inverts it, so a round
 %     trip over equal lengths is the identity
-%     [tested: lib_functional:zip_and_unzip_round_trip; commit=WORKTREE]
+%     [tested: lib_functional:zip_and_unzip_round_trip; commit=a2a80061cd8264d8f714b14c76b94d00f44a0755]
 % Fails when: a count that has to be positive is not, or a function answers
 %   nothing where one answer is required. Each refusal names the operation.
 % Owns resources: none; every answer is a new expression.
@@ -37,7 +37,7 @@
 %   nothing said. The shipped libraries' hyphenated, domain-qualified names are
 %   what keep every other head clear of that chain
 %   [tested: sh check.sh lib-autoload, whose shadowed-head check refuses a
-%   published name a tier above the libraries already answers; commit=WORKTREE].
+%   published name a tier above the libraries already answers; commit=a2a80061cd8264d8f714b14c76b94d00f44a0755].
 % Open Obligations:
 %   To Do: None
 %   Hacks: None
