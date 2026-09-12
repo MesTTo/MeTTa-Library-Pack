@@ -3,11 +3,11 @@
 % Guarantees: choices retain occurrences and literal values; properties use
 % the core bag comparison and report the first failing input through
 % assert-answers. A universal check returns its executed case count.
-% [tested: lib_testing; commit=WORKTREE].
+% [tested: lib_testing; commit=a283d39342d891aae0edc58949e2ccbb48911cd8].
 % Decides: integer and length bounds are inclusive; reversed intervals are
 % empty. List positions copy variables independently; sharing within a chosen
 % value survives. Generator/function/expectation variables are copied together.
-% [tested: lib_testing; commit=WORKTREE].
+% [tested: lib_testing; commit=a283d39342d891aae0edc58949e2ccbb48911cd8].
 
 :- module(lib_testing,
           ['test-integers'/3,'test-choices'/2,'test-lists'/4,
