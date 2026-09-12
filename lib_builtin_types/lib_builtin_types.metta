@@ -1,5 +1,8 @@
 ; Purpose: declare the type surface of MeTTa's shipped builtins, its type-kind
 ; markers included, for engine reflection and optional live typed dispatch.
+; Guarantees: add-atom holds its occurrence-output binder as written
+;   [tested: spaces_tokens:an_atom_can_contain_its_own_occurrence_token;
+;   commit=WORKTREE].
 ; Guarantees: Kwargs holds zero or more pairs through one (:seg Atom) arrow
 ;   [tested: variadic_arrows; commit=6031c83ab3002b5703cb6fcb10e70a60a89f4ad7].
 ; Guarantees:
@@ -219,6 +222,7 @@
 ;the atom itself, and a caller that reduced it first would hand it a value
 ;`reduce/3` has nothing left to do with.
 (: add-atom (-> SpaceType Atom Bool))
+(: add-atom (-> SpaceType Atom Atom Bool))
 (: remove-atom (-> SpaceType Atom Bool))
 (: add-atoms (-> SpaceType Atom Bool))
 (: add-reduct (-> SpaceType Atom Bool))
