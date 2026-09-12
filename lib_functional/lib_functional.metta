@@ -7,9 +7,8 @@
 ; that wants only the four idioms should not load this library to get them.
 ;
 ; The collection operations are the Prolog half below. The three control forms
-; here are TRANSLATOR RULES, like `for`: a rule rewrites the written form before
-; anything in it is evaluated, which is the only way a loop can decide whether
-; to run its body at all.
+; here HOLD their body, which is the only way a loop can decide whether to run it
+; at all; the next comment says why they are equations rather than rules.
 ; [tested: sh test.sh examples/ch08-data/08-03-the-shipped-libraries/22-functional_lib.metta; commit=a2a80061cd8264d8f714b14c76b94d00f44a0755]
 
 ; The three control forms hold their body and their condition, which is what
