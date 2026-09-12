@@ -164,7 +164,7 @@ scalar_value(Scalar, Value) :-
     ->  Value = Scalar
     ;   string(Scalar)
     ->  Value = Scalar
-    ;   Scalar = tag(Tag, Content)
+    ;   Scalar = tag(Tag, _)
     ->  throw(error(domain_error(yaml_tag, Tag),
                     context('yaml-decode',
                             'the host has no value for this tag; the standard ones are !!str, !!int, !!float, !!bool, !!null, !!binary, !!seq and !!map')))
