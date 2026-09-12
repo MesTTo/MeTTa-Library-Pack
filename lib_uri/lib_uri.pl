@@ -1,11 +1,11 @@
 % Purpose: parse, compose, normalize and resolve URI references and query pairs.
 % Guarantees: absent components differ from empty ones; reserved percent octets,
 % userinfo case, duplicate query keys and strict UTF8 survive their stated doors.
-% [tested: lib_uri; commit=WORKTREE].
+% [tested: lib_uri; commit=24b96f8ec8468bc97cec35e1d71ce689ede7fdcf].
 % Decides: RFC3986 generic structure, ASCII URI spelling, encoded authorities,
 % native encoding contexts and explicit uri/form plus convention. Relative path
 % normalization keeps dot segments until resolution supplies a base.
-% [source: https://www.rfc-editor.org/rfc/rfc3986#section-5; commit=WORKTREE].
+% [source: https://www.rfc-editor.org/rfc/rfc3986#section-5; commit=24b96f8ec8468bc97cec35e1d71ce689ede7fdcf].
 
 :- module(lib_uri,
           [ 'uri-parts'/2, 'uri-build'/2, 'uri-normalize'/2, 'uri-resolve'/3,
