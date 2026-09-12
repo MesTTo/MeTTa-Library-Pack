@@ -3,7 +3,7 @@
 % its captured execution module remains alive until that server stops.
 % Guarantees: non-2xx statuses remain data, framing is owned by the transport,
 % repeated fields survive, and scopes release on exhaustion, cut and exception.
-% [tested: lib_http; commit=WORKTREE].
+% [tested: lib_http; commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
 % Owns resources: http-open! transfers its response stream to File's handle table.
 % A started server belongs to its caller until http-server-stop!; with-http and
 % with-http-server retain ownership for the lifetime of their answer streams.
@@ -13,7 +13,7 @@
 % arguments in the native port registry; a stale ID never stops a later server.
 % Decides: redirects require an explicit option; the native timeout defaults
 % remain. The transport supplies framing, host, connection and response date.
-% [source: https://github.com/SWI-Prolog/packages-http/blob/8e6b758778aed1986f81a4a7a8efeb475faa35aa/http_open.pl:http_open/3; commit=WORKTREE].
+% [source: https://github.com/SWI-Prolog/packages-http/blob/8e6b758778aed1986f81a4a7a8efeb475faa35aa/http_open.pl:http_open/3; commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
 
 :- module(lib_http,
           ['http-request!'/4, 'http-open!'/4, 'with-http'/5,

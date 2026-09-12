@@ -56,7 +56,7 @@
 % Guarded by:
 %   - '$metta_files' serialises the handle table and each close claims its entry
 %     once before releasing the stream [tested: lib_http:concurrent_file_close_claims_once;
-%     commit=WORKTREE].
+%     commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
 % Decides:
 %   - list-dir!, dir-walk and dir-glob order entries by codepoint within each
 %     directory; a walk and a glob are depth first.
@@ -216,7 +216,7 @@ known_file(Handle, Stream) :-
 % Transfer a newly owned stream into the shared handle table. Callers supply
 % a fresh Handle and a stream not already registered. A failed registration
 % withdraws its entry and closes the stream, including cancellation.
-% [tested: lib_http:adoption_failure_releases_stream; commit=WORKTREE].
+% [tested: lib_http:adoption_failure_releases_stream; commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
 % @private
 adopt_file_stream(Stream, Handle) :-
     setup_call_catcher_cleanup(true,

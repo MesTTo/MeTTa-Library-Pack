@@ -1,5 +1,5 @@
 ; Purpose: declare the HTTP surface generated from its native typed exports.
-; [tested: sh check.sh prolog-face; commit=WORKTREE].
+; [tested: sh check.sh prolog-face; commit=0f22b69cfca5c108e4126bdd56ab9bb2e493744d].
 !(import! &self (library lib_file))
 
 ; begin generated Prolog face
