@@ -3,7 +3,7 @@
 % returned socket; functions accept its integer handle in the calling module.
 % Guarantees: TCP bytes use File; datagrams retain packet boundaries, bytes and
 % complete IPv4/IPv6 endpoints; scoped handles close on every exit.
-% [tested: lib_socket; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
+% [tested: lib_socket; commit=WORKTREE].
 % Owns resources: openers transfer streams to File; file-close! releases them.
 % with-socket owns its handle until exhaustion, cut or exception. The native
 % adapter owns accepted descriptors until their two stream halves close.
@@ -12,7 +12,7 @@
 % call-local allocation set until the returned handle enters its callback scope.
 % Decides: endpoint families are explicit, binding port zero asks the OS, waits
 % use nonnegative seconds or infinite, and empty wait sets return immediately.
-% [tested: lib_socket; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
+% [tested: lib_socket; commit=WORKTREE].
 
 :- module(lib_socket,
           ['tcp-connect!'/2,'tcp-listen!'/3,'tcp-accept!'/2,
@@ -30,7 +30,9 @@
 :- use_module(library(assoc), [ord_list_to_assoc/2,get_assoc/3]).
 :- use_module('../lib_file/lib_file',
               [known_file/2,adopt_file_stream/2,release_file_stream/1,'file-close!'/2]).
-:- use_module(support/native, []).
+% Workaround: swi-relative-compound-source - resolve this atom relative to the
+% importing file instead of reusing another directory's compound-path cache.
+:- use_module('support/native', []).
 :- meta_predicate open_socket(+,+,0,+,-).
 
 %! 'tcp-connect!'(+Endpoint:list, -Handle:integer) is det.

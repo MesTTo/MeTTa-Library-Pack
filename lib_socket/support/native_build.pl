@@ -1,6 +1,6 @@
 % Purpose: build the private socket adapter with the shared atomic builder.
 % Guarantees: a failed build raises with a repair and prebuild command.
-% [tested: lib_socket; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
+% [tested: lib_socket; commit=WORKTREE].
 % Owns resources: native_build:native_object/6 owns compiler, stage and locks.
 
 :- module(lib_socket_native_build, [native_object/1]).

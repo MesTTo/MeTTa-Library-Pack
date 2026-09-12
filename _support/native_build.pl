@@ -1,13 +1,15 @@
 % Purpose: build a library's native object for the current SWI ABI.
+% Assumes: builder(Module:Goal) receives Source and Stage, closes its compiler
+% jobs before returning, and writes a complete object only on success.
 % Guarantees: current objects need no subprocess service; publication is atomic
 % and a failed rebuild preserves the previous object
 % [tested: test_native_build_is_atomic_and_reused,
-% test_warm_native_build_needs_no_process_library; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% test_warm_native_build_needs_no_process_library; commit=WORKTREE].
 % Owns resources: the file lock closes on every exit; cancellation joins the
 % compiler before removing its stage
-% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% [tested: test_cancelled_build_waits_for_its_compiler_and_discards_the_stage; commit=WORKTREE].
 % Guarded by: an object-path mutex protects threads; build.lock protects processes
-% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% [tested: test_concurrent_processes_and_threads_publish_one_native_object; commit=WORKTREE].
 
 :- module(native_build, [native_object/6]).
 :- use_module(library(filesex), [directory_file_path/3, make_directory_path/1]).
@@ -62,6 +64,10 @@ build_locked(Inputs, Links, Object) :-
     ).
 
 compile_object(Source, Links, Stage) :-
+    ( Links=builder(Build) -> call(Build,Source,Stage)
+    ; compile_single_source(Source,Links,Stage) ).
+
+compile_single_source(Source, Links, Stage) :-
     (   absolute_file_name(library(process), Process,
                            [access(read), file_type(prolog), file_errors(fail)])
     ->  use_module(Process, [process_create/3, process_wait/2])

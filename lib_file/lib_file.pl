@@ -32,7 +32,7 @@
 %   - replace-file! and copy-dir! publish with one rename after every staged
 %     stream closed, so a reader sees the old entry or the complete new one
 %     [tested: lib_file_surface:replace_preserves_destination_on_failure,
-%     lib_file_surface:copy_dir_publishes_a_complete_tree; commit=e40ef941310bddd1f57074eb559e78aac8a263b0]
+%     lib_file_surface:copy_dir_publishes_a_complete_tree; commit=WORKTREE]
 %   - dir-walk and dir-glob report symbolic links and enter them only under
 %     (follow-links True), where a link back to the current chain is reported
 %     and not entered [tested: lib_file_surface:walk_reports_links_without_entering,
@@ -129,7 +129,8 @@
             stdout/1,
             adopt_file_stream/2,
             release_file_stream/1,
-            known_file/2
+            known_file/2,
+            metta_staged_publish/2
           ]).
 
 % Guarantees: private helpers and autoload declarations belong to this module.
@@ -147,6 +148,7 @@
                delete_directory_and_contents/1, link_file/3]).
 :- use_module(library(readutil), [read_stream_to_codes/2]).
 :- use_module(library(solution_sequences), [distinct/2]).
+:- meta_predicate metta_staged_publish(+,1).
 
 :- dynamic metta_file/2.            % Handle, Stream
 %The counter is a FLAG rather than a dynamic fact, and the difference is a
@@ -1335,11 +1337,14 @@ metta_copy_file(From, To) :-
     ),
     metta_staged_publish(To, metta_copy_bytes(From)).
 
-% One publication protocol for copy-file!, replace-file! and copy-dir!: a
-% sibling staging directory acquired with mkdir, the writer filling
-% StageDirectory/contents, one rename onto the destination, and the staging
-% directory removed on every exit. The destination changes only after every
-% staged stream has closed, because the writer closes before it returns.
+%! metta_staged_publish(+Destination:string, :Writer:callable) is det.
+%
+% Own a sibling staging directory and apply Writer to its contents pathname.
+% Writer closes its streams before returning. Publish with one rename and
+% remove staging on every exit. A failed Writer preserves Destination.
+% [tested: lib_file_surface:replace_preserves_destination_on_failure,
+% lib_file_surface:copy_dir_publishes_a_complete_tree, lib_compression; commit=WORKTREE].
+% @private
 metta_staged_publish(To, Writer) :-
     file_directory_name(To, Parent),
     (   exists_directory(Parent)
