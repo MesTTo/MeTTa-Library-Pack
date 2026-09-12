@@ -1,12 +1,12 @@
 % Purpose: select occurrences and stream samples from explicit distribution values.
 % Assumes: math-float and Vector's dot provide the shared binary64 conversion.
-% [source: lib/lib_math/lib_math.pl:'math-float'/2; commit=WORKTREE].
+% [source: lib/lib_math/lib_math.pl:'math-float'/2; commit=505b45e1d9184608c818a8a4fdba5cf6406bf3e7].
 % Guarantees: parameter refusals consume no random state, positions preserve
 % duplicate values, and with-seed restores the generator after completion or cut.
-% [tested: lib_random; commit=WORKTREE].
+% [tested: lib_random; commit=505b45e1d9184608c818a8a4fdba5cf6406bf3e7].
 % Owns resources: query-local population and numeric terms; the host thread owns
 % its generator. The existing metta_with_seed/4 scope owns state restoration.
-% [source: engine/metta/control.pl:metta_with_seed/4; commit=WORKTREE].
+% [source: engine/metta/control.pl:metta_with_seed/4; commit=505b45e1d9184608c818a8a4fdba5cf6406bf3e7].
 % Guarded by: the host generator is thread-local; this library stores no state.
 % Decides: parameters use finite binary64; continuous samples use native floating
 % precision and final IEEE saturation. These draws are for sampling, not secrets.

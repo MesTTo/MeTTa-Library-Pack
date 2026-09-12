@@ -1,7 +1,7 @@
 ; Purpose: sampling occurrences and explicit distributions through the native generator.
 ; Guarantees: the generated declarations match the native half; the math import
 ; composes the shared binary64 conversion before loading its consumer.
-; [tested: sh check.sh prolog-face; commit=WORKTREE].
+; [tested: sh check.sh prolog-face; commit=505b45e1d9184608c818a8a4fdba5cf6406bf3e7].
 !(import! &self (library lib_math))
 
 ; begin generated Prolog face
