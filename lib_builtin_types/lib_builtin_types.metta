@@ -542,7 +542,8 @@
 ;;A ground expression held as Atom becomes a parametric space identifier.
 (: new-space (-> Atom SpaceType))
 ;;The Atom descriptor is held as data: `(inherits &parent)` and
-;;`(restricted (grants file ...))` select creation-time execution bases.
+;;`(scoped &home)` and `(restricted (grants file ...))` select creation-time
+;;execution bases. An unbound identity mints a fresh space before declaration.
 (: new-space (-> SpaceType Atom SpaceType))
 (: py-atom (-> Atom %Undefined%))
 (: py-atom (-> Atom Atom %Undefined%))
