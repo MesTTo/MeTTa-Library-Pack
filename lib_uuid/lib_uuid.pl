@@ -2,17 +2,17 @@
 % and bytes without losing a name's Unicode or embedded NUL characters.
 % Assumes: uuid-time! needs the host's OSSP UUID provider; version 3 needs the
 % crypto capability through lib_crypto, while version 5 retains its SHA provider.
-% [source: lib/lib_crypto/lib_crypto.pl:portable_digest/4; commit=WORKTREE].
+% [source: lib/lib_crypto/lib_crypto.pl:portable_digest/4; commit=d5de00cc183b4b395b552f3aae7fca87752ef38c].
 % Guarantees: standard and arbitrary namespaces follow the RFC name algorithm;
 % text and all 128-bit byte values round-trip, with malformed text refused.
-% [tested: lib_uuid; commit=WORKTREE].
+% [tested: lib_uuid; commit=d5de00cc183b4b395b552f3aae7fca87752ef38c].
 % Owns resources: the host UUID and digest providers release their temporary
 % storage within each call; no handle or scope is returned.
 % Decides: uuid-random! explicitly selects version 4. uuid-time! selects version 1,
 % which contains a timestamp and may expose the host's MAC address. The host's
 % unqualified default is version 1 when OSSP is linked. UUIDs identify objects;
 % use lib_crypto's crypto-random-bytes for secrets.
-% [source: https://github.com/SWI-Prolog/packages-clib/blob/2d74666697ba12af386644638b3e563390affbf6/uuid.c:pl_uuid; commit=WORKTREE].
+% [source: https://github.com/SWI-Prolog/packages-clib/blob/2d74666697ba12af386644638b3e563390affbf6/uuid.c:pl_uuid; commit=d5de00cc183b4b395b552f3aae7fca87752ef38c].
 
 :- module(lib_uuid,
           [ 'uuid-random!'/1, 'uuid-time!'/1, 'uuid-name'/4,
