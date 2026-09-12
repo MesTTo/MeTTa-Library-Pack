@@ -1,16 +1,16 @@
 % Purpose: provide exact number operations and native floating functions.
 % Assumes: exact arithmetic uses the host's GMP integers/rationals; math-float
 % delegates to lib_vector:'vector-scale'/3 and its scalar/4 rounding policy.
-% [source: lib/lib_vector/lib_vector.pl:scalar/4; commit=WORKTREE].
+% [source: lib/lib_vector/lib_vector.pl:scalar/4; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
 % Guarantees: integer/rational operations stay exact, factor pairs are ground
 % and unmirrored, and floating conversion preserves signed zeros and subnormals.
-% [tested: lib_math; commit=WORKTREE].
+% [tested: lib_math; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
 % Owns resources: numeric temporaries and FD constraints belong to the query;
 % cutting a factor-pair stream leaves no handle or stored state.
 % Decides: conversion rounds to nearest with ties to even and signed IEEE
 % saturation, as Vector does. Native floating functions retain the host's
 % arithmetic error policy; rationalization is an explicit approximation.
-% [source: lib/lib_vector/lib_vector.pl:positive_float/3; commit=WORKTREE].
+% [source: lib/lib_vector/lib_vector.pl:positive_float/3; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
 
 :- module(lib_math,
           [ 'math-gcd'/2, 'math-lcm'/2, 'math-rational'/3, 'math-ratio'/2,

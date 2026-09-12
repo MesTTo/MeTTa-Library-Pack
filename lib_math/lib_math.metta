@@ -1,7 +1,7 @@
 ; Purpose: exact number operations, floating functions and the existing counts.
 ; Guarantees: the generated declarations follow the native half; the imports
 ; compose the existing numeric conversion and combinatorics providers.
-; [tested: sh check.sh prolog-face; commit=WORKTREE].
+; [tested: sh check.sh prolog-face; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
 !(import! &self (library lib_vector))
 !(import! &self (library lib_combinatorics))
 
