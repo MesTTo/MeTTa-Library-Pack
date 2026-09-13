@@ -1,29 +1,27 @@
-% Purpose: expose text operations, line layout, templates and exact metrics.
+% Purpose: supply shared text boundaries, host layout, templates and exact metrics.
 % Assumes: text accepts String, Symbol or Number; indexes count codepoints.
-% [tested: lib_string, lib_string_surface; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% [tested: lib_string, lib_string_surface; commit=WORKTREE].
 % Guarantees: text results are Strings and NUL survives every text boundary.
-% [tested: lib_string_surface, test_string_unicode_oracles; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% [tested: lib_string_surface, test_string_unicode_oracles; commit=WORKTREE].
 % Literal search, exact splitting and replacement share KMP traversal.
-% [source: lib/lib_string/support/string_native.cpp:occurrences; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% [source: lib/lib_string/support/string_native.cpp:occurrences; commit=WORKTREE].
 % Decides: slices clamp, absent indexes are -1, empty replacement patterns
 % preserve their input, and parse-number fails on ordinary nonnumbers.
-% [tested: lib_string, lib_string_surface; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+% [tested: lib_string, lib_string_surface; commit=WORKTREE].
 
 :- module(lib_string,
           ['number-to-string'/2, 'parse-number'/2,
-           'string-chars'/2, 'string-from-chars'/2,
+           'string-chars'/2,
            'string-codes'/2, 'string-from-codes'/2,
            'string-length'/2, 'string-slice'/4,
            'string-split'/3, 'string-split-exact'/3, 'string-join'/3,
            'string-trim'/2, 'string-upper'/2, 'string-lower'/2,
-           'string-starts-with'/3, 'string-ends-with'/3, 'string-contains'/3,
            'string-index-of'/3, 'string-last-index-of'/3,
            'string-count'/3, 'string-count'/4, 'string-replace'/4,
-           'string-repeat'/3, 'string-pad-left'/4, 'string-pad-right'/4,
-           'string-center'/4, 'string-lines'/2, 'string-unlines'/2,
+           'string-lines'/2, 'string-unlines'/2,
            'string-dedent'/2, 'string-indent'/3,
            'string-wrap'/3, 'string-wrap'/4, 'string-template'/3,
-           'string-edit-distance'/3, 'string-similarity'/3,
+           'string-edit-distance'/3,
            'string-isub'/3, 'string-isub'/4, metta_text/2]).
 :- set_module(base(metta_engine)).
 :- use_module('support/native', []).
@@ -99,26 +97,6 @@ metta_text(Value, Text) :-
 % Apply the host Unicode lowercase mapping and return a String.
 'string-lower'(Value, Out) :- metta_text(Value, Text), string_lower(Text, Out).
 
-%! 'string-starts-with'(+Value:any, +Prefix:any, -Answer:boolean) is det.
-%
-% Return True exactly when Prefix begins the text. An empty prefix matches.
-'string-starts-with'(Value, Prefix, Answer) :-
-    metta_text(Value, Text), metta_text(Prefix, Part),
-    ( sub_string(Text, 0, _, _, Part) -> Answer = true ; Answer = false ).
-
-%! 'string-ends-with'(+Value:any, +Suffix:any, -Answer:boolean) is det.
-%
-% Return True exactly when Suffix ends the text. An empty suffix matches.
-'string-ends-with'(Value, Suffix, Answer) :-
-    metta_text(Value, Text), metta_text(Suffix, Part),
-    ( sub_string(Text, _, _, 0, Part) -> Answer = true ; Answer = false ).
-
-%! 'string-contains'(+Value:any, +Part:any, -Answer:boolean) is det.
-%
-% Return True when Part occurs literally, including an empty Part.
-'string-contains'(Value, Part, Answer) :-
-    'string-index-of'(Value, Part, Index), ( Index >= 0 -> Answer = true ; Answer = false ).
-
 %! 'string-index-of'(+Value:any, +Part:any, -Index:integer) is det.
 %
 % Return the first zero-based codepoint index, or -1. An empty Part returns 0.
@@ -158,12 +136,6 @@ metta_text(Value, Text) :-
 'string-chars'(Value, Chars) :-
     metta_text(Value, Text), string_chars(Text, Atoms), maplist(atom_string, Atoms, Chars).
 
-%! 'string-from-chars'(+Chars:list, -Out:string) is det.
-%
-% Join text items into one String. Retain the existing acceptance of items
-% containing zero or several characters, Symbols and Numbers.
-'string-from-chars'(Chars, Out) :- 'string-join'("", Chars, Out).
-
 %! 'string-codes'(+Value:any, -Codes:list) is det.
 %
 % Return Unicode scalar integers. NUL is 0; supplementary characters count once.
@@ -181,46 +153,6 @@ scalar_code(Code) :-
     must_be(integer, Code),
     ( Code >= 0, Code =< 0x10ffff, (Code < 0xd800 ; Code > 0xdfff) -> true
     ; domain_error(unicode_scalar_value, Code) ).
-
-%! 'string-repeat'(+Value:any, +Times:integer, -Out:string) is det.
-%
-% Repeat the text Times times. Zero and negative counts produce an empty String.
-'string-repeat'(Value, Times, Out) :-
-    metta_text(Value, Text), must_be(integer, Times), Count is max(0, Times),
-    length(Copies, Count), maplist(=(Text), Copies), atomics_to_string(Copies, Out).
-
-%! 'string-pad-left'(+Value:any, +Width:integer, +Pad:any, -Out:string) is det.
-%
-% Pad on the left to Width codepoints. Repeat and truncate a multicharacter
-% filler. An empty filler or a width no greater than the input leaves it unchanged.
-'string-pad-left'(Value, Width, Pad, Out) :- pad_with(Value, Width, Pad, left, Out).
-
-%! 'string-pad-right'(+Value:any, +Width:integer, +Pad:any, -Out:string) is det.
-%
-% Pad on the right using string-pad-left's width and filler rules.
-'string-pad-right'(Value, Width, Pad, Out) :- pad_with(Value, Width, Pad, right, Out).
-
-pad_with(Value, Width, Pad, Side, Out) :-
-    metta_text(Value, Text), metta_text(Pad, Filler), must_be(integer, Width),
-    string_length(Text, Length), Missing is Width - Length,
-    padding(Filler, Missing, Fill),
-    ( Side == left -> string_concat(Fill, Text, Out) ; string_concat(Text, Fill, Out) ).
-
-padding(Pad, Missing, Fill) :-
-    ( (Missing =< 0 ; Pad == "") -> Fill = ""
-    ; string_length(Pad, Size), Times is (Missing + Size - 1) // Size,
-      'string-repeat'(Pad, Times, Repeated), sub_string(Repeated, 0, Missing, _, Fill) ).
-
-%! 'string-center'(+Value:any, +Width:integer, +Pad:any, -Out:string) is det.
-%
-% Pad both sides to Width codepoints, with an odd extra character on the right.
-% Each side starts at the beginning of Pad; empty filler leaves the input unchanged.
-'string-center'(Value, Width, Pad, Out) :-
-    metta_text(Value, Text), metta_text(Pad, Filler), must_be(integer, Width),
-    string_length(Text, Length), Missing is max(0, Width - Length),
-    Left is Missing // 2, Right is Missing - Left,
-    padding(Filler, Left, Before), padding(Filler, Right, After),
-    atomics_to_string([Before, Text, After], Out).
 
 %! 'string-lines'(+Value:any, -Lines:list) is det.
 %
@@ -293,15 +225,6 @@ template_assignment(Name-Value, Name=Value).
 'string-edit-distance'(First, Second, Distance) :-
     metta_text(First, Left), metta_text(Second, Right), lib_string_native:edit_distance(Left, Right, Distance).
 
-%! 'string-similarity'(+First:any, +Second:any, -Score:float) is det.
-%
-% Return 1 - edit-distance/max(lengths), in [0,1]. Two empty Strings score 1.
-'string-similarity'(First, Second, Score) :-
-    metta_text(First, Left), metta_text(Second, Right),
-    string_length(Left, L), string_length(Right, R), Maximum is max(L,R),
-    ( Maximum =:= 0 -> Score = 1.0
-    ; lib_string_native:edit_distance(Left, Right, Distance), Score is 1.0 - Distance/Maximum ).
-
 %! 'string-isub'(+First:any, +Second:any, -Score:float) is det.
 %! 'string-isub'(+First:any, +Second:any, +Options:list, -Score:float) is det.
 %
@@ -352,22 +275,14 @@ isub_text(true, Text, Out) :-
 :- det('string-trim'/2).
 :- det('string-upper'/2).
 :- det('string-lower'/2).
-:- det('string-starts-with'/3).
-:- det('string-ends-with'/3).
-:- det('string-contains'/3).
 :- det('string-index-of'/3).
 :- det('string-last-index-of'/3).
 :- det('string-count'/3).
 :- det('string-count'/4).
 :- det('string-replace'/4).
 :- det('string-chars'/2).
-:- det('string-from-chars'/2).
 :- det('string-codes'/2).
 :- det('string-from-codes'/2).
-:- det('string-repeat'/3).
-:- det('string-pad-left'/4).
-:- det('string-pad-right'/4).
-:- det('string-center'/4).
 :- det('string-lines'/2).
 :- det('string-unlines'/2).
 :- det('string-dedent'/2).
@@ -376,7 +291,6 @@ isub_text(true, Text, Out) :-
 :- det('string-wrap'/4).
 :- det('string-template'/3).
 :- det('string-edit-distance'/3).
-:- det('string-similarity'/3).
 :- det('string-isub'/3).
 :- det('string-isub'/4).
 :- det('number-to-string'/2).

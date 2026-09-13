@@ -1,6 +1,7 @@
-String operations preserve Unicode codepoints and embedded NUL. The library
-provides literal search, splitting, replacement, line layout, named templates
-and two distinct similarity calculations. Import it with
+String operations preserve Unicode codepoints and embedded NUL. MeTTa recipes
+compose literal search, repetition, padding and normalized similarity over
+shared text boundaries. The library also provides splitting, replacement,
+line layout, named templates and two distinct similarity calculations. Import it with
 `!(import! &self (library lib_string))`.
 
 ```metta
@@ -9,6 +10,8 @@ and two distinct similarity calculations. Import it with
 !(string-wrap "one two three" 7)      ; "one two\nthree"
 !(string-edit-distance "kitten" "sitting") ; 3
 !(string-template "Hello {Name}!" (quote ((Name "Ada")))) ; "Hello Ada!"
+!(string-center 12 7 3)              ; "3312333"
+!(collapse (string-repeat "x" (superpose (0 2)))) ; ("" "xx")
 ```
 
 Text inputs accept a String, Symbol or Number. Results containing text are
@@ -38,8 +41,41 @@ including the replacement argument even when it is unused. Search state
 takes O(m) storage for m pattern codepoints beyond converted inputs. Returned
 text or fields occupy their own output storage. Character-set membership uses
 native hash sets.
-Joining concatenates all pieces once. Repeat and padding take space
-proportional to the requested output.
+Joining concatenates all pieces once. Repeat collects a MeTTa range; padding
+uses one equation whose function argument assigns the left share of the missing
+width. The left, right and center recipes supply all, none and floor-div by two.
+For nonempty filler, construction takes space proportional to the output.
+Empty text or filler needs no traversal even with an arbitrarily large count.
+Both text arguments and integer counts validate before an empty result returns.
+Noninteger Numbers raise named assertions from string-repeat or the shared
+string-pad equation. Literal arguments with the wrong declared type produce
+the engine's `(Error Call (BadArgType Position Expected Actual))` value before
+the recipe runs. The assertions can print diagnostics, so construction
+recordings conservatively refuse replay.
+
+Contains and prefix tests compare the shared search index. Suffix testing
+compares a codepoint slice, from-chars joins text items, and similarity normalizes
+the exact distance. The nine recipes are stored equations that you can inspect
+with `match` and reconstruct as functions:
+
+```metta
+!(let $recipe (match &self (= (string-repeat $value $count) $body)
+               (quote (|-> ($value $count) $body)))
+   (let $repeat (eval $recipe) ($repeat "ab" 3))) ; "ababab"
+```
+
+```python
+from metta import G, MeTTa, lib
+
+with MeTTa() as engine:
+    text = engine.self
+    text += lib.string
+    assert text.fn.string_center(G("🦊"), 4, G(".")).one() == ".🦊.."
+```
+
+Use `quote` for a literal character expression. The join boundary refuses code
+inside that expression as nontext and preserves variable identity while refusing
+an unbound item. Ordinary arguments retain the engine's evaluation rules.
 
 Line operations split only on LF and preserve CR as data. `string-lines`
 omits one terminal empty component, and empty input gives an empty expression.
@@ -92,8 +128,9 @@ walking; RapidFuzz delivers them after its synchronous calculation returns.
 The [example](../../examples/ch08-data/08-03-the-shipped-libraries/18-string_lib.metta)
 calls all 34 heads and all 37 typed arities. Its
 [Python twin](../../extensions/python/examples/language-feature-examples/ch08-data/08-03-the-shipped-libraries/18-string_lib.py)
-checks the same claims through values and function calls. Generated tests cover
-Unicode, NUL, edit-distance goldens and line transformations. Native tests
+checks the same fifty claims through values, function calls and reflected
+equations. Generated tests cover Unicode, NUL, padding, edit-distance goldens
+and line transformations. Native tests
 compare SWI layout and ISub results and exercise refusals and cancellation.
 
 Migration: splitting, trimming, wrapping, lines and ISub preserve embedded NUL
