@@ -1,7 +1,7 @@
 % Purpose: validate the finite expression boundary for collection rewrites.
 % Guarantees: proper finite expressions retain terms and variable sharing;
 % host-injected cycles, open tails and improper lists raise before traversal.
-% [tested: lib_statistics, lib_math; commit=WORKTREE].
+% [tested: lib_statistics, lib_math; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 % Owns resources: caller terms remain caller-owned; no copies or stored state.
 :- module(collections_data, ['collections-expression'/2]).
 :- set_module(base(metta_engine)).

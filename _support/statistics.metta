@@ -2,7 +2,7 @@
 ; Assumes: the native boundary checks finite expression structure; Math and
 ; Vector own numeric representation and division.
 ; Guarantees: a host approximation is refused before an exact result is claimed.
-; [tested: lib_statistics; commit=WORKTREE].
+; [tested: lib_statistics; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 (: statistics-data (-> Expression Expression))
 (= (statistics-data $data)
    (let* (($checked (collections-expression $data))

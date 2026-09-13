@@ -1,7 +1,7 @@
 ; Purpose: compose exact number operations over the shared numeric providers.
 ; Guarantees: collection arithmetic, factor choices and floating conversion are
 ; inspectable equations; complete integer inputs are validated before reduction.
-; [tested: lib_math; commit=WORKTREE].
+; [tested: lib_math; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 !(import! &self (library lib_vector))
 !(import! &self (library lib_combinatorics))
 !(import! &self (library "_support/math.metta"))

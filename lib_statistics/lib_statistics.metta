@@ -5,7 +5,7 @@
 ; callbacks preserve alternative complete laws and literal values.
 ; [tested: lib_statistics, test_statistics_exact_reductions,
 ; test_independent_marginals_and_a_correlated_joint_are_not_interchangeable;
-; commit=WORKTREE].
+; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 ; Owns resources: expressions and query-local arithmetic; no stored state.
 ; Decides: sample quantiles interpolate; finite-law quantiles invert the CDF.
 ; Moments, order counts and product laws remain inspectable equations.

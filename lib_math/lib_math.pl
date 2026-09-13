@@ -1,9 +1,9 @@
 % Purpose: bridge exact numeric representations and host arithmetic kernels.
 % Assumes: Vector owns scalar rounding and the licensed fraction_sqrt/2 kernel.
-% [source: lib/lib_vector/lib_vector.pl:scalar/4, fraction_sqrt/2; commit=WORKTREE].
+% [source: lib/lib_vector/lib_vector.pl:scalar/4, fraction_sqrt/2; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 % Guarantees: exact constructors refuse approximation, roots precede binary64
 % rounding, and conversion preserves signed zeros and subnormals.
-% [tested: lib_math, test_statistics_exact_reductions; commit=WORKTREE].
+% [tested: lib_math, test_statistics_exact_reductions; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 % Owns resources: numeric temporaries belong to the query; no stored state.
 % Decides: conversion rounds to nearest with ties to even and signed IEEE
 % saturation, as Vector does. Native floating functions retain the host's

@@ -1,6 +1,6 @@
 ; Purpose: private integer validation and the Euclidean reduction for Math.
 ; Guarantees: complete inputs are checked before zero can end a reduction.
-; [tested: lib_math; commit=WORKTREE].
+; [tested: lib_math; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 
 (: math-integers (-> Expression Expression))
 (= (math-integers $values)

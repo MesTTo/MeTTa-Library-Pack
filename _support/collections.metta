@@ -1,7 +1,7 @@
 ; Purpose: share the finite-expression and integer checks used by collection libraries.
 ; Guarantees: an unbound or non-expression size input raises without binding it;
 ; the integer predicate rejects floats and non-numbers.
-; [tested: lib_combinatorics_surface, lib_statistics, lib_math; commit=WORKTREE].
+; [tested: lib_combinatorics_surface, lib_statistics, lib_math; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 ; These equations are internal support for the public library operations.
 
 !(import! &self (library lib_import))
