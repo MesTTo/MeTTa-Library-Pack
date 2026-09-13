@@ -1,7 +1,7 @@
 ; Purpose: derive set operations over canonical expressions from core collections.
 ; Guarantees: each set result is ordered and duplicate-free, while membership
 ; compares term identity without binding the caller's variables.
-; [tested: lib_sets; commit=6471fbad35eced5ed6440ebf2c25a053b20221f3].
+; [tested: lib_sets; commit=WORKTREE].
 ; Fails when: an input requiring a canonical set is unordered or duplicated,
 ; or set-intersection receives no sets; core assertions report the refusal.
 ; Decides: set-of canonicalizes with unique-atom and sort-atom; intersections

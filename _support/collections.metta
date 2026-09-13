@@ -1,16 +1,19 @@
 ; Purpose: share the finite-expression and integer checks used by collection libraries.
 ; Guarantees: an unbound or non-expression size input raises without binding it;
 ; the integer predicate rejects floats and non-numbers.
-; [tested: lib_combinatorics_surface; commit=6471fbad35eced5ed6440ebf2c25a053b20221f3].
+; [tested: lib_combinatorics_surface, lib_statistics, lib_math; commit=WORKTREE].
 ; These equations are internal support for the public library operations.
+
+!(import! &self (library lib_import))
+!(import_prolog_functions_from_file
+   (library "_support/collections_data.pl") (collections-expression))
+(: collections-expression (-> Atom Expression))
 
 (: collections-size (-> Atom Number))
 (= (collections-size $value)
-   (let $checked (assertEqualMsg (get-metatype $value) Expression
-                                (quote (collections-size $value)))
-     (size-atom $value)))
+   (let $checked (collections-expression $value) (size-atom $checked)))
 (@doc collections-size
-  (@desc "The length of a finite expression. Refuse a non-expression through a core assertion. Internal collection boundary check.")
+  (@desc "The length of a finite expression. Refuse non-expressions, open or improper lists and cyclic host terms before traversal. Internal collection boundary check.")
   (@params ((@param "Value")))
   (@return "Size"))
 

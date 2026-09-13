@@ -1,56 +1,34 @@
-% Purpose: provide exact number operations and native floating functions.
-% Assumes: exact arithmetic uses the host's GMP integers/rationals; math-float
-% delegates to lib_vector:'vector-scale'/3 and its scalar/4 rounding policy.
-% [source: lib/lib_vector/lib_vector.pl:scalar/4; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
-% Guarantees: integer/rational operations stay exact, factor pairs are ground
-% and unmirrored, and floating conversion preserves signed zeros and subnormals.
-% [tested: lib_math; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
-% Owns resources: numeric temporaries and FD constraints belong to the query;
-% cutting a factor-pair stream leaves no handle or stored state.
+% Purpose: bridge exact numeric representations and host arithmetic kernels.
+% Assumes: Vector owns scalar rounding and the licensed fraction_sqrt/2 kernel.
+% [source: lib/lib_vector/lib_vector.pl:scalar/4, fraction_sqrt/2; commit=WORKTREE].
+% Guarantees: exact constructors refuse approximation, roots precede binary64
+% rounding, and conversion preserves signed zeros and subnormals.
+% [tested: lib_math, test_statistics_exact_reductions; commit=WORKTREE].
+% Owns resources: numeric temporaries belong to the query; no stored state.
 % Decides: conversion rounds to nearest with ties to even and signed IEEE
 % saturation, as Vector does. Native floating functions retain the host's
 % arithmetic error policy; rationalization is an explicit approximation.
 % [source: lib/lib_vector/lib_vector.pl:positive_float/3; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
 
 :- module(lib_math,
-          [ 'math-gcd'/2, 'math-lcm'/2, 'math-rational'/3, 'math-ratio'/2,
+          [ 'math-rational'/3, 'math-ratio'/2,
             'math-rationalize'/2, 'math-integer-root'/3, 'math-power-mod'/4,
-            'math-factor-pairs'/2, 'math-float'/2, 'math-class'/2,
+            'math-sqrt'/2, 'math-float'/2, 'math-class'/2,
             'math-real'/3, 'math-real-functions'/1
           ]).
 :- set_module(base(metta_engine)).
 :- use_module(library(error), [must_be/2, domain_error/2, representation_error/1]).
-:- use_module(library(apply), [foldl/4, maplist/3]).
-:- use_module(library(clpfd), [(#=)/2, in/2, labeling/2,
-                              op(700,xfx,#=), op(700,xfx,in), op(450,xfx,..)]).
-:- use_module('../lib_vector/lib_vector', ['vector-scale'/3]).
+:- use_module(library(apply), [maplist/3]).
+:- use_module('../lib_vector/lib_vector', ['vector-scale'/3, fraction_sqrt/2]).
 :- meta_predicate math_operation(+, 0).
-
-%! 'math-gcd'(+Integers:list(integer), -Divisor:integer) is det.
-%
-% The nonnegative greatest common divisor of any number of integers. Empty
-% input and a collection of zeros give zero. Negative signs do not affect it.
-'math-gcd'(Integers, Divisor) :-
-    math_operation('math-gcd',
-        (must_be(list(integer),Integers),foldl(gcd_step,Integers,0,Divisor))).
-
-gcd_step(Value, Acc, Out) :- Out is gcd(Value,Acc).
-
-%! 'math-lcm'(+Integers:list(integer), -Multiple:integer) is det.
-%
-% The nonnegative least common multiple. Empty input gives the multiplicative
-% identity one; any zero makes the result zero. Validate the complete input.
-'math-lcm'(Integers, Multiple) :-
-    math_operation('math-lcm',
-        (must_be(list(integer),Integers),foldl(lcm_step,Integers,1,Multiple))).
-
-lcm_step(Value, Acc, Out) :- Out is lcm(Value,Acc).
 
 %! 'math-rational'(+Numerator:integer, +Denominator:integer, -Value:number) is det.
 %
 % Construct an exact reduced Number with a positive denominator. Whole results
 % are integers. A zero denominator or host policy that approximates the exact
-% result raises. Use math-ratio to recover its parts; rationals have no signed zero.
+% result raises. The unary MeTTa form converts a finite Number to its exact
+% binary rational value through math-ratio; rationalize is the approximation.
+% Use math-ratio to recover the parts; rationals have no signed zero.
 'math-rational'(Numerator, Denominator, Value) :-
     math_operation('math-rational',
         (must_be(integer,Numerator),must_be(integer,Denominator),
@@ -107,19 +85,26 @@ finite_number(Value) :-
         (must_be(integer,Base),must_be(nonneg,Exponent),must_be(positive_integer,Modulus),
          Reduced is Base mod Modulus,Result is powm(Reduced,Exponent,Modulus))).
 
-%! 'math-factor-pairs'(+Value:integer, -Pair:list(integer)) is nondet.
+%! 'math-sqrt'(+Value:number, -Root:float) is det.
 %
-% Stream the positive (A B) factor pairs of a positive integer with A=<B, in
-% ascending A order. A square's equal pair appears once. The host FD solver
-% searches A only through the exact square root; large inputs can need search.
-% Zero is refused because it has infinitely many factor pairs.
-'math-factor-pairs'(Value, [A,B]) :-
-    math_operation('math-factor-pairs',
-        (must_be(positive_integer,Value),
-         nth_integer_root_and_remainder(2,Value,Limit,_),
-         A in 1..Limit,B in 1..Value,A*B #= Value,labeling([bisect],[A,B]))).
+% Correctly rounded floating square root of a nonnegative finite Number.
+% Take the root before rounding, so huge or tiny exact inputs can still have
+% representable roots. Reuse Vector's fractional-root kernel and final IEEE
+% saturation. Preserve the sign of floating zero. A negative or nonfinite
+% input raises.
+'math-sqrt'(Value, Root) :-
+    math_operation('math-sqrt',
+        (float(Value),Value =:= 0 -> Root=Value
+        ; 'math-ratio'(Value,[Numerator,Denominator]),
+          (Numerator >= 0 -> true ; domain_error(nonnegative_number,Value)),
+          'math-rational'(Numerator,Denominator,Exact),
+          fraction_sqrt(Exact,Root))).
 
 %! 'math-float'(+Value:number, -Float:float) is det.
+%
+% @private
+% Native consumers use this Vector bridge. The public MeTTa equation composes
+% vector-scale directly and does not register this native predicate.
 %
 % Convert a Number to binary64 through multiplication by the floating unit.
 % Round once to nearest with ties to even, preserving negative zero, subnormal
@@ -190,13 +175,12 @@ real_function(nan,0).
 math_operation(Name, Goal) :-
     catch(Goal,Error,rethrow_metta_operation_error(Name,Error)).
 
-:- det('math-gcd'/2).
-:- det('math-lcm'/2).
 :- det('math-rational'/3).
 :- det('math-ratio'/2).
 :- det('math-rationalize'/2).
 :- det('math-integer-root'/3).
 :- det('math-power-mod'/4).
+:- det('math-sqrt'/2).
 :- det('math-float'/2).
 :- det('math-class'/2).
 :- det('math-real'/3).
