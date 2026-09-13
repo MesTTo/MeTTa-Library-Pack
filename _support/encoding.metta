@@ -1,9 +1,9 @@
 ; Purpose: share validated hexadecimal recipes across Encoding and UUID.
 ; Assumes: encoding-hex-text receives bytes checked by encoding-bytes.
-; [source: lib/lib_encoding/lib_encoding.metta:hex-encode, lib/lib_uuid/lib_uuid.metta:uuid-of-bytes; commit=WORKTREE].
+; [source: lib/lib_encoding/lib_encoding.metta:hex-encode, lib/lib_uuid/lib_uuid.metta:uuid-of-bytes; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 ; Guarantees: the alphabet is ASCII, two digits encode each byte, and decoding
 ; preserves every byte value. Literal nonbytes never become executable elements.
-; [tested: lib_encoding, test_encoding_python_oracles; commit=WORKTREE].
+; [tested: lib_encoding, test_encoding_python_oracles; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 
 !(import_prolog_functions_from_file (library "lib_encoding/lib_encoding.pl")
   (encoding-bytes encoding-text))

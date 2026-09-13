@@ -2,10 +2,10 @@
 % Guarantees: complete finite bytes are validated before conversion. Only proven
 % malformed decoder errors become domain errors; interruptions and unrelated
 % provider exceptions retain their original terms.
-% [tested: lib_encoding; commit=WORKTREE].
+% [tested: lib_encoding; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 % Decides: standard base64 is padded; URL base64 is unpadded. Decoder acceptance
 % follows the host codec, including its URL alphabet's classic fallback.
-% [tested: lib_encoding:base64_is_the_hosts_own_encoding; commit=WORKTREE].
+% [tested: lib_encoding:base64_is_the_hosts_own_encoding; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 
 :- module(lib_encoding,
           [ 'utf8-encode'/2,
@@ -115,7 +115,7 @@ alphabet(url, [padding(false), charset(url), as(string), encoding(iso_latin_1)])
 
 % These are the codec failures established by malformed-input probes. Catching
 % any other error would turn cancellation or resource exhaustion into bad data.
-% [tested: lib_encoding:provider_exceptions_keep_their_identity; commit=WORKTREE].
+% [tested: lib_encoding:provider_exceptions_keep_their_identity; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 malformed_input(Kind, Error) :-
     malformed_pattern(Kind, Pattern), subsumes_term(Pattern, Error).
 

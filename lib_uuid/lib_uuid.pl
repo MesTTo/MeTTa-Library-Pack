@@ -2,11 +2,11 @@
 % Guarantees: validation accepts exactly 8-4-4-4-12 hexadecimal digits in a String,
 % including nil and reserved bit patterns. RFC version1 timestamps retain the
 % host's epoch and 100ns tick conversion.
-% [tested: lib_uuid; commit=WORKTREE].
+% [tested: lib_uuid; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 % Owns resources: the host UUID provider releases its temporary storage per call.
 % Decides: random generation explicitly selects version4; time generation selects
 % version1, which may expose the host's MAC address. Identifiers are not secrets.
-% [source: https://github.com/SWI-Prolog/packages-clib/blob/2d74666697ba12af386644638b3e563390affbf6/uuid.c:pl_uuid; commit=WORKTREE].
+% [source: https://github.com/SWI-Prolog/packages-clib/blob/2d74666697ba12af386644638b3e563390affbf6/uuid.c:pl_uuid; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 
 :- module(lib_uuid,
           [ 'uuid-random!'/1, 'uuid-time!'/1, 'uuid-is'/2,
