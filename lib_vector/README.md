@@ -45,6 +45,28 @@ the existing order. With an empty accumulator, the distribution is the positive
 cube projected onto the unit sphere. It is neither Gaussian nor uniform on the
 sphere. Use it when that positive-direction distribution is intended.
 
+Construction is expressed in MeTTa. `vector-fill` collects a `range` answer
+stream. `random-normal-vector` folds fresh `random-float` answers with
+`cons-atom`, then calls `vector-normalize`. `cosine-of-normalized` calls `dot`.
+You can inspect their equations with `match` and reuse their bodies as functions:
+
+```metta
+!(let $recipe (match &self (= (vector-fill $count $value) $body)
+               (quote (|-> ($count $value) $body)))
+   (let $fill (eval $recipe) ($fill 3 7))) ; (7 7 7)
+```
+
+Invalid counts raise named MeTTa assertions. Numeric validation for construction
+uses the empty `vector-scale` operation, which checks its factor without doing
+arithmetic. These errors name `vector-scale`; shortcut errors name `dot`.
+Both kinds remain observable through `catch` and Python's `MettaError` hierarchy.
+Expression arguments follow the usual evaluation rules. Use `quote` to supply
+a literal accumulator; a code expression inside it is not a Number and is
+refused before any draw, even when executing that code could produce a Number.
+The construction equations retain assertions that can print diagnostics.
+Recordings therefore conservatively refuse replay for fill and random
+construction, even with a seed. The dot specialization remains replayable.
+
 Traversal is linear in the dimension, which must be read completely. Exact
 arithmetic also depends on the number of bits in its inputs and intermediates;
 the library does not silently replace it with a floating approximation. It
@@ -60,6 +82,7 @@ its numeric identity; its `.value` is the Python `Fraction` payload. Creating
 Python object's identity.
 
 The [example](../../examples/ch08-data/08-03-the-shipped-libraries/13-vector_lib.metta)
-calls every head. Native PlDoc declarations generate the MeTTa imports, arrow
-types and documentation. The [provider notice](vendor/README.md) records the
+calls every head. MeTTa equations declare their own types and documentation;
+native PlDoc generates the ten numerical kernels' imports, types and docs.
+The [provider notice](vendor/README.md) records the
 licensed fraction square-root translation and its primary sources.
