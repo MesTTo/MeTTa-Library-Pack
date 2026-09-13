@@ -5,15 +5,55 @@
 ; callbacks preserve alternative complete laws and literal values.
 ; [tested: lib_statistics, test_statistics_exact_reductions,
 ; test_independent_marginals_and_a_correlated_joint_are_not_interchangeable;
-; commit=6fa571d1b7059b610f73e9feed657711414251e5].
+; commit=WORKTREE].
+; Guarantees: exact additive conditioning uses sparse integer coefficient rows
+; and forward/backward joins, preserving literal candidate identities and order.
+; [tested: weighted_subset, test_weighted_subset_matches_exhaustive;
+; commit=WORKTREE].
 ; Owns resources: expressions and query-local arithmetic; no stored state.
 ; Decides: sample quantiles interpolate; finite-law quantiles invert the CDF.
 ; Moments, order counts and product laws remain inspectable equations.
 
 !(import! &self (library lib_math))
-!(import! &self (library lib_functional))
+!(import! &self (library lib_pairs))
 !(import! &self (library lib_measure))
 !(import! &self (library "_support/statistics.metta"))
+
+(: weighted-subset-mass-independent (-> Atom Number Expression))
+(= (weighted-subset-mass-independent $raw $target)
+   (let* ((($candidates $denominator)
+            (statistics-subset-prepare weighted-subset-mass-independent $raw $target))
+          ($row (foldl-atom $candidates ((0 1)) $before $candidate
+                  (statistics-subset-step $target $before $candidate)))
+          ($weight (statistics-subset-weight $row $target)))
+     (statistics-subset-ratio $weight $denominator)))
+(@doc weighted-subset-mass-independent
+  (@desc "Exact mass of an independent additive observation, as a reduced (ratio N D). Hold Candidates as literal (candidate ID LOSS (ratio N D)) rows with distinct ground acyclic IDs, nonnegative integer losses and integer 0<=N<=D with D>0. Target is a nonnegative integer on the same scale. Fold sparse ordered coefficient rows, merging equal sums and discarding sums above Target; an unreachable target has mass (ratio 0 1). Integer coefficients avoid host rational approximation.")
+  (@params ((@param "Candidates") (@param "Target")))
+  (@return "Exact mass"))
+
+(: weighted-subset-posterior-independent (-> Atom Number Expression))
+(= (weighted-subset-posterior-independent $raw $target)
+   (let* ((($candidates $denominator)
+            (statistics-subset-prepare weighted-subset-posterior-independent $raw $target))
+          ($prefixes (statistics-subset-rows $candidates $target))
+          (((:seg $before) $final) $prefixes)
+          ($weight (statistics-subset-weight $final $target))
+          ($positive (assertEqualMsg (> $weight 0) True
+                       (quote (weighted-subset-posterior-independent
+                         "conditioning on a zero-mass observation is undefined; use weighted-subset-mass-independent to inspect reachability" $target))))
+          ($reversed (apply-to reverse (quote ($candidates))))
+          ($suffixes (statistics-subset-rows $reversed $target))
+          (((:seg $backward) $all) $suffixes)
+          ($after (reverse $backward))
+          ($mass (statistics-subset-ratio $weight $denominator))
+          ($marginals (map-atom (zip (quote $candidates) (zip $before $after)) $entry
+                        (statistics-subset-marginal $target $weight $entry))))
+     (quote (subset-posterior $mass $marginals))))
+(@doc weighted-subset-posterior-independent
+  (@desc "Return (subset-posterior Mass ((candidate-posterior ID Ratio) ...)) in candidate order under the mass operation's exact-input contract. Unfold sparse prefix and suffix rows, then map two-pointer coefficient joins to recover every marginal. For N candidates and maximum reachable row width R, coefficient arithmetic and retained row cells are O(NR); integer bit cost grows with prior denominator products. Zero-mass conditioning refuses and names weighted-subset-mass-independent. Recipes and coefficient rows remain ordinary inspectable MeTTa data.")
+  (@params ((@param "Candidates") (@param "Target")))
+  (@return "Mass and exact marginals"))
 
 (= (stats-sum $data)
    (let ($values $floating) (statistics-data $data)

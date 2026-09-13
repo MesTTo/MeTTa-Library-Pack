@@ -1,7 +1,9 @@
 ; Purpose: compose collection transformations and held control forms in MeTTa.
 ; Assumes: collections are finite expressions; callers quote runnable values.
 ; Guarantees: callback alternatives, literal data, input order and variable
-; identity survive the compositions [tested: lib_functional; commit=6fa571d1b7059b610f73e9feed657711414251e5].
+; identity survive the compositions [tested: lib_functional; commit=WORKTREE].
+; Held, eager, lambda and partial callbacks share apply-to's finished-value
+; application boundary [tested: lib_functional; commit=WORKTREE].
 ; Fails when: a collection or step result has the wrong shape, or a slicing
 ; count is outside its domain. Core assertions report those refusals.
 ; Decides: derive the operations from map, fold, choice and application.
@@ -151,7 +153,7 @@
    (let $size (collections-size $items)
      (foldl-atom $items (() ()) $sides $item
        (let ($yes $no) (quote $sides)
-         (if (forall ($test (quote $item)) (|-> ($verdict) (!= $verdict True)))
+         (if (forall (apply-to $test (quote ($item))) (|-> ($verdict) (!= $verdict True)))
            (let $next (union-atom $no (quote ($item))) (quote ($yes $next)))
            (let $next (union-atom $yes (quote ($item))) (quote ($next $no))))))))
 (@doc partition
@@ -161,7 +163,7 @@
 
 (: unfold (-> %Undefined% %Undefined% Expression))
 (= (unfold $step $seed)
-   (case ($step (quote $seed))
+   (case (apply-to $step (quote ($seed)))
      ((Empty ())
       ($pair
        (let $checked (unzip (quote ($pair)))
@@ -176,13 +178,14 @@
 (= (group-by $key $items)
    (let* (($size (collections-size $items))
           ($keyed (map-atom $items $item
-                    (let $value ($key (quote $item)) (quote ($value $item))))))
+                    (let $value (apply-to $key (quote ($item))) (quote ($value $item))))))
      (unfold
        (|-> ($remaining)
          (if (== $remaining ()) (empty)
            (let* (($first (index-atom (index-atom $remaining 0) 0))
                   ($sides (partition
-                            (|-> ($pair) (== (index-atom $pair 0) $first))
+                            (|-> ($pair)
+                              (let $actual (index-atom $pair 0) (== $actual $first)))
                             (quote $remaining)))
                   ($matches (index-atom $sides 0))
                   ($rest (index-atom $sides 1))
@@ -209,7 +212,7 @@
    (let $size (collections-size $items)
      (foldl-atom $items (quote ($seed)) $running $item
        (let ((:seg $previous) $acc) (quote $running)
-         (let $next ($fn (quote $acc) (quote $item))
+         (let $next (apply-to $fn (quote ($acc $item)))
            (union-atom $running (quote ($next))))))))
 (@doc scan
   (@desc "Every running fold result, beginning with Start. Each callback answer extends a history, so a branching function produces alternative histories and a function with no answer ends that history.")
@@ -220,7 +223,7 @@
 (= (pipe $functions $seed)
    (let $size (collections-size $functions)
      (foldl-atom (quote $functions) $seed $acc $fn
-       (let $function (eval $fn) ($function (quote $acc))))))
+       (let $function (eval $fn) (apply-to $function (quote ($acc)))))))
 (@doc pipe
   (@desc "Pass Value through a held collection of functions from left to right. Evaluate each function entry, then apply the resulting function to the current literal value. Preserve zero or many answers from every application.")
   (@params ((@param "Functions") (@param "Value")))
@@ -229,10 +232,9 @@
 (: apply-to (-> %Undefined% Expression %Undefined%))
 (= (apply-to $fn $arguments)
    (let* (($size (collections-size $arguments))
-          ($quoted (map-atom $arguments $arg (quote (quote $arg))))
-          ($call (cons-atom $fn $quoted)))
-     (eval $call)))
+          ($call (cons-atom $fn $arguments)))
+     (reduce $call)))
 (@doc apply-to
-  (@desc "Apply Function to the literal arguments held by an expression. A computed head, lambda or other function value uses ordinary application, preserving all answers and variable sharing.")
+  (@desc "Apply Function to zero or more literal argument values. Build the application with cons-atom and take its reduce step; the arguments already are values, so eval and per-argument quote wrappers would reinterpret them as syntax. Held/eager functions, lambdas and partial applications preserve all answers, literal runnable contents and variable sharing. Functional's callback operators share this boundary.")
   (@params ((@param "Function") (@param "Arguments")))
   (@return "Result"))
