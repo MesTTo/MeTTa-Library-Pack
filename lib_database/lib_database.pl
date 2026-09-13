@@ -3,7 +3,7 @@
 % while open; native handles are used only by their owning database operations.
 % Guarantees: one handle owns a store; requests serialize, snapshots preserve
 % duplicates and variable sharing, and update/sync failures end the attachment.
-% [tested: lib_database; commit=WORKTREE].
+% [tested: lib_database; commit=24b9b7ee948564963a5c3455cd5b412d05afdd2c].
 % Owns resources: each anonymous engine owns a lock stream, temporary schema,
 % source registration and journal attachment. Close and scope cleanup finish
 % those resources; native atom collection releases an abandoned engine.
@@ -11,7 +11,7 @@
 % competing handles and processes until the owning stream closes.
 % Decides: stores contain journal.pl and a permanent lock file; journal-sync
 % controls buffering. Writes survive caller backtracking and native transactions.
-% [tested: lib_database; commit=WORKTREE].
+% [tested: lib_database; commit=24b9b7ee948564963a5c3455cd5b412d05afdd2c].
 
 :- module(lib_database,
           ['database-open!'/3,'database-atoms'/2,'database-add!'/3,
