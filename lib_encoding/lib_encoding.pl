@@ -1,52 +1,17 @@
-% Purpose: the three encodings a program moves bytes through: UTF-8, hex and
-%   base64, each one head in and one head out.
-%
-%   Bytes are an expression of Numbers from 0 to 255, which is lib_file's own byte
-%   shape, so what read-bytes! answers is what these heads take and what they
-%   answer is what write-bytes! writes [source: lib/lib_file/lib_file.pl's byte
-%   doors; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]. Text is a String throughout.
-% Assumes:
-%   - a byte collection really holds bytes. Every head checks, and a number outside
-%     0..255 or a non-number is refused naming the value, because the host's own
-%     writers turn a code point above 255 into several bytes and a caller who meant
-%     bytes would never see it
-%     [tested: lib_encoding:a_value_that_is_not_a_byte_is_refused_by_name;
-%     commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
-%   - malformed input is refused rather than repaired: a hex string of odd length or
-%     with a character outside the alphabet, and base64 text the host's decoder
-%     rejects, each raise
-%     [tested: lib_encoding:malformed_text_is_refused_by_name; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
-% Guarantees:
-%   - every encoding round-trips: the bytes of a text are that text again, the hex
-%     of bytes is those bytes again, and so is the base64, in both alphabets, over
-%     generated inputs
-%     [tested: lib_encoding:every_encoding_round_trips; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
-%   - UTF-8 is the host's own encoding of the same text, byte for byte, which is
-%     what makes a byte count a length in bytes rather than in characters
-%     [tested: lib_encoding:utf8_is_the_hosts_own_encoding; commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
-%   - hex answers lower case and accepts either case, which is what every hash and
-%     every wire format that carries hex does
-%     [tested: lib_encoding:hex_answers_lower_case_and_reads_either;
-%     commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e]
-% Fails when: a caller wants a struct layout, a protocol buffer or an integer of a
-%   named width and endianness. Those are a host FFI concern and stay one; what is
-%   here is the byte-level plumbing every such format is built out of.
-% Owns resources: none; every answer is a new expression or String.
-% Decides: base64 takes its ALPHABET as an argument, `standard` or `url`, rather
-%   than publishing two pairs of heads. The url alphabet is the one RFC 4648 names
-%   for a URL or a file name, and it is unpadded here, because that is what a URL
-%   carries.
-% Open Obligations:
-%   To Do: None
-%   Hacks: None
-%   Future Enhancements: None
-
+% Purpose: supply strict byte/text boundaries and the shared UTF8/base64 codecs.
+% Guarantees: complete finite bytes are validated before conversion. Only proven
+% malformed decoder errors become domain errors; interruptions and unrelated
+% provider exceptions retain their original terms.
+% [tested: lib_encoding; commit=WORKTREE].
+% Decides: standard base64 is padded; URL base64 is unpadded. Decoder acceptance
+% follows the host codec, including its URL alphabet's classic fallback.
+% [tested: lib_encoding:base64_is_the_hosts_own_encoding; commit=WORKTREE].
 
 :- module(lib_encoding,
           [ 'utf8-encode'/2,
             'utf8-decode'/2,
-            'hex-encode'/2,
-            'hex-decode'/2,
+            'encoding-bytes'/3,
+            'encoding-text'/3,
             'base64-encode'/3,
             'base64-decode'/3
           ]).
@@ -63,8 +28,10 @@
 % commit=2b8c0afd38dcfe3994d5047dba2d035970311d0e].
 :- use_module('../lib_csv/support/csv_codec', [utf8_bytes/2, utf8_text/2]).
 :- use_module(library(base64), [base64_encoded/3]).
-:- use_module(library(error), [must_be/2]).
-:- use_module(library(lists), [member/2, memberchk/2]).
+:- use_module(library(lists), [member/2]).
+:- multifile seam:extension_builtin/2.
+seam:extension_builtin('encoding-bytes', pureStructural).
+seam:extension_builtin('encoding-text', pureStructural).
 
 %! 'utf8-encode'(+Text:string, -Bytes:list) is det.
 %
@@ -81,59 +48,12 @@
 % because the alternative is a string holding whatever the bytes happened to mean.
 'utf8-decode'(Bytes, Text) :-
     bytes_argument('utf8-decode', Bytes),
-    (   catch(utf8_text(Bytes, Decoded), _, fail)
+    (   catch(utf8_text(Bytes, Decoded), Error,
+              ( malformed_input(utf8, Error) -> fail ; throw(Error) ))
     ->  Text = Decoded
     ;   throw(error(domain_error(utf8_bytes, Bytes),
                     context('utf8-decode',
                             'these bytes are not UTF-8; hex-encode shows what they are')))
-    ).
-
-%! 'hex-encode'(+Bytes:list, -Text:string) is det.
-%
-% The bytes as hexadecimal, two lower-case digits each and nothing between them,
-% which is how a hash, a key and a wire dump are all written.
-'hex-encode'(Bytes, Text) :-
-    bytes_argument('hex-encode', Bytes),
-    findall(Digits,
-            ( member(Byte, Bytes), format(atom(Digits), '~|~`0t~16r~2|', [Byte]) ),
-            Pairs),
-    atomic_list_concat(Pairs, Joined),
-    atom_string(Joined, Text).
-
-%! 'hex-decode'(+Text:string, -Bytes:list) is det.
-%
-% The bytes that hexadecimal spells, in either case. An odd number of digits or a
-% character outside 0-9a-fA-F is refused naming it, because a truncated or
-% mistyped dump is not bytes.
-'hex-decode'(Text, Bytes) :-
-    text_argument('hex-decode', Text),
-    string_codes(Text, Codes),
-    length(Codes, Length),
-    (   Length mod 2 =:= 0
-    ->  true
-    ;   throw(error(domain_error(hex_text, Text),
-                    context('hex-decode',
-                            'hexadecimal spells one byte in two digits, so the text has an even length')))
-    ),
-    hex_bytes(Codes, Text, Bytes).
-
-hex_bytes([], _, []).
-hex_bytes([High, Low|Rest], Text, [Byte|Bytes]) :-
-    hex_digit(High, Text, HighValue),
-    hex_digit(Low, Text, LowValue),
-    Byte is HighValue * 16 + LowValue,
-    hex_bytes(Rest, Text, Bytes).
-
-hex_digit(Code, Text, Value) :-
-    (   Code >= 0'0, Code =< 0'9
-    ->  Value is Code - 0'0
-    ;   Code >= 0'a, Code =< 0'f
-    ->  Value is Code - 0'a + 10
-    ;   Code >= 0'A, Code =< 0'F
-    ->  Value is Code - 0'A + 10
-    ;   char_code(Char, Code),
-        throw(error(domain_error(hex_digit, Char),
-                    context('hex-decode', Text)))
     ).
 
 %! 'base64-encode'(+Alphabet:'Symbol', +Bytes:list, -Text:string) is det.
@@ -151,13 +71,14 @@ hex_digit(Code, Text, Value) :-
 
 %! 'base64-decode'(+Alphabet:'Symbol', +Text:string, -Bytes:list) is det.
 %
-% The bytes that base64 spells, in the named alphabet. Text the decoder rejects,
-% which includes a character outside the alphabet and a truncated group, is refused
-% naming the text.
+% The bytes that base64 spells under the named host decoder policy. Rejected text
+% raises a named domain error. The host URL decoder also accepts classic digits;
+% this operation does not impose an additional canonical-spelling check.
 'base64-decode'(Alphabet, Text, Bytes) :-
     text_argument('base64-decode', Text),
     alphabet_options('base64-decode', Alphabet, Options),
-    (   catch(base64_encoded(Plain, Text, Options), _, fail)
+    (   catch(base64_encoded(Plain, Text, Options), Error,
+              ( malformed_input(base64, Error) -> fail ; throw(Error) ))
     ->  plain_bytes(Plain, Bytes)
     ;   throw(error(domain_error(base64_text, Text),
                     context('base64-decode',
@@ -192,6 +113,31 @@ alphabet_options(Head, Alphabet, Options) :-
 alphabet(standard, [padding(true), charset(classic), as(string), encoding(iso_latin_1)]).
 alphabet(url, [padding(false), charset(url), as(string), encoding(iso_latin_1)]).
 
+% These are the codec failures established by malformed-input probes. Catching
+% any other error would turn cancellation or resource exhaustion into bad data.
+% [tested: lib_encoding:provider_exceptions_keep_their_identity; commit=WORKTREE].
+malformed_input(Kind, Error) :-
+    malformed_pattern(Kind, Pattern), subsumes_term(Pattern, Error).
+
+% Classification may not instantiate an unknown exception into a codec error.
+malformed_pattern(utf8, error(representation_error(utf8), _)).
+malformed_pattern(utf8, error(representation_error(unicode_scalar_value), _)).
+malformed_pattern(base64, error(syntax_error(base64_char(_,_)), _)).
+malformed_pattern(base64, error(representation_error(encoding),
+                               context(system:string_bytes/3, _))).
+
+%! 'encoding-bytes'(+Head:'Atom', +Bytes:'Atom', -Checked:list) is det.
+%
+% Return the caller's finite byte expression unchanged after strict validation.
+% @private
+'encoding-bytes'(Head, Bytes, Bytes) :- bytes_argument(Head, Bytes).
+
+%! 'encoding-text'(+Head:'Atom', +Text:'Atom', -Checked:any) is det.
+%
+% Return text unchanged after the codec's strict text boundary.
+% @private
+'encoding-text'(Head, Text, Text) :- text_argument(Head, Text).
+
 % Bytes are an expression of Numbers from 0 to 255, and the check names the value
 % that is not one: a code point above 255 is the common mistake, and it arrives
 % from string-codes over text rather than from utf8-encode.
@@ -217,7 +163,7 @@ text_argument(Head, Text) :-
 
 :- det('utf8-encode'/2).
 :- det('utf8-decode'/2).
-:- det('hex-encode'/2).
-:- det('hex-decode'/2).
+:- det('encoding-bytes'/3).
+:- det('encoding-text'/3).
 :- det('base64-encode'/3).
 :- det('base64-decode'/3).
