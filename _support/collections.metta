@@ -1,7 +1,7 @@
 ; Purpose: share the finite-expression and integer checks used by collection libraries.
 ; Guarantees: an unbound or non-expression size input raises without binding it;
 ; the integer predicate rejects floats and non-numbers.
-; [tested: lib_combinatorics_surface; commit=WORKTREE].
+; [tested: lib_combinatorics_surface; commit=6471fbad35eced5ed6440ebf2c25a053b20221f3].
 ; These equations are internal support for the public library operations.
 
 (: collections-size (-> Atom Number))

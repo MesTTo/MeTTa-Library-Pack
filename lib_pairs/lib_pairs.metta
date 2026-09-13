@@ -1,7 +1,7 @@
 ; Purpose: read ordinary (Key Value) pairs as a relation through collection operations.
 ; Guarantees: projections, stable orderings and grouping preserve duplicates,
 ; literal values and variable identity; lookup compares keys without unification.
-; [tested: lib_pairs; commit=WORKTREE].
+; [tested: lib_pairs; commit=6471fbad35eced5ed6440ebf2c25a053b20221f3].
 ; Fails when: an operation receives a malformed pair or group; unzip and the
 ; shared collection check report the offending shape through core assertions.
 

@@ -1,7 +1,7 @@
 ; Purpose: finite choices as MeTTa answer streams, with a native exact posterior algorithm.
 ; Guarantees: choices preserve order, multiplicity, literal values and variable
 ; identity; counts stay exact and invalid finite domains raise.
-; [tested: lib_combinatorics_surface; commit=WORKTREE].
+; [tested: lib_combinatorics_surface; commit=6471fbad35eced5ed6440ebf2c25a053b20221f3].
 ; The weighted-subset native contract is documented in its provider and example.
 
 !(import! &self (library "_support/collections.metta"))

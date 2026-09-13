@@ -10,12 +10,12 @@
 %   - outputs preserve input order and contain only reduced exact ratios with
 %     positive denominators [tested: test_weighted_subset_matches_exhaustive,
 %     weighted_subset:equivalent_input_ratios_are_canonical;
-%     commit=WORKTREE]
+%     commit=6471fbad35eced5ed6440ebf2c25a053b20221f3]
 %   - equal partial sums are merged at every prefix and suffix layer, and all
 %     marginals are recovered by a forward/backward join rather than by
 %     enumerating subsets [tested:
 %     weighted_subset:repeated_unit_losses_have_target_bounded_rows;
-%     commit=WORKTREE]
+%     commit=6471fbad35eced5ed6440ebf2c25a053b20221f3]
 % Fails when:
 %   - an input violates the identity, integer-lattice, or exact-ratio contract
 %   - posterior conditioning has zero mass; the refusal names
