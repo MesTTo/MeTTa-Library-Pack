@@ -1,15 +1,15 @@
 % Purpose: parse typed argument vectors and derive help from option declarations.
 % Guarantees: literal arguments, defaults and occurrence order survive parsing;
 % missing values, unknown names and ambiguous declarations raise with a repair.
-% [tested: lib_cli; commit=WORKTREE].
+% [tested: lib_cli; commit=83b7589a6766210414ceca14dfb9846b28c2ef78].
 % Assumes: a custom decoder terminates before exhaustion or its second answer.
 % Owns resources: bounded answer collection closes a custom decoder's generator
 % on success, refusal or exception. No parser state outlives a call.
-% [tested: lib_cli; commit=WORKTREE].
+% [tested: lib_cli; commit=83b7589a6766210414ceca14dfb9846b28c2ef78].
 % Decides: absent options without defaults contribute no pair; every occurrence
 % is converted before the requested repeat policy selects results. Custom types
 % use the calling module's ordinary argument checks, including gradual typing.
-% [tested: lib_cli; commit=WORKTREE].
+% [tested: lib_cli; commit=83b7589a6766210414ceca14dfb9846b28c2ef78].
 
 :- module(lib_cli, ['cli-parse'/4,'cli-help'/2,'cli-types'/1,'cli-arguments!'/1]).
 :- set_module(base(metta_engine)).
