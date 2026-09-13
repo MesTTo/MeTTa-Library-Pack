@@ -1,4 +1,4 @@
-The gamma sampler in `../lib_random.pl` adapts the Marsaglia/Tsang method and
+The gamma equations in `../../_support/random.metta` adapt the Marsaglia/Tsang method and
 shape-boosting identity implemented by Rand at revision
 `d65b9bbf991e56d8a097a35d934e6f93d9194ac0`. Its MIT license is `RAND-LICENSE`.
 
@@ -12,4 +12,6 @@ The normal and inverse-transform formulas were checked against
 [CPython random.py](https://github.com/python/cpython/blob/ebf955df7a89ed0c7968f79faec1de49f61ed7cb/Lib/random.py).
 That revision's license is already shipped in
 `../../lib_vector/vendor/PYTHON-LICENSE`. Neither upstream project is a runtime
-dependency; every uniform draw uses SWI's existing thread-local generator.
+dependency; every uniform draw uses the core random-float operation and SWI's
+existing thread-local generator. The public constructors in
+`../lib_random.metta` return sample programs as ordinary MeTTa expressions.

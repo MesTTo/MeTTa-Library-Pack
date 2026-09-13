@@ -9,6 +9,9 @@
 % saturation, as Vector does. Native floating functions retain the host's
 % arithmetic error policy; rationalization is an explicit approximation.
 % [source: lib/lib_vector/lib_vector.pl:positive_float/3; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
+% Guarantees: native numeric heads declare their structural effect beside their
+% implementation, so derived seeded programs remain replayable.
+% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=WORKTREE].
 
 :- module(lib_math,
           [ 'math-rational'/3, 'math-ratio'/2,
@@ -21,6 +24,17 @@
 :- use_module(library(apply), [maplist/3]).
 :- use_module('../lib_vector/lib_vector', ['vector-scale'/3, fraction_sqrt/2]).
 :- meta_predicate math_operation(+, 0).
+
+:- multifile seam:extension_builtin/2.
+seam:extension_builtin('math-rational', pureStructural).
+seam:extension_builtin('math-ratio', pureStructural).
+seam:extension_builtin('math-rationalize', pureStructural).
+seam:extension_builtin('math-integer-root', pureStructural).
+seam:extension_builtin('math-power-mod', pureStructural).
+seam:extension_builtin('math-sqrt', pureStructural).
+seam:extension_builtin('math-class', pureStructural).
+seam:extension_builtin('math-real', pureStructural).
+seam:extension_builtin('math-real-functions', pureStructural).
 
 %! 'math-rational'(+Numerator:integer, +Denominator:integer, -Value:number) is det.
 %

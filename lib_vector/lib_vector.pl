@@ -10,6 +10,9 @@
 % Decides: exact scalar inputs stay exact, floating scalar inputs round once,
 % zero directions retain IEEE NaNs, and negative random counts draw nothing.
 % [tested: lib_vector_surface, test_vector_ieee_arithmetic; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
+% Guarantees: native effect declarations describe numeric kernels as structural;
+% random-normal-vector alone consumes the seed-controlled generator.
+% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=WORKTREE].
 
 :- module(lib_vector,
           [dot/3, norm/2, cosine/3, 'cosine-of-normalized'/3,
@@ -22,6 +25,22 @@
 :- use_module(library(apply), [maplist/2, maplist/3, maplist/4, foldl/4, foldl/5]).
 :- use_module(library(random), [random/1]).
 :- meta_predicate operation(+, 0).
+
+:- multifile seam:extension_builtin/2, seam:seeded_operation/1.
+seam:extension_builtin(dot, pureStructural).
+seam:extension_builtin(norm, pureStructural).
+seam:extension_builtin(cosine, pureStructural).
+seam:extension_builtin('cosine-of-normalized', pureStructural).
+seam:extension_builtin('vector-add', pureStructural).
+seam:extension_builtin('vector-subtract', pureStructural).
+seam:extension_builtin('vector-multiply', pureStructural).
+seam:extension_builtin('vector-divide', pureStructural).
+seam:extension_builtin('vector-scale', pureStructural).
+seam:extension_builtin('vector-normalize', pureStructural).
+seam:extension_builtin('vector-distance', pureStructural).
+seam:extension_builtin('vector-fill', pureStructural).
+seam:extension_builtin('random-normal-vector', oracleIO).
+seam:seeded_operation('random-normal-vector').
 
 require_exact_runtime :-
     ( current_prolog_flag(bounded, false), current_prolog_flag(rationals, true)
