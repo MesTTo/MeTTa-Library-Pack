@@ -2,7 +2,7 @@
 ; Guarantees: traversal, verdicts, counting and commitment use the existing
 ; forall, test, assertEqualToResult, foldall and once operations. This library
 ; defines no alternative assertion or generator protocol.
-; [tested: lib_testing; commit=WORKTREE].
+; [tested: lib_testing; commit=7fad61bab72098722b27091a94282ff69989920e].
 !(import! &self (library lib_combinatorics))
 
 (@doc lib_testing
