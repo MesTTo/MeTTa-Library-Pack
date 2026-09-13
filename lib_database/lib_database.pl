@@ -1,9 +1,9 @@
-% Purpose: own independent persistent stores and query their native MeTTa values.
+% Purpose: own independent persistent stores of passive MeTTa syntax.
 % Assumes: a store directory and its contents remain managed through this API
 % while open; native handles are used only by their owning database operations.
-% Guarantees: one handle owns a store; requests serialize, queries preserve
-% duplicate matches, and update/sync failures end the attachment.
-% [tested: lib_database; commit=060bea3199e9f504c6d425f60841f229fc96e861].
+% Guarantees: one handle owns a store; requests serialize, snapshots preserve
+% duplicates and variable sharing, and update/sync failures end the attachment.
+% [tested: lib_database; commit=WORKTREE].
 % Owns resources: each anonymous engine owns a lock stream, temporary schema,
 % source registration and journal attachment. Close and scope cleanup finish
 % those resources; native atom collection releases an abandoned engine.
@@ -11,10 +11,10 @@
 % competing handles and processes until the owning stream closes.
 % Decides: stores contain journal.pl and a permanent lock file; journal-sync
 % controls buffering. Writes survive caller backtracking and native transactions.
-% [tested: lib_database; commit=060bea3199e9f504c6d425f60841f229fc96e861].
+% [tested: lib_database; commit=WORKTREE].
 
 :- module(lib_database,
-          ['database-open!'/3,'database-query'/4,'database-add!'/3,
+          ['database-open!'/3,'database-atoms'/2,'database-add!'/3,
            'database-remove!'/3,'database-sync!'/2,'database-close!'/2,
            'with-database'/4]).
 :- set_module(base(metta_engine)).
@@ -26,7 +26,8 @@
 :- use_module(library(lists), [memberchk/2,append/3]).
 :- use_module(library(apply), [maplist/2]).
 :- use_module(library(readutil), [read_line_to_codes/2]).
-:- use_module('../../engine/spaces', [metta_seq_head_plan/2]).
+:- use_module(library(terms), [mapsubterms/3]).
+:- use_module(library(varnumbers), [varnumbers_names/3]).
 :- use_module('../lib_string/lib_string', [metta_text/2]).
 :- use_module('../lib_csv/support/csv_codec', [utf8_text/2]).
 :- use_module('../_support/owned_resources', [with_outcome_cleanup/3]).
@@ -70,37 +71,34 @@
 
 %! 'database-add!'(+Handle:any, +Value:'Atom', -Done:boolean) is det.
 %
-% Append one held ground value, retaining duplicate occurrences. Values may
-% contain native Symbols, Strings, Numbers and proper expression lists.
-% Variables, cycles and foreign resource/Python objects raise before writing.
-% Bind computed values before passing them to this held argument. A write
-% error closes the store; its journal may need repair before reopening.
+% Append one held value, retaining duplicate occurrences. Values may contain
+% native Symbols, Strings, Numbers, plain Variables and proper expressions.
+% Each occurrence owns fresh variables, preserving sharing within that value.
+% Equations remain passive syntax until a caller explicitly evaluates them.
+% Attributed variables, cycles and foreign resource/Python objects raise before
+% writing. Bind computed values before this held argument. A write error closes
+% the store; its journal may need repair before reopening.
 'database-add!'(Handle,Value,true) :-
-    persistent_value(Value),database_request(Handle,add(Value),true).
+    encode_value(Value,Encoded),database_request(Handle,add(Encoded),true).
 
 %! 'database-remove!'(+Handle:any, +Value:'Atom', -Removed:boolean) is det.
 %
-% Remove one exactly equal held ground occurrence, returning False if absent.
-% Duplicates need one removal each. Exact stored-value equality distinguishes
-% integer 1 from float 1.0; database-query instead uses core numeric matching.
-% A native write failure closes the store and propagates its error.
+% Remove one alpha-identical held occurrence, returning False if absent.
+% Variable names may differ, but their sharing must agree. Variables are data,
+% not deletion wildcards. Duplicates need one removal each; integer 1 and float
+% 1.0 remain distinct. A native write failure closes the store and propagates.
 'database-remove!'(Handle,Value,Removed) :-
-    persistent_value(Value),database_request(Handle,remove(Value),Removed).
+    encode_value(Value,Encoded),database_request(Handle,remove(Encoded),Removed).
 
-%! 'database-query'(+Handle:any, +Pattern:'Atom', +Template:'Atom', -Rows:list) is det.
+%! 'database-atoms'(+Handle:any, -Rows:list) is det.
 %
-% Match a held pattern against each stored value and collect the shared held
-% template. Use the core matcher, including numeric promotion, equality guards
-% and sequence variables. Stored marker-shaped values remain data. Queries
-% match one row at a time; compose joins explicitly. Preserve insertion order,
-% duplicates and all matches of each row. The result is a snapshot occupying
-% memory proportional to its output. A query error leaves the store open.
-'database-query'(Handle,Pattern,Template,Rows) :-
-    persistent_syntax(Pattern),persistent_syntax(Template),
-    current_metta_module(Caller),
-    lift_pattern_modifiers(Pattern,Lifted,Guards,Segments),
-    ( Segments==true -> metta_seq_head_plan(Lifted,Asked) ; Asked=Lifted ),
-    database_request(Handle,query(Caller,Asked,Guards,Template),Rows).
+% Return an expression containing every stored value in insertion order,
+% including duplicates. Each value has fresh variables on each snapshot, with
+% sharing preserved within that value. Binding a snapshot never changes the
+% store. Nothing is evaluated. Compose selection and joins with let segment
+% patterns, and explicit rule reconstruction with eval or add-atom. Snapshot
+% memory is proportional to the complete stored syntax.
+'database-atoms'(Handle,Rows) :- database_request(Handle,atoms,Rows).
 
 %! 'database-sync!'(+Handle:any, -Done:boolean) is det.
 %
@@ -143,7 +141,6 @@ database_request(Handle,Command,Reply) :-
 
 database_response(Response,Value) :-
     ( nonvar(Response),Response=answer(Value) -> true
-    ; nonvar(Response),Response=exception(Error) -> throw(Error)
     ; domain_error(database_response,Response) ).
 
 store_owner(Directory,Sync) :-
@@ -203,11 +200,8 @@ database_loop(Module) :-
 % https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/man/engines.plx#L285-L288
 database_yield(Response) :- garbage_collect,trim_stacks,engine_yield(Response).
 
-database_apply(Module,query(Caller,Pattern,Guards,Template),Response) :-
-    catch(( findall(Template,
-                    ( Module:row(Value),metta_match_atoms(Pattern,Value),
-                      maplist(query_guard(Caller),Guards),acyclic_term(Template) ),Rows),
-            Response=answer(Rows) ),Error,Response=exception(Error)).
+database_apply(Module,atoms,answer(Rows)) :-
+    findall(Value,(Module:row(Encoded),decode_value(Encoded,Value)),Rows).
 % Workaround: swi-persistency-write-memory - an update or sync exception ends
 % the owning engine, discarding the native attachment's partially changed memory.
 database_apply(Module,add(Value),answer(true)) :- Module:assert_row(Value).
@@ -215,15 +209,26 @@ database_apply(Module,remove(Value),answer(Removed)) :-
     ( Module:retract_row(Value) -> Removed=true ; Removed=false ).
 database_apply(Module,sync,answer(true)) :- Module:db_sync(close).
 
-query_guard(Caller,Goal) :- call(Caller:Goal).
-
 persistent_value(Value) :-
-    ( ground(Value),acyclic_term(Value),persistent_term(Value) -> true
+    ( acyclic_term(Value),term_attvars(Value,[]),persistent_term(Value) -> true
     ; domain_error(persistent_value,Value) ).
 
-persistent_syntax(Value) :-
-    ( acyclic_term(Value),persistent_term(Value) -> true
-    ; domain_error(persistent_pattern,Value) ).
+% A private compound is disjoint from every permitted MeTTa value. Unlike
+% $VAR/1, it also stays ground through persistency's numbervars(true) writer.
+% https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/library/persistency.pl#L526
+encode_value(Value,Encoded) :-
+    persistent_value(Value),copy_term(Value,Encoded),
+    numbervars(Encoded,0,_,[functor_name('$metta_database_variable'),attvar(error)]).
+
+% The sparse inverse allocates by variable count, not by an untrusted largest
+% index in a journal. Canonical replay validation below rejects renamed tags.
+decode_value(Encoded,Value) :-
+    mapsubterms(variable_marker,Encoded,Numbered),varnumbers_names(Numbered,Value,_).
+variable_marker('$metta_database_variable'(Index),'$VAR'(Index)) :-
+    integer(Index),Index>=0.
+
+stored_value(Encoded) :-
+    decode_value(Encoded,Value),encode_value(Value,Canonical),Encoded==Canonical.
 
 persistent_term(Value) :-
     ( var(Value) -> true
@@ -262,12 +267,12 @@ journal_records(Stream,Position) :-
       journal_records(Stream,later) ).
 
 journal_record(first,created(Time)) :- number(Time).
-journal_record(_,assert(row(Value))) :- persistent_value(Value).
-journal_record(_,retract(row(Value))) :- persistent_value(Value).
+journal_record(_,assert(row(Value))) :- stored_value(Value).
+journal_record(_,retract(row(Value))) :- stored_value(Value).
 
 :- det('database-open!'/3).
 :- det('database-add!'/3).
 :- det('database-remove!'/3).
-:- det('database-query'/4).
+:- det('database-atoms'/2).
 :- det('database-sync!'/2).
 :- det('database-close!'/2).
