@@ -2,11 +2,11 @@
 ; Guarantees: held plans and terms preserve variable sharing, literal runnable
 ; contents and every alternative. Strategy application lowers to an inspectable
 ; equation rather than a host callback [tested: lib_strategy, lib_reflect_terms;
-; commit=WORKTREE].
+; commit=505ce25b9384e782afa26f621527d4b1fd695924].
 ; Assumes: terms are finite; a callable strategy declines by producing no answer.
 ; Guarantees: literal Empty is an ordinary result, distinct from (empty).
 ; [tested: lib_reflect_terms:empty_symbol_is_a_value_and_not_strategy_failure;
-; commit=WORKTREE].
+; commit=505ce25b9384e782afa26f621527d4b1fd695924].
 ; Fails when: repeat or innermost keeps succeeding without reaching a normal
 ; form, including a rule that always returns its input.
 ; Decides: choice uses the first nonempty answer bag. Expression heads are

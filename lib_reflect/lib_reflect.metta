@@ -4,7 +4,7 @@
 ; Guarantees: atom-variables retains first-appearance identity; atom-replace
 ; composes topmost traversal and exact pair lookup, preserving literal values,
 ; shared variables and every duplicate replacement answer.
-; [tested: lib_reflect_terms; commit=WORKTREE].
+; [tested: lib_reflect_terms; commit=505ce25b9384e782afa26f621527d4b1fd695924].
 ; Fails when: term traversal receives cyclic host data or replacement rows are
 ; malformed; the shared finite-expression and pair checks report the refusal.
 ; Decides: all written variables count, including variables inside binder syntax.
