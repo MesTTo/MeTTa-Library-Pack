@@ -2,11 +2,11 @@
 ; Assumes: the native boundary checks finite expression structure; Math and
 ; Vector own numeric representation and division.
 ; Guarantees: a host approximation is refused before an exact result is claimed.
-; [tested: lib_statistics; commit=WORKTREE].
+; [tested: lib_statistics; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 ; Guarantees: weighted-subset rows merge equal sums, truncate at the target
 ; and preserve exact integer coefficients and literal candidate identities.
 ; [tested: weighted_subset, test_weighted_subset_matches_exhaustive;
-; commit=WORKTREE].
+; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 (: statistics-data (-> Expression Expression))
 (= (statistics-data $data)
    (let* (($checked (collections-expression $data))

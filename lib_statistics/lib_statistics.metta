@@ -5,11 +5,11 @@
 ; callbacks preserve alternative complete laws and literal values.
 ; [tested: lib_statistics, test_statistics_exact_reductions,
 ; test_independent_marginals_and_a_correlated_joint_are_not_interchangeable;
-; commit=WORKTREE].
+; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 ; Guarantees: exact additive conditioning uses sparse integer coefficient rows
 ; and forward/backward joins, preserving literal candidate identities and order.
 ; [tested: weighted_subset, test_weighted_subset_matches_exhaustive;
-; commit=WORKTREE].
+; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 ; Owns resources: expressions and query-local arithmetic; no stored state.
 ; Decides: sample quantiles interpolate; finite-law quantiles invert the CDF.
 ; Moments, order counts and product laws remain inspectable equations.

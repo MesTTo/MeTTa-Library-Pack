@@ -1,9 +1,9 @@
 ; Purpose: compose collection transformations and held control forms in MeTTa.
 ; Assumes: collections are finite expressions; callers quote runnable values.
 ; Guarantees: callback alternatives, literal data, input order and variable
-; identity survive the compositions [tested: lib_functional; commit=WORKTREE].
+; identity survive the compositions [tested: lib_functional; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 ; Held, eager, lambda and partial callbacks share apply-to's finished-value
-; application boundary [tested: lib_functional; commit=WORKTREE].
+; application boundary [tested: lib_functional; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 ; Fails when: a collection or step result has the wrong shape, or a slicing
 ; count is outside its domain. Core assertions report those refusals.
 ; Decides: derive the operations from map, fold, choice and application.

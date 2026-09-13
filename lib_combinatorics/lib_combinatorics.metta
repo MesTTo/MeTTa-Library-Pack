@@ -1,7 +1,7 @@
 ; Purpose: finite choices and exact counts as MeTTa answer streams.
 ; Guarantees: choices preserve order, multiplicity, literal values and variable
 ; identity; counts stay exact and invalid finite domains raise.
-; [tested: lib_combinatorics_surface; commit=WORKTREE].
+; [tested: lib_combinatorics_surface; commit=e1be99ea1c08f70444c1c35cada441e089777906].
 ; Exact additive probability and posterior marginals belong to lib_statistics.
 
 !(import! &self (library "_support/collections.metta"))
