@@ -1,6 +1,14 @@
-; Purpose: expose the engine's surface and defining origins as data.
+; Purpose: inspect the engine's surface and manipulate literal terms as data.
 ; Guarantees: origin-of projects get-property's occurrence origins, including
 ;   deferred definitions [tested: head_properties:origin_of_delegates_without_forcing_a_definition; commit=90ba93eb8f6e98ebfefc55416859bf13de6a8427].
+; Guarantees: atom-variables retains first-appearance identity; atom-replace
+; composes topmost traversal and exact pair lookup, preserving literal values,
+; shared variables and every duplicate replacement answer.
+; [tested: lib_reflect_terms; commit=WORKTREE].
+; Fails when: term traversal receives cyclic host data or replacement rows are
+; malformed; the shared finite-expression and pair checks report the refusal.
+; Decides: all written variables count, including variables inside binder syntax.
+; Substitution is simultaneous and structural, without lexical capture avoidance.
 ;
 ;The engine's own surface, as data you can match.
 ;
@@ -25,6 +33,8 @@
 
 !(import! &self (library lib_import))
 !(import! &self (library lib_json))
+!(import! &self (library lib_pairs))
+!(import! &self (library lib_strategy))
 !(import_prolog_functions_from_file (library lib_reflect.pl)
   (engine-builtin engine-special-form engine-arity engine-function
    engine-user-function engine-knows engine-origin engine-extension-point
@@ -97,3 +107,22 @@
        (dict-space ((builtinNames $builtin-names)
                     (specialFormNames $special-form-names)
                     (userFunctionNames $user-function-names))))))
+
+(: atom-variables (-> Atom Expression))
+(= (atom-variables $term)
+   (unique-atom
+     (filter-atom (flatten-deep (quote ($term))) $leaf (is-var $leaf))))
+(@doc atom-variables
+  (@desc "Every written variable once, in first-appearance order, preserving its identity and sharing with the original term. Inspect literal contents, including expression heads and binder syntax. This is structural inspection, not lexical free-variable analysis.")
+  (@params ((@param "Term")))
+  (@return "Variables"))
+
+(: atom-replace (-> Atom Atom %Undefined%))
+(= (atom-replace $term $replacements)
+   (let* (($finite (collections-size (quote ($term))))
+          ($checked (unzip (quote $replacements))))
+     (alltd (|-> ($node) (pairs-lookup (quote $replacements) (quote $node))) $term)))
+(@doc atom-replace
+  (@desc "Replace exact subterms through a literal (From To) relation. A matching root wins over its descendants; replacement terms are final for this pass. Preserve every matching row as an alternative, including duplicates, and form all combinations across different occurrences. Compare by identity without unifying unrelated variables. Empty relations return the original term; malformed rows and cyclic host terms raise. This does not implement lexical capture avoidance.")
+  (@params ((@param "Term") (@param "Replacements")))
+  (@return "Every simultaneously replaced term"))

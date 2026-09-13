@@ -1,231 +1,206 @@
-; Purpose: provide a Stratego-style strategy basis whose plans are ordinary
-;   MeTTa terms and whose application is lowered by the translator.
+; Purpose: compose literal term rewrites through ordinary MeTTa functions.
+; Guarantees: held plans and terms preserve variable sharing, literal runnable
+; contents and every alternative. Strategy application lowers to an inspectable
+; equation rather than a host callback [tested: lib_strategy, lib_reflect_terms;
+; commit=WORKTREE].
+; Assumes: terms are finite; a callable strategy declines by producing no answer.
+; Guarantees: literal Empty is an ordinary result, distinct from (empty).
+; [tested: lib_reflect_terms:empty_symbol_is_a_value_and_not_strategy_failure;
+; commit=WORKTREE].
+; Fails when: repeat or innermost keeps succeeding without reaching a normal
+; form, including a rule that always returns its input.
+; Decides: choice uses the first nonempty answer bag. Expression heads are
+; children, and one answers every successful immediate-child position.
+; The direct strategy-repeat name distinguishes rewriting until failure from
+; Functional's numeric repeat. The held plan (repeat Rule) is unchanged.
 ;
-;   !(import! &self (library lib_strategy))
-;
-; Assumes: `minimal_metta_lib` supplies function, collapse-bind, and
-;   superpose-bind, while the engine supplies id and the atom decomposition
-;   operations. A named strategy declines by answering no result, conventionally
-;   through an equation whose body is Empty.
-; Guarantees: id, fail, seq, choice, try, repeat, all, one, topdown, bottomup,
-;   innermost, stratego-all, and stratego-one are reified atom families. Applying
-;   one through strategy-apply lowers to strategy-eval; it never installs a host
-;   callback [tested: sh test.sh examples/ch20-extending-the-engine/20-02-metta-written-in-metta/11-strategy.metta; commit=0d37dd6b24fe916e44cdbfb4efc6a1d5ffaf74aa]
-; Fails when: a strategy used under repeat keeps succeeding forever, including an
-;   identity success. Stratego's repeat has the same progress obligation.
-; Decides: choice is left-biased over result bags. stratego-one returns every
-;   successful immediate-child position rather than committing to the first.
-;   Written expression heads count as children, which is what MeTTa's flat term
-;   model makes them.
-;
-; The controlling laws come from the Stratego library at immutable commit
-; 35009963ebc99c4fa8c93cae064309186a877d0e:
-; https://github.com/metaborg/stratego/blob/35009963ebc99c4fa8c93cae064309186a877d0e/strategolib/trans/strategy/conditional.str2
-; https://github.com/metaborg/stratego/blob/35009963ebc99c4fa8c93cae064309186a877d0e/strategolib/trans/strategy/iteration.str2
+; Traversal laws follow Stratego at commit35009963ebc99c4fa8c93cae064309186a877d0e:
 ; https://github.com/metaborg/stratego/blob/35009963ebc99c4fa8c93cae064309186a877d0e/strategolib/trans/strategy/traversal/simple.str2
-; https://github.com/metaborg/stratego/blob/35009963ebc99c4fa8c93cae064309186a877d0e/strategolib/trans/strategy/traversal/fixpoint.str2
+; MeTTa retains complete answer bags and treats function values as ordinary data.
 
 !(import! &self (library minimal_metta_lib))
 
 (: strategy-eval (-> Atom Atom %Undefined%))
-(: strategy-all (-> Atom Atom Atom))
-(: strategy-all-tail (-> Atom Expression Expression))
-(: strategy-one (-> Atom Atom Atom))
+(: strategy-all (-> Atom Atom %Undefined%))
+(: strategy-all-tail (-> Atom Atom %Undefined%))
+(: strategy-one (-> Atom Atom %Undefined%))
 (: strategy-apply (-> Atom Atom %Undefined%))
 
-; all(s) applies s to every immediate child. It is identity on leaves and the
-; empty expression, and the complete traversal fails when any child declines.
-(= (strategy-all $strategy $x)
-   (function
-     (chain (eval (get-metatype $x)) $kind
-       (unify $kind Expression
-         (eval (if-equal $x ()
-           (return ())
-           (chain (decons-atom $x) $head-tail
-             (unify ($head $tail) $head-tail
-               (chain (eval (strategy-eval $strategy $head)) $head-result
-                 (chain (eval (strategy-all-tail $strategy $tail)) $tail-result
-                   (chain (cons-atom $head-result $tail-result) $result
-                     (return $result))))
-               (return $x)))))
-         (return $x)))))
-
-(= (strategy-all-tail $strategy $tail)
-   (function
-     (eval (if-equal $tail ()
-       (return ())
-       (chain (decons-atom $tail) $head-tail
-         (unify ($head $rest) $head-tail
-           (chain (eval (strategy-eval $strategy $head)) $head-result
-             (chain (eval (strategy-all-tail $strategy $rest)) $tail-result
-               (chain (cons-atom $head-result $tail-result) $result
-                 (return $result))))
-           (return $tail)))))))
-
-; one(s) applies s at exactly one immediate child. The two segment gaps enumerate
-; every position, so MeTTa exposes every success in left-to-right order. A leaf,
-; empty expression, or all-declining child strategy answers no result.
-(= (strategy-one $strategy ((:seg $before) $child (:seg $after)))
-   (function
-     (chain (eval (strategy-eval $strategy $child)) $child-result
-       (return ((:seg $before) $child-result (:seg $after))))))
-(= (strategy-one $strategy $leaf) Empty)
-
-; Plans are dispatched in one ordered equation. Separate equations plus a
-; catch-all would overlap under MeTTa's relational equation semantics and add a
-; spurious answer to every recognized constructor.
+; A bound operand already is a value. Rebuilding a metta call would evaluate it
+; again for an eager callback; ordinary application preserves the literal.
+; Quote the subject and its case keys because unquoted keys are functional
+; patterns and would execute seq or turn all into a partial application.
+; One ordered case avoids overlapping constructor and fallback equations.
+; Collect each result inside a one-element expression: answer aggregation
+; prunes bare Empty, while the wrapper preserves it as literal data until
+; superpose-bind restores the answer's bindings. Choice uses the same shape.
 (= (strategy-eval $strategy $term)
-   (function
-     ; id(t) = t.
-     (unify $strategy id
-       (return $term)
-       ; fail(t) has no result.
-       (unify $strategy fail
-         (empty)
-         ; seq(s1,s2)(t) = s1(t) followed by s2.
-         (unify (seq $first $second) $strategy
-           (chain (eval (strategy-eval $first $term)) $middle
-             (chain (eval (strategy-eval $second $middle)) $result
-               (return $result)))
-           ; choice(s1,s2) = s1 <+ s2: use s2 only when all s1 branches fail.
-           (unify (choice $left $right) $strategy
-             (chain (collapse-bind (strategy-eval $left $term)) $left-results
-               (unify $left-results ()
-                 (chain (eval (strategy-eval $right $term)) $result
-                   (return $result))
-                 (chain (superpose-bind $left-results) $result
-                   (return $result))))
-             ; try(s) = choice(s,id).
-             (unify (try $inner) $strategy
-               (chain (eval (strategy-eval (choice $inner id) $term)) $result
-                 (return $result))
-               ; repeat(s) = choice(seq(s,repeat(s)),id).
-               (unify (repeat $inner) $strategy
-                 (chain (collapse-bind (strategy-eval $inner $term)) $results
-                   (unify $results ()
-                     (return $term)
-                     (chain (superpose-bind $results) $next
-                       (chain (eval (strategy-eval (repeat $inner) $next)) $result
-                         (return $result)))))
-                 ; all(s) is the universal immediate-child traversal.
-                 (unify (all $inner) $strategy
-                   (chain (eval (strategy-all $inner $term)) $result
-                     (return $result))
-                   ; stratego-all is the public prefixed spelling of all.
-                   (unify (stratego-all $inner) $strategy
-                     (chain (eval (strategy-all $inner $term)) $result
-                       (return $result))
-                     ; one(s) is the one-immediate-child traversal.
-                     (unify (one $inner) $strategy
-                       (chain (eval (strategy-one $inner $term)) $result
-                         (return $result))
-                       ; stratego-one is the public prefixed spelling of one.
-                       (unify (stratego-one $inner) $strategy
-                         (chain (eval (strategy-one $inner $term)) $result
-                           (return $result))
-                         ; topdown(s) = seq(s,all(topdown(s))).
-                         (unify (topdown $inner) $strategy
-                           (chain (eval (strategy-eval
-                                          (seq $inner (all (topdown $inner)))
-                                          $term))
-                             $result
-                             (return $result))
-                           ; bottomup(s) = seq(all(bottomup(s)),s).
-                           (unify (bottomup $inner) $strategy
-                             (chain (eval (strategy-eval
-                                            (seq (all (bottomup $inner)) $inner)
-                                            $term))
-                               $result
-                               (return $result))
-                             ; innermost(s) = bottomup(try(seq(s,innermost(s)))).
-                             (unify (innermost $inner) $strategy
-                               (chain (eval (strategy-eval
-                                              (bottomup
-                                                (try (seq $inner
-                                                          (innermost $inner))))
-                                              $term))
-                                 $result
-                                 (return $result))
-                               ; A NAME denotes a user strategy equation, and it is
-                               ; either metatype: since 2026-09-05 a name this engine
-                               ; holds a function for answers Grounded, and DEFINING the
-                               ; strategy is what gives it one, so a Symbol-only test
-                               ; stopped recognizing every strategy that had been
-                               ; defined. Compound plans not recognized above, and an
-                               ; unbound strategy, fail instead of becoming a
-                               ; variable-headed call.
-                               (chain (eval (get-metatype $strategy)) $kind
-                                 (unify $kind Expression
-                                   (empty)
-                                   (unify $kind Variable
-                                     (empty)
-                                     (chain (context-space) $space
-                                       (chain (metta ($strategy $term)
-                                                     %Undefined% $space)
-                                         $result
-                                         (return $result)))))))))))))))))))))
+   (if (is-var $strategy) (empty)
+     (case (noeval (quote $strategy))
+       (((quote id) (noeval $term))
+        ((quote fail) (empty))
+        ((quote (seq (:seg $steps)))
+         (foldl-atom $steps $term $value $step (strategy-eval $step $value)))
+        ((quote (choice (:seg $steps))) (strategy-choice-tail $steps $term))
+        ((quote (try $inner)) (strategy-eval (choice $inner id) $term))
+        ((quote (repeat $inner))
+         (let $hits (collapse-bind
+                      (let $value (strategy-eval $inner $term) (noeval ($value))))
+           (if (== $hits ()) (noeval $term)
+             (let ($next) (superpose-bind $hits)
+               (strategy-eval (repeat $inner) $next)))))
+        ((quote (all $inner)) (strategy-all $inner $term))
+        ((quote (stratego-all $inner)) (strategy-all $inner $term))
+        ((quote (one $inner)) (strategy-one $inner $term))
+        ((quote (stratego-one $inner)) (strategy-one $inner $term))
+        ((quote (topdown $inner))
+         (strategy-eval (seq $inner (all (topdown $inner))) $term))
+        ((quote (bottomup $inner))
+         (strategy-eval (seq (all (bottomup $inner)) $inner) $term))
+        ((quote (innermost $inner))
+         (strategy-eval (bottomup (try (seq $inner (innermost $inner)))) $term))
+        ((quote (alltd $inner))
+         (strategy-eval (choice $inner (all (alltd $inner))) $term))
+        ($_
+         (let $callable
+           (if (== (get-metatype $strategy) Expression)
+             (eval $strategy) (noeval $strategy))
+           ($callable $term)))))))
+(@doc strategy-eval
+  (@desc "Apply a held rewrite plan or callable value to a literal term. Named functions, lambdas and partial applications use ordinary application. An unbound strategy declines. Preserve every answer and its bindings, including literal Empty; (empty) produces no answer.")
+  (@params ((@param "Strategy") (@param "Term")))
+  (@return "Rewritten term"))
 
-; strategy-apply is the only lowering door. Its expansion is another atom, so
-; the runtime plan remains language data and no Python or Prolog callback is
-; minted per strategy.
-(= (strategy-apply $strategy $term)
-   (noeval (strategy-eval $strategy $term)))
+(: strategy-choice-tail (-> Atom Atom %Undefined%))
+(= (strategy-choice-tail $steps $term)
+   (if (== $steps ()) (empty)
+     (let ($first (:seg $rest)) (noeval $steps)
+       (let $hits (collapse-bind
+                    (let $value (strategy-eval $first $term) (noeval ($value))))
+         (if (== $hits ()) (strategy-choice-tail $rest $term)
+           (let ($answer) (superpose-bind $hits) (noeval $answer)))))))
+(@doc strategy-choice-tail
+  (@desc "Apply held strategies in order until one has answers, then return that complete bag. An empty sequence declines. Shared bindings survive collapse-bind and superpose-bind.")
+  (@params ((@param "Strategies") (@param "Term")))
+  (@return "First nonempty answer bag"))
+
+(= (strategy-all $strategy $term)
+   (if (== (get-metatype $term) Expression)
+     (strategy-all-tail $strategy $term) (noeval $term)))
+(@doc strategy-all
+  (@desc "Rewrite every immediate child, including an expression's head. A leaf and the empty expression are identities. A declining child ends that combination; branching children produce every combination.")
+  (@params ((@param "Strategy") (@param "Term")))
+  (@return "Rebuilt term"))
+
+(= (strategy-all-tail $strategy $items)
+   (if (== (get-metatype $items) Expression)
+     (map-atom $items $child (strategy-eval $strategy $child)) (empty)))
+(@doc strategy-all-tail
+  (@desc "Map a strategy over a literal expression through map-atom. Unlike strategy-all, a non-expression declines.")
+  (@params ((@param "Strategy") (@param "Items")))
+  (@return "Rebuilt expression"))
+
+(= (strategy-one $strategy $term)
+   (if (== (get-metatype $term) Expression)
+     (let ((:seg $before) $child (:seg $after)) (noeval $term)
+       (let $changed (strategy-eval $strategy $child)
+         (union-atom $before (cons-atom $changed $after)))) (empty)))
+(@doc strategy-one
+  (@desc "Rewrite exactly one immediate child, answering every successful position from left to right. Preserve other children literally. Leaves, empty expressions and all-declining children have no answer.")
+  (@params ((@param "Strategy") (@param "Term")))
+  (@return "One-position rewrite"))
+
+; This translator rule expands into another MeTTa call; stored plans remain data.
+(= (strategy-apply $strategy $term) (noeval (strategy-eval $strategy $term)))
 !(add-translator-rule! strategy-apply)
-
-; Direct call spellings adapt the same reified plans to ordinary MeTTa calls.
-; `id` itself is already the engine's identity operation, so the library does
-; not shadow it with a second equation.
+(@doc strategy-apply
+  (@desc "Lower a held strategy application to strategy-eval through the ordinary translator-rule door.")
+  (@params ((@param "Strategy") (@param "Term")))
+  (@return "Every rewrite"))
 
 (: fail (-> Atom %Undefined%))
-(= (fail $term) (strategy-apply fail $term))
+(= (fail $term) (empty))
+(@doc fail (@desc "Decline every term.") (@params ((@param "Term"))) (@return "No answer"))
 
-(: seq (-> Atom Atom Atom %Undefined%))
-(= (seq $first $second $term)
-   (strategy-apply (seq $first $second) $term))
+(: seq (-> Atom (:seg Atom) %Undefined%))
+(= (seq (:seg $strategies) $term) (strategy-apply (seq (:seg $strategies)) $term))
+(@doc seq
+  (@desc "Apply zero or more held strategies from left to right to the final literal term. Zero strategies is identity. A runtime plan is (seq Rule ...).")
+  (@params ((@param "Strategies") (@param "Term")))
+  (@return "Every composed rewrite"))
 
-(: choice (-> Atom Atom Atom %Undefined%))
-(= (choice $left $right $term)
-   (strategy-apply (choice $left $right) $term))
+(: choice (-> Atom (:seg Atom) %Undefined%))
+(= (choice (:seg $strategies) $term) (strategy-apply (choice (:seg $strategies)) $term))
+(@doc choice
+  (@desc "Use the first strategy with any answers and preserve its whole bag. Accept zero or more held strategies before the final literal term; zero strategies declines.")
+  (@params ((@param "Strategies") (@param "Term")))
+  (@return "First nonempty answer bag"))
 
 (: try (-> Atom Atom %Undefined%))
 (= (try $strategy $term) (strategy-apply (try $strategy) $term))
+(@doc try
+  (@desc "Apply the strategy, or return the original term when it has no answers.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Rewrite or original"))
 
-; gtry is the generic binary try spelling. Its law is try(s)(t).
-(: gtry (-> Atom Atom Atom))
-(= (gtry $strategy $term)
-   (function
-     (chain (eval (strategy-eval (try $strategy) $term)) $result
-       (return $result))))
+(: gtry (-> Atom Atom %Undefined%))
+(= (gtry $strategy $term) (strategy-apply (try $strategy) $term))
+(@doc gtry
+  (@desc "The generic try spelling: apply a strategy or preserve the original term when it declines.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Rewrite or original"))
 
-(: repeat (-> Atom Atom %Undefined%))
-(= (repeat $strategy $term) (strategy-apply (repeat $strategy) $term))
+(: strategy-repeat (-> Atom Atom %Undefined%))
+(= (strategy-repeat $strategy $term) (strategy-apply (repeat $strategy) $term))
+(@doc strategy-repeat
+  (@desc "Repeat a rewrite until it declines, retaining every resulting normal form. A rule that always succeeds, including identity, does not terminate. The reified plan is (repeat Rule); numeric repeat remains Functional's operation.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Normal form"))
 
 (: all (-> Atom Atom %Undefined%))
 (= (all $strategy $term) (strategy-apply (all $strategy) $term))
+(@doc all
+  (@desc "Apply a strategy to all immediate children. Leaves and empty expressions are identities.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Rebuilt term"))
 
 (: one (-> Atom Atom %Undefined%))
 (= (one $strategy $term) (strategy-apply (one $strategy) $term))
+(@doc one
+  (@desc "Apply a strategy at exactly one child position, preserving every successful position as an answer.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "One-position rewrite"))
 
 (: topdown (-> Atom Atom %Undefined%))
 (= (topdown $strategy $term) (strategy-apply (topdown $strategy) $term))
+(@doc topdown
+  (@desc "Rewrite the root, then recursively visit the children of each result. All visited nodes must succeed; compose try for identity on a declining node. Newly introduced subterms are visited.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Preorder rewrite"))
 
 (: bottomup (-> Atom Atom %Undefined%))
 (= (bottomup $strategy $term) (strategy-apply (bottomup $strategy) $term))
+(@doc bottomup
+  (@desc "Recursively rewrite children, then their rebuilt parent. All visited nodes must succeed; compose try for identity on a declining node.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Postorder rewrite"))
 
 (: innermost (-> Atom Atom %Undefined%))
 (= (innermost $strategy $term) (strategy-apply (innermost $strategy) $term))
+(@doc innermost
+  (@desc "Rewrite children before parents and revisit every reduct until no rule applies.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Normal form"))
 
-(: stratego-all (-> Atom Atom Atom))
-(= (stratego-all $strategy $term)
-   (function
-     (chain (eval (strategy-eval (stratego-all $strategy) $term)) $result
-       (return $result))))
+(: alltd (-> Atom Atom %Undefined%))
+(= (alltd $strategy $term) (strategy-apply (alltd $strategy) $term))
+(@doc alltd
+  (@desc "Return every root rewrite when the strategy has answers; otherwise descend into every child. A successful replacement is final for this pass, so root matches take precedence over descendant matches. Leaves with no match stay unchanged.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Topmost rewrites"))
 
-(: stratego-one (-> Atom Atom Atom))
-(= (stratego-one $strategy $term)
-   (function
-     (chain (eval (strategy-eval (stratego-one $strategy) $term)) $result
-       (return $result))))
+(: stratego-all (-> Atom Atom %Undefined%))
+(= (stratego-all $strategy $term) (strategy-apply (all $strategy) $term))
+(@doc stratego-all
+  (@desc "The Stratego spelling of all: rewrite all immediate children, preserving leaves.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Rebuilt term"))
+
+(: stratego-one (-> Atom Atom %Undefined%))
+(= (stratego-one $strategy $term) (strategy-apply (one $strategy) $term))
+(@doc stratego-one
+  (@desc "The Stratego spelling of one: answer every successful single-child rewrite.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "One-position rewrite"))
 
 ; Lämmel's TP scheme is type-preserving: its accepted arrow has one sort on
 ; both sides. TU(r) is type-unifying: every accepted arrow returns r. The
@@ -233,47 +208,53 @@
 ; authoritative; redeclaring it as TU would change eager argument evaluation.
 (: TP Type)
 (: TU (-> Type Type))
+(@doc TP (@desc "The type-preserving strategy scheme: accept a declared arrow with the same input and output sort."))
+(@doc TU
+  (@desc "The type-unifying strategy scheme: accept a declared arrow whose output has the supplied sort.")
+  (@params ((@param "Result sort"))) (@return "Strategy scheme"))
 
 ; s ◁ TP @ t applies s only when t has the input sort of a type-preserving s.
 ; s ◁ TU(r) @ t applies s only when t fits an s whose output sort is r.
-(: ◁ (-> Atom Type Atom Atom))
+(: ◁ (-> Atom Type Atom %Undefined%))
 (= (◁ $strategy $target $term)
-   (function
-     (unify $target TP
-       (chain (eval (strategy-typed-tp $strategy $term)) $result
-         (return $result))
-       (unify (TU $unified) $target
-         (chain (eval (strategy-typed-tu $strategy $unified $term)) $result
-           (return $result))
-         (return Empty)))))
+   (case (noeval (quote $target))
+     (((quote TP) (strategy-typed-tp $strategy $term))
+      ((quote (TU $unified)) (strategy-typed-tu $strategy $unified $term))
+      ($_ (empty)))))
+(@doc ◁
+  (@desc "Apply a declared strategy through TP or TU(ResultSort), filtering its input by the term's type in the current space. Unknown schemes and incompatible types decline.")
+  (@params ((@param "Strategy") (@param "Scheme") (@param "Term")))
+  (@return "Typed rewrite"))
 
-(: strategy-typed-tp (-> Atom Atom Atom))
+(: strategy-typed-tp (-> Atom Atom %Undefined%))
 (= (strategy-typed-tp $strategy $term)
-   (function
-     (chain (context-space) $space
-       (chain (match $space (: $strategy (-> $sort $sort)) $sort) $expected
-         (chain (eval (strategy-typed-apply $strategy $expected $term)) $result
-           (return $result))))))
+   (let $space (context-space)
+     (let $expected (match $space (: $strategy (-> $sort $sort)) $sort)
+       (strategy-typed-apply $strategy $expected $term))))
+(@doc strategy-typed-tp
+  (@desc "Match a strategy's equal input and output sorts, then apply it when the term fits that sort.")
+  (@params ((@param "Strategy") (@param "Term"))) (@return "Typed rewrite"))
 
-(: strategy-typed-tu (-> Atom Type Atom Atom))
+(: strategy-typed-tu (-> Atom Type Atom %Undefined%))
 (= (strategy-typed-tu $strategy $unified $term)
-   (function
-     (chain (context-space) $space
-       (chain (match $space (: $strategy (-> $sort $unified)) $sort) $expected
-         (chain (eval (strategy-typed-apply $strategy $expected $term)) $result
-           (return $result))))))
+   (let $space (context-space)
+     (let $expected (match $space (: $strategy (-> $sort $unified)) $sort)
+       (strategy-typed-apply $strategy $expected $term))))
+(@doc strategy-typed-tu
+  (@desc "Match a strategy's declared output against the requested result sort, then check its input sort and apply it.")
+  (@params ((@param "Strategy") (@param "Result sort") (@param "Term")))
+  (@return "Typed rewrite"))
 
 ; The two schemes differ only in how they select an input sort. Once selected,
 ; both apply the same gradual type check before running the reified strategy.
-(: strategy-typed-apply (-> Atom Type Atom Atom))
+(: strategy-typed-apply (-> Atom Type Atom %Undefined%))
 (= (strategy-typed-apply $strategy $expected $term)
-   (function
-     (chain (context-space) $space
-       (chain (eval (get-type-space $space $term)) $actual
-         (unify $actual (Error $_actual-atom $_actual-message)
-           (return $actual)
-           (chain (eval (match-types $expected $actual True False)) $fits
-             (unify $fits True
-               (chain (eval (strategy-eval $strategy $term)) $result
-                 (return $result))
-               (return Empty))))))))
+   (let $space (context-space)
+     (let $actual (get-type-space $space $term)
+       (if-error $actual (noeval $actual)
+         (if (match-types $expected $actual True False)
+           (strategy-eval $strategy $term) (empty))))))
+(@doc strategy-typed-apply
+  (@desc "Apply a strategy when match-types accepts the term's current-space type against the expected sort. Preserve type errors as values; an incompatible type declines.")
+  (@params ((@param "Strategy") (@param "Expected sort") (@param "Term")))
+  (@return "Typed rewrite"))
