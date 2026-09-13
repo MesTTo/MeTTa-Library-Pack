@@ -3,9 +3,9 @@
 ; and returned remainders are finite expressions.
 ; Guarantees: duplicate parses, longest-first repetitions, literal values and
 ; shared variables survive ordinary function composition.
-; [tested: lib_parsing; commit=WORKTREE].
+; [tested: lib_parsing; commit=3c1d074a2069bc150a95cedc1946e0627a17a132].
 ; Guarantees: grammar-is does not run parsers or recursive reference targets.
-; [tested: lib_parsing:checking_a_grammar_does_not_run_its_callbacks; commit=WORKTREE].
+; [tested: lib_parsing:checking_a_grammar_does_not_run_its_callbacks; commit=3c1d074a2069bc150a95cedc1946e0627a17a132].
 ; Fails when: a grammar is malformed, a parser returns the wrong shape, or a
 ; repeated step consumes no input. Left recursion remains a caller contract.
 ; Owns resources: only expressions and function values; no ambient parser state.

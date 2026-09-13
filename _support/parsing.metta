@@ -1,7 +1,7 @@
 ; Purpose: derive grammar preparation and parser composition from MeTTa values.
 ; Guarantees: one metadata relation governs forms, arities and preparation;
 ; parser functions preserve literal contributions, sharing and alternatives.
-; [tested: lib_parsing; commit=WORKTREE].
+; [tested: lib_parsing; commit=3c1d074a2069bc150a95cedc1946e0627a17a132].
 ; Owns resources: caller-owned expressions and closures; no stored parse state.
 ; Decides: repeated steps must shorten the input; failures have no answers.
 ;
