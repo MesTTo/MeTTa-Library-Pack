@@ -1,6 +1,6 @@
 ; Purpose: compose String recipes over the shared text and metric providers.
 ; Guarantees: recipes preserve text coercions, codepoints and empty-input cases.
-; [tested: lib_string_surface, test_string_padding_oracles; commit=WORKTREE].
+; [tested: lib_string_surface, test_string_padding_oracles; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 ; Text accepts Strings, Symbols and Numbers; text results remain Strings.
 ; See README.md for codepoint, overlap, empty-input and native-provider contracts.
 ; Positional formatting remains the engine's format-args operation.

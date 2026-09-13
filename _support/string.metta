@@ -1,10 +1,10 @@
 ; Purpose: share String padding through an ordinary function of the missing width.
 ; Assumes: public padding equations supply a function returning an integer
 ; between zero and the missing width.
-; [source: lib/lib_string/lib_string.metta:string-center; commit=WORKTREE].
+; [source: lib/lib_string/lib_string.metta:string-center; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 ; Guarantees: coerce both texts and validate Width before constructing padding;
 ; each side restarts the filler and no padding truncates the input.
-; [tested: lib_string_surface:padding_contracts, test_string_padding_oracles; commit=WORKTREE].
+; [tested: lib_string_surface:padding_contracts, test_string_padding_oracles; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 
 (: string-padding (-> String Number String))
 (= (string-padding $filler $count)

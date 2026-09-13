@@ -1,13 +1,13 @@
 % Purpose: supply shared text boundaries, host layout, templates and exact metrics.
 % Assumes: text accepts String, Symbol or Number; indexes count codepoints.
-% [tested: lib_string, lib_string_surface; commit=WORKTREE].
+% [tested: lib_string, lib_string_surface; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 % Guarantees: text results are Strings and NUL survives every text boundary.
-% [tested: lib_string_surface, test_string_unicode_oracles; commit=WORKTREE].
+% [tested: lib_string_surface, test_string_unicode_oracles; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 % Literal search, exact splitting and replacement share KMP traversal.
-% [source: lib/lib_string/support/string_native.cpp:occurrences; commit=WORKTREE].
+% [source: lib/lib_string/support/string_native.cpp:occurrences; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 % Decides: slices clamp, absent indexes are -1, empty replacement patterns
 % preserve their input, and parse-number fails on ordinary nonnumbers.
-% [tested: lib_string, lib_string_surface; commit=WORKTREE].
+% [tested: lib_string, lib_string_surface; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 
 :- module(lib_string,
           ['number-to-string'/2, 'parse-number'/2,
