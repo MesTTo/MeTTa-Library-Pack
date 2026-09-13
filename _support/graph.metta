@@ -1,6 +1,6 @@
 ; Purpose: share graph shape validation and the cycle-vertex projection.
 ; Guarantees: graph checks preserve identity; cycle vertices have nonempty
-; paths back to themselves [tested: lib_graph; commit=WORKTREE].
+; paths back to themselves [tested: lib_graph; commit=2951a00d660131f008c2779be828c97f53aa1555].
 
 (: graph-checked (-> Atom Expression))
 (= (graph-checked $graph)

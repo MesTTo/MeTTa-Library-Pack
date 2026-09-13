@@ -1,7 +1,7 @@
 ; Purpose: derive directed graphs from canonical relation and set expressions.
 ; Guarantees: graph operations preserve literal vertices and variable identity;
 ; unknown vertices and cycles in topological ordering produce named refusals.
-; [tested: lib_graph, extensions/python/tests/ch08_data/test_graph_lib.py; commit=WORKTREE].
+; [tested: lib_graph, extensions/python/tests/ch08_data/test_graph_lib.py; commit=2951a00d660131f008c2779be828c97f53aa1555].
 ; Decides: closure folds intermediate vertices; reachability and cycle detection
 ; share that recipe. Topological ordering unfolds canonical zero-indegree layers.
 ; A single-origin query computes all-pairs closure before selecting its row.
