@@ -1,7 +1,7 @@
 ; Purpose: validate immutable map and priority-queue values as ordered relations.
 ; Guarantees: validation preserves literal terms and variable identity, rejects
 ; malformed or cross-kind values and names the calling operation.
-; [tested: lib_datastructures; commit=WORKTREE].
+; [tested: lib_datastructures; commit=9c9e60542491416e2c5e431a2672bb20f04264fa].
 
 !(import! &self (library lib_pairs))
 

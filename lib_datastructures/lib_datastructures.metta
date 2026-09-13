@@ -1,7 +1,7 @@
 ; Purpose: immutable maps, priority queues, functional queues and finger trees.
 ; Guarantees: map and priority-queue equations preserve literal values, variable
 ; identity and every queued occurrence; updates leave their inputs unchanged.
-; [tested: lib_datastructures; commit=WORKTREE].
+; [tested: lib_datastructures; commit=9c9e60542491416e2c5e431a2672bb20f04264fa].
 ; Fails when: a map or priority queue has a malformed, unordered or cross-kind
 ; representation, or a map constructor receives duplicate keys.
 ; Decides: maps and priority queues hold ordinary ordered pair expressions.
