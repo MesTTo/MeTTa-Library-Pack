@@ -3,14 +3,14 @@
 % [source: lib/lib_vector/lib_vector.pl:require_exact_runtime/0; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 % Guarantees: complete numeric inputs are validated, finite reductions round
 % only their final result, and named errors retain their formal terms.
-% [tested: lib_vector_surface, test_vector_exact_reductions; commit=WORKTREE].
+% [tested: lib_vector_surface, test_vector_exact_reductions; commit=c7bacead4feb29b9761d026b52b952e91b26b10b].
 % Owns resources: numeric results and temporaries require no explicit release.
 % Decides: exact scalar inputs stay exact, floating scalar inputs round once,
 % and zero directions retain IEEE NaNs.
-% [tested: lib_vector_surface, test_vector_ieee_arithmetic; commit=WORKTREE].
+% [tested: lib_vector_surface, test_vector_ieee_arithmetic; commit=c7bacead4feb29b9761d026b52b952e91b26b10b].
 % Guarantees: native effect declarations describe numeric kernels as structural.
 % Construction equations in lib_vector.metta inherit the core random-float seam.
-% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=WORKTREE].
+% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=c7bacead4feb29b9761d026b52b952e91b26b10b].
 
 :- module(lib_vector,
           [dot/3, norm/2, cosine/3,

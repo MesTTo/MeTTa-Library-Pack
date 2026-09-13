@@ -1,10 +1,10 @@
 ; Purpose: compose numeric construction from MeTTa streams and shared kernels.
 ; Guarantees: fill preserves numeric identity; random construction validates
 ; complete inputs before drawing and retains the core generator's draw order.
-; [tested: lib_vector_surface, test_vector_seeded_construction; commit=WORKTREE].
+; [tested: lib_vector_surface, test_vector_seeded_construction; commit=c7bacead4feb29b9761d026b52b952e91b26b10b].
 ; Owns resources: random-float consumes the caller's existing thread generator;
 ; with-seed owns any requested temporary seed scope.
-; [tested: lib_vector_surface:random_draw_order_and_state; commit=WORKTREE].
+; [tested: lib_vector_surface:random_draw_order_and_state; commit=c7bacead4feb29b9761d026b52b952e91b26b10b].
 !(import! &self (library lib_combinatorics))
 
 (: cosine-of-normalized (-> Expression Expression Number))
