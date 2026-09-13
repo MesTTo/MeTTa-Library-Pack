@@ -12,7 +12,7 @@
 % [tested: lib_vector_surface, test_vector_ieee_arithmetic; commit=615e8a68dce996a0c05b3ddddc71b80bc598442d].
 % Guarantees: native effect declarations describe numeric kernels as structural;
 % random-normal-vector alone consumes the seed-controlled generator.
-% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=WORKTREE].
+% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=1d0b78a359f58de49f2f98bed50a6480d56cd5f6].
 
 :- module(lib_vector,
           [dot/3, norm/2, cosine/3, 'cosine-of-normalized'/3,

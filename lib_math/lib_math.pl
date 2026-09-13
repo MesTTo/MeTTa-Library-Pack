@@ -11,7 +11,7 @@
 % [source: lib/lib_vector/lib_vector.pl:positive_float/3; commit=4d17f1af15fe125e3b8cd488502ba1e0e688fb3e].
 % Guarantees: native numeric heads declare their structural effect beside their
 % implementation, so derived seeded programs remain replayable.
-% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=WORKTREE].
+% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=1d0b78a359f58de49f2f98bed50a6480d56cd5f6].
 
 :- module(lib_math,
           [ 'math-rational'/3, 'math-ratio'/2,

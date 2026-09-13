@@ -1,9 +1,9 @@
 ; Purpose: construct inspectable sample programs and select distinct occurrences.
 ; Guarantees: construction validates without drawing; eval and repeat consume
 ; only demanded samples from the existing thread-local generator.
-; [tested: lib_random; commit=WORKTREE].
+; [tested: lib_random; commit=1d0b78a359f58de49f2f98bed50a6480d56cd5f6].
 ; Owns resources: no stored state; with-seed owns generator restoration.
-; [source: engine/metta/control.pl:metta_with_seed/4; commit=WORKTREE].
+; [source: engine/metta/control.pl:metta_with_seed/4; commit=1d0b78a359f58de49f2f98bed50a6480d56cd5f6].
 ; Decides: parameters use finite binary64, numeric results use IEEE saturation,
 ; and sample programs remain ordinary expressions which callers may rewrite.
 

@@ -4,7 +4,7 @@
 % [tested: lib_statistics, lib_math; commit=6fa571d1b7059b610f73e9feed657711414251e5].
 % Owns resources: caller terms remain caller-owned; no copies or stored state.
 % Guarantees: checking a term's shape has a structural effect.
-% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=WORKTREE].
+% [tested: test_sample_program_recordings_replay_through_the_core_seed; commit=1d0b78a359f58de49f2f98bed50a6480d56cd5f6].
 :- module(collections_data, ['collections-expression'/2]).
 :- set_module(base(metta_engine)).
 :- use_module(library(error), [must_be/2, representation_error/1]).

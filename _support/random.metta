@@ -1,7 +1,7 @@
 ; Purpose: share validation and numeric recipes for inspectable sample programs.
 ; Guarantees: exact component operations retain gamma factors and corrections
 ; until a final scale or ratio, with no sampler state or cached normal spare.
-; [tested: lib_random; commit=WORKTREE].
+; [tested: lib_random; commit=1d0b78a359f58de49f2f98bed50a6480d56cd5f6].
 
 (: random-parameters (-> Expression Expression))
 (= (random-parameters $parameters)
