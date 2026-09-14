@@ -12,6 +12,7 @@
 
 regex_benchmark :-
     format('provider,characters,cpu_seconds,checksum~n'),
+    % policy-inventory-exempt: mechanism-internal; reason=geometric benchmark inputs distinguish growth of the two range projections; evidence=lib/lib_regex/support/benchmark.pl:benchmark_size/1
     forall(member(Size, [1024,4096,16384]), benchmark_size(Size)).
 
 benchmark_size(Size) :-
@@ -20,6 +21,7 @@ benchmark_size(Size) :-
     string_codes(Text, Codes),
     Pairs is Size // 2,
     Expected is 3*Pairs*Pairs + 2*Pairs,
+    % policy-inventory-exempt: mechanism-internal; reason=compare the installed oracle and the private Unicode-corrected provider on the same data; evidence=lib/lib_regex/support/benchmark.pl:benchmark_size/1
     forall(member(Provider, [pcre,lib_regex_pcre]),
            (Provider:re_compile("(?<a_R>.)(?<b_R>.)", Pattern, [capture_type(range)]),
             findall(Elapsed,

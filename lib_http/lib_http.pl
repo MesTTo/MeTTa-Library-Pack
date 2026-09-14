@@ -159,6 +159,7 @@ http_option(Kind,Option,_,_) :- domain_error(http_options(Kind),Option).
 http_seconds(Value,Seconds) :-
     ( Value == infinite -> Seconds=infinite
     ; must_be(number,Value), Seconds is float(Value),
+      % policy-inventory-exempt: mechanism-internal; reason=positive finite IEEE timeout values exclude zero infinities and NaN; evidence=lib/lib_http/lib_http.pl:http_seconds/2
       ( Seconds>0, float_class(Seconds,Class),memberchk(Class,[normal,subnormal])
       -> true ; domain_error(positive_finite_http_timeout,Value) ) ).
 

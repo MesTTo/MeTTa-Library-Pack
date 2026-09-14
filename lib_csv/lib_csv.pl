@@ -147,15 +147,18 @@ csv_config(Options, config(Separator, Quote, Newline, Width, Skip)) :-
     csv_character(separator, Separator, false), csv_character(quote, Quote, true),
     ( Separator == Quote -> domain_error(distinct_csv_separator_and_quote, Separator) ; true ),
     must_be(string, Newline),
+    % policy-inventory-exempt: mechanism-internal; reason=the CSV record grammar accepts CRLF LF and CR terminators; evidence=lib/lib_csv/support/csv_codec.pl:field_bytes/4
     ( memberchk(Newline, ["\r\n", "\n", "\r"])
     -> true ; domain_error(csv_newline, Newline) ),
     must_be(ground, Width),
+    % policy-inventory-exempt: mechanism-internal; reason=width either follows the first row or accepts any row alongside explicit numeric widths; evidence=lib/lib_csv/lib_csv.pl:csv_compile/4
     ( memberchk(Width, [infer, any]) -> true ; must_be(nonneg, Width) ),
     must_be(nonneg, Skip).
 
 csv_options([], Pairs, Pairs).
 csv_options([Option|More], Before, Pairs) :-
     ( is_list(Option), Option = [Name, Value], atom(Name),
+      % policy-inventory-exempt: mechanism-internal; reason=these fields define the CSV dialect record consumed by the codec; evidence=lib/lib_csv/lib_csv.pl:csv_config/2
       memberchk(Name, [separator, quote, newline, width, skip])
     -> true ; domain_error(csv_option, Option) ),
     ( memberchk(Name-_, Before) -> domain_error(duplicate_csv_option, Name) ; true ),
@@ -167,6 +170,7 @@ csv_option(Name, Pairs, Default, Value) :-
 csv_character(_Name, Text, AllowEmpty) :-
     csv_codec:utf8_bytes(Text, _), string_codes(Text, Codes),
     ( ( AllowEmpty == true, Codes == [] )
+    % policy-inventory-exempt: mechanism-internal; reason=CSV separators and quotes cannot be record terminators; evidence=lib/lib_csv/support/csv_codec.pl:field_bytes/4
     ; Codes = [Code], \+ memberchk(Code, [10,13]) ), !.
 csv_character(Name, Text, _) :- domain_error(csv_character(Name), Text).
 
@@ -329,6 +333,7 @@ csv_append_boundary(Input, Output, syntax(_, _, Ending), _) :-
     seek(Input, 0, eof, Size),
     ( Size =:= 0 -> true
     ; seek(Input, -1, eof, _), get_byte(Input, Last),
+      % policy-inventory-exempt: mechanism-internal; reason=CR and LF already terminate the preceding CSV record; evidence=lib/lib_csv/support/csv_codec.pl:field_bytes/4
       ( memberchk(Last, [10,13]) -> true
       ; csv_codec:utf8_text(Ending, Text), format(Output, '~s', [Text]) ) ).
 

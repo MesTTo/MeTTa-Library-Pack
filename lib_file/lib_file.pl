@@ -861,6 +861,7 @@ glob_select([Component|Rest], Root, Rel, Chain, Hidden, Follow, Full) :-
 wildcard_component(Component) :-
     atom_codes(Component, Codes),
     member(Code, Codes),
+    % policy-inventory-exempt: mechanism-internal; reason=these characters activate SWI wildcard syntax including escape handling; evidence=lib/lib_file/lib_file.pl:glob_select/7
     memberchk(Code, [0'*, 0'?, 0'[, 0'{, 0'\\]),
     !.
 
@@ -899,6 +900,7 @@ walk_options(Operation, Allowed, Options, Pairs) :-
 walk_option_pair(Operation, Allowed, Option, Before, [Name-Value|Before]) :-
     (   is_list(Option), Option = [Name0, Value], atom(Name0),
         option_name(Name0, Name), memberchk(Name, Allowed),
+        % policy-inventory-exempt: mechanism-internal; reason=walk and glob switches use the native Boolean domain; evidence=lib/lib_file/lib_file.pl:walk_options/4
         memberchk(Value, [true, false])
     ->  true
     ;   throw(error(domain_error(walk_option, Option),

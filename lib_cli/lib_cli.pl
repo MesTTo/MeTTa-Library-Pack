@@ -65,6 +65,7 @@ lib_cli_optparse:format_default(default_value(Value),Text) :- sdisplay(Value,Tex
 % the repair. Parsing itself prints nothing; custom functions keep their effects.
 'cli-parse'(Specification,Arguments,Duplicates,[Pairs,Operands]) :-
     must_be(atom,Duplicates),
+    % policy-inventory-exempt: documented-collision-decision; reason=the caller selects optparse's repeated-flag resolution; evidence=lib/lib_cli/vendor/lib_cli_optparse.pl:remove_duplicates/3
     ( memberchk(Duplicates,[keepfirst,keeplast,keepall]) -> true
     ; cli_refuse(domain_error(cli_duplicates,Duplicates),
                  'Choose keepfirst, keeplast or keepall.') ),

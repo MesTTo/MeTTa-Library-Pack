@@ -244,6 +244,7 @@ receive_packet(Stream,Bytes,Family,Host,Port) :-
 wait_seconds(Value,Seconds) :-
     ( Value==infinite -> Seconds=infinite
     ; must_be(number,Value), Seconds is float(Value),
+      % policy-inventory-exempt: mechanism-internal; reason=nonnegative finite IEEE waits include immediate zero but exclude infinities and NaN; evidence=lib/lib_socket/lib_socket.pl:wait_seconds/2
       ( Seconds>=0, float_class(Seconds,Class),memberchk(Class,[zero,normal,subnormal])
       -> true ; domain_error(nonnegative_finite_socket_timeout,Value) ) ).
 handle_stream(Handle,Stream) :- socket_handle(Handle,_,Stream).

@@ -182,15 +182,21 @@ valid_component([0'%,H,L|Rest],Name) :- Name \== scheme, !,
 valid_component([Code|Rest],Name) :-
     ( component_char(Name,Code) -> true
     ; domain_error(uri_character(Name),Code) ), valid_component(Rest,Name).
+% policy-inventory-exempt: mechanism-internal; reason=RFC3986 section3.1 permits these scheme punctuation characters; evidence=lib/lib_uri/lib_uri.pl:valid_component/2
 component_char(scheme,C) :- !, ( ascii_alnum(C) ; memberchk(C,[0'+,0'-,0'.]) ).
 component_char(_,C) :- unreserved(C), !.
+% policy-inventory-exempt: mechanism-internal; reason=RFC3986 section2.2 defines this sub-delims production; evidence=lib/lib_uri/lib_uri.pl:valid_component/2
 component_char(_,C) :- memberchk(C,[0'!,0'$,0'&,0'\',0'(,0'),0'*,0'+,0',,0';,0'=]), !.
 component_char(authority,C) :- memberchk(C,[0':,0'@,0'[,0']]).
+% policy-inventory-exempt: mechanism-internal; reason=RFC3986 section3.3 extends pchar with slash for paths; evidence=lib/lib_uri/lib_uri.pl:valid_component/2
 component_char(path,C) :- memberchk(C,[0':,0'@,0'/]).
+% policy-inventory-exempt: mechanism-internal; reason=RFC3986 section3.4 extends pchar with slash and question mark for queries; evidence=lib/lib_uri/lib_uri.pl:valid_component/2
 component_char(query,C) :- memberchk(C,[0':,0'@,0'/,0'?]).
+% policy-inventory-exempt: mechanism-internal; reason=RFC3986 section3.5 extends pchar with slash and question mark for fragments; evidence=lib/lib_uri/lib_uri.pl:valid_component/2
 component_char(fragment,C) :- memberchk(C,[0':,0'@,0'/,0'?]).
 ascii_alpha(C) :- ( C>=0'A, C=<0'Z ; C>=0'a, C=<0'z ).
 ascii_alnum(C) :- ( ascii_alpha(C) ; C>=0'0, C=<0'9 ).
+% policy-inventory-exempt: mechanism-internal; reason=RFC3986 section2.3 defines these unreserved punctuation characters; evidence=lib/lib_uri/lib_uri.pl:valid_component/2
 unreserved(C) :- ( ascii_alnum(C) ; memberchk(C,[0'-,0'.,0'_,0'~]) ).
 hex_value(C,V) :-
     ( code_type(C,xdigit(V)) -> true ; domain_error(uri_percent_digit,C) ).
@@ -287,6 +293,7 @@ percent_bytes([0'%|Rest],_) :- !, domain_error(uri_percent_escape,[0'%|Rest]).
 percent_bytes([C|Rest],[C|Bytes]) :- percent_bytes(Rest,Bytes).
 query_style(Style) :-
     must_be(atom,Style),
+    % policy-inventory-exempt: mechanism-internal; reason=URI and form codecs differ in their treatment of a literal plus; evidence=lib/lib_uri/lib_uri.pl:query_decode/3
     ( memberchk(Style,[uri,form]) -> true
     ; domain_error(uri_query_style,Style) ).
 query_rows([],_,[]) :- !.

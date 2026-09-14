@@ -97,7 +97,7 @@
 %
 % One HTML document in the same shape. HTML's own rules are the host's: an omitted
 % end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a
-% stray close tag or unparseable text is still a refusal.
+% stray close tag or unparsable text is still a refusal.
 'markup-parse-html'(Text, Element) :-
     text_argument('markup-parse-html', Text),
     parsed('markup-parse-html', load_html, Text, Element).

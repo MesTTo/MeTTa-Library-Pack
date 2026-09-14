@@ -39,7 +39,7 @@
 
 (: markup-parse-html (-> String Expression))
 (@doc markup-parse-html
-  (@desc "One HTML document in the same shape. HTML's own rules are the host's: an omitted end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a stray close tag or unparseable text is still a refusal.")
+  (@desc "One HTML document in the same shape. HTML's own rules are the host's: an omitted end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a stray close tag or unparsable text is still a refusal.")
   (@params ((@param "Text")))
   (@return "Element"))
 

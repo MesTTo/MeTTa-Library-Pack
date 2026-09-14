@@ -78,6 +78,7 @@ quoted_bytes(Bytes, Quote) -->
 quoted_bytes([Byte|Tail], Quote) --> [Byte], quoted_bytes(Tail, Quote).
 
 field_bytes([], Separator, Input, Input) :-
+    % policy-inventory-exempt: mechanism-internal; reason=CR and LF close an unquoted CSV field; evidence=lib/lib_csv/support/csv_codec.pl:field_bytes/4
     ( Input = [] ; Input = [Byte|_], memberchk(Byte, [10,13])
     ; phrase(literal(Separator), Input, _) ), !.
 field_bytes([Byte|Tail], Separator) --> [Byte], field_bytes(Tail, Separator).

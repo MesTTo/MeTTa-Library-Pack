@@ -26,5 +26,6 @@ with_archive_stream(Input,Options,Archive,Goal) :-
 
 archive_property(Archive,filter(Filters)) :- archive_property(Archive,filter,Filters).
 archive_header_property(Archive,Property) :-
+    % policy-inventory-exempt: mechanism-internal; reason=enumerate the property functors accepted by the pinned archive binding; evidence=lib/lib_compression/vendor/archive4pl.c:1127
     member(Property,[filetype(_),mtime(_),size(_),link_target(_),format(_),permissions(_)]),
     archive_header_prop_(Archive,Property).

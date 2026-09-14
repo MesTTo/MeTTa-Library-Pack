@@ -273,6 +273,7 @@ in_class(prefix(Letter), Code) :-
 in_class(white_space, Code) :-
     (   in_class(prefix('Z'), Code)
     ->  true
+    % policy-inventory-exempt: mechanism-internal; reason=Unicode White_Space includes TAB through CR and NEXT LINE beside separator categories; evidence=lib/lib_unicode/lib_unicode.pl:in_class/2
     ;   memberchk(Code, [9, 10, 11, 12, 13, 133])
     ).
 in_class(ascii, Code) :-

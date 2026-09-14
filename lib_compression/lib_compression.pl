@@ -219,6 +219,7 @@ fold_entries(Archive,Visitor,Index,Initial,Final) :-
     ; Final=Initial ).
 property_pair(Property,[Key,Value]) :-
     compound_name_arguments(Property,Key,[Native]),
+    % policy-inventory-exempt: mechanism-internal; reason=these native archive properties carry text rather than numeric or file-kind values; evidence=lib/lib_compression/vendor/archive4pl.c:1127
     ( memberchk(Key,[link_target,format]) -> atom_string(Native,Value) ; Value=Native ).
 collect_entry(Entry,Input,Before,[Entry|Before]) :- discard_stream(Input).
 select_entry(Index,Entry,Input,Before,After) :-
@@ -232,6 +233,7 @@ extract_tree(File,Directory) :-
     make_directory(Directory),archive_file(File,extract_entry(Directory),[],_).
 extract_entry(Directory,['archive-entry',_,Name,Properties],Input,State,State) :-
     memberchk([filetype,Type],Properties),
+    % policy-inventory-exempt: mechanism-internal; reason=tree extraction materializes regular bytes and directories and refuses links or special entries; evidence=lib/lib_compression/lib_compression.pl:extract_entry/5
     ( memberchk(Type,[file,directory]) -> true ; domain_error(extractable_archive_entry,Name-Type) ),
     extraction_path(Name,Type,Directory,Target),
     ( Type==directory -> make_directory_path(Target),discard_stream(Input)
@@ -249,6 +251,7 @@ extraction_path(Name,Type,Directory,Target) :-
     ; atomics_to_string(Parts,"/",Relative),directory_file_path(Directory,Relative,Target) ).
 dot_component("").
 dot_component(".").
+% policy-inventory-exempt: mechanism-internal; reason=Windows pathname syntax reserves these punctuation code points; evidence=lib/lib_compression/lib_compression.pl:extraction_path/4
 forbidden_path_code(Code) :- Code<32;memberchk(Code,[34,42,58,60,62,63,92,124]).
 
 % Portable components cannot designate an OS device or a differently normalized
@@ -256,12 +259,16 @@ forbidden_path_code(Code) :- Code<32;memberchk(Code,[34,42,58,60,62,63,92,124]).
 % https://github.com/MicrosoftDocs/win32/blob/63e70903d18b0637e62ffab6656c4a388ef0f2ce/desktop-src/FileIO/naming-a-file.md#naming-conventions
 portable_component(Part) :-
     string_codes(Part,Codes),last(Codes,Last),
+    % policy-inventory-exempt: mechanism-internal; reason=Windows removes trailing space and dot when normalizing path components; evidence=lib/lib_compression/lib_compression.pl:portable_component/1
     ( Part\=="..",Codes\=[32|_],\+memberchk(Last,[32,46]),\+reserved_device(Part)
     -> true ; domain_error(portable_archive_component,Part) ).
 reserved_device(Part) :-
     split_string(Part,".","",[Stem|_]),normalize_space(string(Trimmed),Stem),string_upper(Trimmed,Upper),
+    % policy-inventory-exempt: mechanism-internal; reason=Windows DOS device stems cannot designate portable regular files; evidence=lib/lib_compression/lib_compression.pl:portable_component/1
     ( memberchk(Upper,["CON","PRN","AUX","NUL","CONIN$","CONOUT$","CLOCK$"])
+    % policy-inventory-exempt: mechanism-internal; reason=Windows reserves numbered serial and printer device stems; evidence=lib/lib_compression/lib_compression.pl:portable_component/1
     ; sub_string(Upper,0,3,1,Prefix),memberchk(Prefix,["COM","LPT"]),
+      % policy-inventory-exempt: mechanism-internal; reason=Windows recognizes these decimal and superscript device suffixes; evidence=lib/lib_compression/lib_compression.pl:portable_component/1
       sub_string(Upper,3,1,0,Digit),memberchk(Digit,["1","2","3","4","5","6","7","8","9","¹","²","³"]) ).
 
 :- det('compression-formats'/1).
