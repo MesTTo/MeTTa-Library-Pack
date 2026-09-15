@@ -196,6 +196,8 @@
 
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
+;; A non-exit SWI unwind applies the held handler to its native outcome once.
+(: on-unwind (-> Atom Atom Atom))
 (: evalc (-> Atom SpaceType Atom))
 ;; The argument is a CALL and it arrives unevaluated, because which function is
 ;; being delegated to has to be known before the call runs: the module holding
