@@ -3,6 +3,9 @@
 ; Guarantees: scope-defer transfers cleanup with a returned owned value;
 ;   drop-space releases through the scope-aware native door
 ;   [tested: lib_thread_scope_deferred; commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
+; Guarantees: scope-defer can hold a query for current dependencies, read after
+;   children join when its value is kept [tested: lib_thread_scope_deferred;
+;   commit=WORKTREE].
 ; Guarantees:
 ;   - scope joins children and returns their retained spaces; capture holds an
 ;     expression in its current space [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
@@ -113,6 +116,8 @@
 (: scope_body (-> Atom %Undefined%))
 (: scope-defer (-> %Undefined% Atom Bool))
 (: scope_defer (-> %Undefined% Atom Bool))
+(: scope-defer (-> %Undefined% Atom Atom Bool))
+(: scope_defer (-> %Undefined% Atom Atom Bool))
 (: drop-space (-> SpaceType Bool))
 (: space_drop (-> SpaceType Bool))
 (: submit (-> %Undefined% Atom %Undefined%))
@@ -162,6 +167,7 @@
 (= (spawn $expr) (thread_spawn $expr))
 (= (scope $expr) (scope_body $expr))
 (= (scope-defer $value $cleanup) (scope_defer $value $cleanup))
+(= (scope-defer $value $cleanup $dependencies) (scope_defer $value $cleanup $dependencies))
 (= (drop-space $space) (space_drop $space))
 (= (await $handle) (thread_await $handle))
 (= (settled? $handle) (thread_settled $handle))
@@ -201,7 +207,7 @@
 
 (@doc scope (@desc "Join children and release resources created by the body; child failure cancels siblings; returned spaces transfer to the enclosing scope") (@params ((@param "the held body"))) (@return "each body answer"))
 (@doc capture (@desc "Hold an expression with its current evaluation space as an evalc value") (@params ((@param "the held expression"))) (@return "(evalc expression space)"))
-(@doc scope-defer (@desc "Register held cleanup in the current scope; returning its value transfers cleanup to the enclosing scope; outside a scope no cleanup is registered") (@params ((@param "the owned ground value") (@param "the held cleanup expression in its defining space"))) (@return "True"))
-(@doc scope_defer (@desc "Native spelling of scope-defer") (@params ((@param "the owned ground value") (@param "the held cleanup expression"))) (@return "True"))
+(@doc scope-defer (@desc "Register held cleanup in the current scope; returning its value transfers cleanup and current dependencies to the enclosing scope; outside a scope no cleanup is registered. An optional held dependency query must terminate without side effects. Close evaluates it after children join; an error retains resources for retry. Cleanup runs in reverse acquisition order.") (@params ((@param "the owned ground value") (@param "the held cleanup expression in its defining space") (@param "optional held query yielding current dependency values"))) (@return "True"))
+(@doc scope_defer (@desc "Native spelling of scope-defer") (@params ((@param "the owned ground value") (@param "the held cleanup expression") (@param "optional held query yielding current dependency values"))) (@return "True"))
 (@doc drop-space (@desc "Release a space through its scope owner, including owned children and deferred cleanup") (@params ((@param "the space to release"))) (@return "True"))
 (@doc space_drop (@desc "Native spelling of drop-space") (@params ((@param "the space to release"))) (@return "True"))

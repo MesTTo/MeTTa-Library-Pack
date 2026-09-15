@@ -5,6 +5,10 @@
 % Guarantees: deferred native expressions follow owned values through Scope
 %   transfer; rolled-back descriptors perform no cleanup
 %   [tested: lib_thread_scope_deferred; commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
+% Guarantees: scope_keep/3 records roots, and close follows current native
+%   dependencies after children join. Failed dependency queries retain the
+%   scope for retry [tested: lib_thread_scope_deferred; commit=WORKTREE].
+% Assumes: scope_defer/4 dependency expressions terminate without side effects.
 % Assumes:
 %   - user:metta_py_dispatch/4 identifies the loaded Python seat for context
 %     capture [tested:
@@ -225,6 +229,7 @@
             scope_host_done/2,
             scope_body/2,
             scope_defer/3,
+            scope_defer/4,
             space_drop/2,
             capture/2,
             space_await/3,
@@ -360,7 +365,7 @@ next_metta_handle(Id) :-
 % [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
 :- meta_predicate scope_call(+, 0).
 :- meta_predicate scope_publish(+, 0).
-:- dynamic scope_deferred_/5.
+:- dynamic scope_deferred_/6.
 :- multifile seam:engine_context/1, seam:space_created/1,
              seam:space_access/1, seam:space_releasing/1,
              seam:host_engine_created/1, seam:host_engine_released/1,
@@ -670,14 +675,16 @@ scope_host_done(Token, Error) :-
 % belongs to the database transaction; its child entry belongs to Scope.
 % Rollback can remove the former without orphaning a host resource because
 % the held expression owns database facts, not a running computation.
-scope_defer(Value, Expr, true) :-
+scope_defer(Value, Expr, Out) :- scope_defer(Value, Expr, [], Out).
+
+scope_defer(Value, Expr, Dependencies, true) :-
     scope_current_(Id),
     ( Id == none -> true
     ; must_be(ground, Value),
       current_metta_module(Module),
       with_mutex('$metta_scopes', sig_atomic((
           scope_checkpoint_(Id), scope_id_('$metta_scope_deferred_', Token),
-          assertz(scope_deferred_(Token, Id, Value, Module, Expr)),
+          assertz(scope_deferred_(Token, Id, Value, Module, Expr, Dependencies)),
           recordz(Id, child(deferred, Token), _) ))) ).
 
 space_drop(Space, true) :- scope_drop_space(Space).
@@ -699,37 +706,55 @@ scope_future_done_(Space, Outcome) :-
 
 scope_keep(Id, Owner, Value) :-
     scope_owner_(Id, Owner), scope_checkpoint_(Id),
-    forall(( sub_term(Space, Value), ground(Space),
-             scope_space_owner_(Space, Id, _) ),
-           scope_keep_space_(Id, Space)),
-    forall(( sub_term(Part, Value), ground(Part),
-             scope_deferred_(Token, Id, Part, _, _) ),
-           scope_keep_deferred_(Id, Token)).
+    forall(scope_value_resource_(Id, Value, Resource),
+           ( recorded(Id, root(Resource), _) -> true
+           ; recordz(Id, root(Resource), _) )).
 
-% A retained cleanup needs both its lexical module and the spaces captured by
-% its held expression. Use the same dependency traversal as a returned space.
+scope_value_resource_(Id, Value, Resource) :-
+    sub_term(Part, Value), ground(Part),
+    ( scope_space_owner_(Part, Owner, _), Resource = space-Part
+    ; scope_deferred_(Token, Owner, Part, _, _, _), Resource = deferred-Token ),
+    scope_descendant_(Id, Owner).
+
+scope_keep_value_(Id, Value) :-
+    forall(scope_value_resource_(Id, Value, Resource), scope_keep_resource_(Id, Resource)).
+
+scope_keep_resource_(Id, space-Space) :- scope_keep_space_(Id, Space).
+scope_keep_resource_(Id, deferred-Token) :- scope_keep_deferred_(Id, Token).
+
+% Like a container's tp_traverse, the held query describes current edges;
+% cleanup remains separate. See CPython v3.14.4 Doc/c-api/gcsupport.rst:223-237.
+% Mark before following edges so mutually referring owned values terminate.
 scope_keep_deferred_(Id, Token) :-
     ( recorded(Id, keep_deferred(Token), _) -> true
     ; recordz(Id, keep_deferred(Token), _),
-      scope_deferred_(Token, Id, _, Module, Expr),
-      forall(( sub_term(Space, Expr), ground(Space),
-               scope_space_owner_(Space, Id, _) ),
-             scope_keep_space_(Id, Space)),
-      forall(( spaces:metta_module_space(Module, Home),
-               scope_space_owner_(Home, Id, _) ),
-             scope_keep_space_(Id, Home)) ).
+      ( scope_deferred_(Token, _, Value, Module, Expr, Dependencies)
+      -> scope_keep_value_(Id, [Value, Expr, Dependencies]),
+         forall(spaces:metta_module_space(Module, Home), scope_keep_value_(Id, Home)),
+         forall(eval_metta_in_module(Module, Dependencies, Child),
+                ( scope_expression_answer_(dependencies, Child),
+                  scope_keep_value_(Id, Child) ))
+      ; true ) ).
 
 scope_keep_space_(Id, Space) :-
     ( recorded(Id, keep(Space), _) -> true
     ; recordz(Id, keep(Space), _),
       forall(( seam:space_dependency(Space, Parent),
-               scope_space_owner_(Parent, Id, _) ),
+               scope_space_owner_(Parent, Owner, _), scope_descendant_(Id, Owner) ),
              scope_keep_space_(Id, Parent)),
       ( metta_future(Space, _, _)
-      -> forall(( 'get-atoms'(Space, Answer), sub_term(Child, Answer),
-                  ground(Child), scope_space_owner_(Child, Id, _) ),
-                scope_keep_space_(Id, Child))
+      -> forall('get-atoms'(Space, Answer), scope_keep_value_(Id, Answer))
       ; true ) ).
+
+scope_refresh_kept_(Id, Reason, Errors) :-
+    forall(( recorded(Id, keep(_), Ref) ; recorded(Id, keep_deferred(_), Ref) ),
+           erase(Ref)),
+    ( Reason \== none -> Errors = []
+    ; findall([prolog, Text],
+          ( recorded(Id, root(Resource), _),
+            catch(( scope_keep_resource_(Id, Resource) -> fail
+                  ; throw(error(scope_retention_failed(Resource), context(scope, Id))) ),
+                  Error, message_to_string(Error, Text)) ), Errors) ).
 
 scope_close(Id, Owner, Disposition, [Reason, Errors, Released]) :-
     scope_owner_(Id, Owner),
@@ -740,22 +765,27 @@ scope_close(Id, Owner, Disposition, [Reason, Errors, Released]) :-
     setup_call_cleanup(
         ( ( nb_current('$metta_scope_cleanup', Previous) -> true ; Previous = false ),
           b_setval('$metta_scope_cleanup', true) ),
-        ( scope_finish_(Id, Reason, Errors),
+        ( scope_finish_(Id, Disposition, Reason, Errors),
           ( scope_state_(Id, _, _, _, _) -> Released = false ; Released = true ) ),
         b_setval('$metta_scope_cleanup', Previous)).
 
-scope_finish_(Id, Reason, Errors) :-
+scope_finish_(Id, Disposition, Reason, Errors) :-
     ( scope_state_(Id, _, _, cancelled, _)
     -> scope_cancel(Id, cancelled) ; true ),
     forall(( recorded(Id, child(space, Timer), _),
              metta_timer_context(Timer, every(_), _) ), thread_cancel(Timer, _)),
     scope_join_(Id),
     scope_join_engines_(Id),
-    findall(Space, recorded(Id, keep(Space), _), Roots),
-    forall(recorded(Id, keep(_), KeepRef), erase(KeepRef)),
-    maplist(scope_keep_space_(Id), Roots),
+    scope_state_(Id, _, _, _, PriorReason),
+    ( Disposition \== success, PriorReason == none -> Reason = body_failure
+    ; Reason = PriorReason ),
+    scope_refresh_kept_(Id, Reason, RetentionErrors),
+    ( RetentionErrors == [] -> scope_dispose_(Id, Reason, Errors)
+    ; Errors = RetentionErrors ).
+
+scope_dispose_(Id, Reason, Errors) :-
     with_mutex('$metta_scopes', sig_atomic((
-        recorded(Id, state(Parent, Owner, _, Reason), Ref), erase(Ref),
+        recorded(Id, state(Parent, Owner, _, _), Ref), erase(Ref),
         recorda(Id, state(Parent, Owner, closing, Reason), _),
         findall(Kind-Value, recorded(Id, child(Kind, Value), _), Resources) ))),
     reverse(Resources, Reverse),
@@ -763,7 +793,7 @@ scope_finish_(Id, Reason, Errors) :-
     scope_release_all_(Id, Parent, cleanup, Releasing, FirstErrors),
     ( FirstErrors == [] -> Transfer = Reason ; Transfer = cleanup ),
     % Adoption preserves acquisition order in the parent's child list, so its
-    % eventual reverse cleanup still runs dependants before their inputs.
+    % eventual cleanup follows the same reverse order as the child's cleanup.
     ( Transfer == none -> reverse(Returning, Transferring)
     ; Transferring = Returning ),
     scope_release_all_(Id, Parent, Transfer, Transferring, LastErrors),
@@ -853,17 +883,17 @@ scope_release_(Id, Parent, none, deferred-Token) :-
     recorded(Id, keep_deferred(Token), _), !,
     with_mutex('$metta_scopes', sig_atomic((
         scope_unlink_(Id, deferred, Token),
-        ( retract(scope_deferred_(Token, Id, Value, Module, Expr))
+        ( retract(scope_deferred_(Token, Id, Value, Module, Expr, Dependencies))
         -> ( Parent == none -> true
-           ; assertz(scope_deferred_(Token, Parent, Value, Module, Expr)),
+           ; assertz(scope_deferred_(Token, Parent, Value, Module, Expr, Dependencies)),
              recordz(Parent, child(deferred, Token), _) )
         ; true ) ))).
 scope_release_(_, _, _, deferred-Token) :-
-    ( scope_deferred_(Token, _, _, Module, Expr)
+    ( scope_deferred_(Token, _, _, Module, Expr, _)
     -> findall(Answer, eval_metta_in_module(Module, Expr, Answer), Answers),
        Answers \== [],
-       forall(member(Answer, Answers), scope_cleanup_answer_(Answer)),
-       retractall(scope_deferred_(Token, _, _, _, _))
+       forall(member(Answer, Answers), scope_expression_answer_(cleanup, Answer)),
+       retractall(scope_deferred_(Token, _, _, _, _, _))
     ; true ).
 scope_release_(_, _, _, pool-Name) :- pool_destroy(Name, _).
 scope_release_(_, _, _, engine-Engine) :- metta_host_hold_close(Engine).
@@ -876,9 +906,9 @@ scope_release_(_, _, _, scope-Id) :-
 scope_host_release_(future, _).
 scope_host_release_(cleanup, Object) :- user:py_call(Object:'__call__'()).
 
-scope_cleanup_answer_(Answer) :-
+scope_expression_answer_(Stage, Answer) :-
     ( nonvar(Answer), Answer = [Head|Tail], Head == 'Error', nonvar(Tail)
-    -> throw(error(scope_cleanup_answer(Answer), none))
+    -> throw(error(scope_expression_answer(Stage, Answer), none))
     ; true ).
 
 scope_unlink_(Id, Kind, Value) :-
