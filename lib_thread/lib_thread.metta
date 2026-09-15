@@ -5,7 +5,7 @@
 ;   [tested: lib_thread_scope_deferred; commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
 ; Guarantees: scope-defer can hold a query for current dependencies, read after
 ;   children join when its value is kept [tested: lib_thread_scope_deferred;
-;   commit=WORKTREE].
+;   commit=bc30fbd0bbcbf535de217d5a9efad2910002f343].
 ; Guarantees:
 ;   - scope joins children and returns their retained spaces; capture holds an
 ;     expression in its current space [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]

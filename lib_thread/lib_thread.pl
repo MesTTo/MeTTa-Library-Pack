@@ -7,7 +7,7 @@
 %   [tested: lib_thread_scope_deferred; commit=9b0a084e534ddf7dd67980ad84c27c8279b877f1].
 % Guarantees: scope_keep/3 records roots, and close follows current native
 %   dependencies after children join. Failed dependency queries retain the
-%   scope for retry [tested: lib_thread_scope_deferred; commit=WORKTREE].
+%   scope for retry [tested: lib_thread_scope_deferred; commit=bc30fbd0bbcbf535de217d5a9efad2910002f343].
 % Assumes: scope_defer/4 dependency expressions terminate without side effects.
 % Assumes:
 %   - user:metta_py_dispatch/4 identifies the loaded Python seat for context
