@@ -196,6 +196,9 @@
 
 ;; --- Special forms: evaluation and nondeterminism ---
 (: eval (-> Atom Atom))
+;; Evaluate once, require exactly one answer, and return that answer as data.
+;; Failure tails do not count; a second answer raises before any third runs.
+(: eval-one (-> Atom Atom))
 ;; A non-exit SWI unwind applies the held handler to its native outcome once.
 (: on-unwind (-> Atom Atom Atom))
 (: evalc (-> Atom SpaceType Atom))
