@@ -620,7 +620,6 @@ memo_automatic_mark_dirty(Module) :-
     ( memo_automatic_dirty(Module) -> true
     ; assertz(memo_automatic_dirty(Module)) ).
 
-% Workaround: swi-cleanup-window - trail the active marker so an inference limit owes no guard cleanup.
 % A library can load after workers exist. A missing marker is inactive,
 % without requiring a thread-initialization default in those workers.
 memo_automatic_reconcile_dirty :-
@@ -630,9 +629,8 @@ memo_automatic_reconcile_dirty :-
     sort(Modules0, Modules),
     (   Modules == []
     ->  true
-    ;   b_setval('$metta_memo_reconciling', true),
-        memo_automatic_reconcile_modules(Modules),
-        nb_setval('$metta_memo_reconciling', false)
+    ;   metta_with_trailed_enumeration('$metta_memo_reconciling', true,
+                                      memo_automatic_reconcile_modules(Modules))
     ).
 
 %Compute every dirty module before changing any dispatch. Then publish the
