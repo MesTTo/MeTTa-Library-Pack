@@ -869,9 +869,12 @@ scope_release_(Id, Parent, none, space-Space) :-
         erase(Ref), recorda(Key, lifetime(Parent, Host), _),
         scope_unlink_(Id, space, Space),
         ( Parent == none -> true ; recordz(Parent, child(space, Space), _) ) ))).
+% The host's drop retires the space inside the current transaction and
+% forgets this record from its own completion after the outer outcome, so an
+% abort keeps the lifetime; seam:space_released/1 below marks the engine's half.
 scope_release_(_, _, _, space-Space) :-
     ( scope_space_owner_(Space, _, Host), Host \== none
-    -> user:py_call(Host:'__call__'(), _), scope_forget_space(Space)
+    -> user:py_call(Host:'__call__'(), _)
     ; metta_release_space(Space) ).
 scope_release_(_, _, _, host-Token) :-
     ( recorded(Token, host(_, Kind, Object), _)
