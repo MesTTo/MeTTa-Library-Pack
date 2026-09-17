@@ -34,9 +34,9 @@
 %     dropped costs the same 467 inferences at N of 5,000, 20,000 and 80,000
 %     with one static table declared, where abolish_all_tables/0 cost 2N
 %     [tested: test_an_equation_change_does_not_pay_for_a_dropped_table;
-%     commit=WORKTREE] [measured 2026-09-17: 467 at each of the three sizes,
+%     commit=0cb96b1823038ffb8084168a7103dfac9eef0daa] [measured 2026-09-17: 467 at each of the three sizes,
 %     the probe recorded in docs/journal/2026-09-11-classes-on-metta.md;
-%     commit=WORKTREE]
+%     commit=0cb96b1823038ffb8084168a7103dfac9eef0daa]
 %   - seam:forget_derived/0 drops every declared table's answers and keeps the
 %     declarations, which is the abolition a changed equation already causes,
 %     so a replay of a recorded run over a tabled head takes the first run's
@@ -54,7 +54,7 @@
 %     test_a_reference_refresh_that_changes_nothing_keeps_the_table, and end to end by
 %     examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
 %     examples/ch18-performance/18-02-memoisation-and-tabling/11-tabling_space_write.metta;
-%     commit=WORKTREE].
+%     commit=0cb96b1823038ffb8084168a7103dfac9eef0daa].
 %   - A write the table's own subgoal does not read leaves it VALID, not
 %     merely leaves its answers unchanged, so tabling over a space that is
 %     written to often is worth having. This is finer than the manual's own
@@ -1381,7 +1381,7 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %an_unrelated_functions_change_keeps_the_tables,
 %an_unbounded_body_drops_on_any_change,
 %a_static_reach_is_remembered_until_its_program_moves,
-%test_an_unrelated_definition_keeps_the_table; commit=WORKTREE].
+%test_an_unrelated_definition_keeps_the_table; commit=0cb96b1823038ffb8084168a7103dfac9eef0daa].
 :- multifile seam:function_changed/1.
 %If-then-else, not a cut. Every caller of this hook enumerates the whole
 %predicate with forall/2, so a cut in one clause's body cuts THAT predicate's
