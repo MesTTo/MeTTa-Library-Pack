@@ -24,22 +24,37 @@
 %   entering their answer trie. Previously compiled callers receive the same
 %   refusal; an explicit private policy uses SWI's rollback machinery
 %   [tested: lib_tabling_transactions; commit=7f00ac7932fefa6f380fc8d14ec583ea0c58eff4].
-% Owns resources: each shared table owns a metta_tabling_transaction wrapper;
-%   unregistering the table removes that wrapper.
+% Owns resources: each shared table owns a metta_tabling_transaction wrapper,
+%   a table(Module, Name, Arity) node in the support graph and at most one
+%   cached reach verdict (metta_tabling_reach/4); unregistering the table
+%   removes all three.
 % Guarantees:
 %   - a function change invalidates the tables MeTTa DECLARED and walks no
 %     further: one equation change after a table of N answers was built and
-%     dropped costs the same 377 inferences at N of 5,000, 20,000 and 80,000,
-%     where abolish_all_tables/0 cost 2N [tested:
-%     test_an_equation_change_does_not_pay_for_a_dropped_table; commit=57f21ba9edf94bcf28cde11f938bce2c241a3709]
+%     dropped costs the same 467 inferences at N of 5,000, 20,000 and 80,000
+%     with one static table declared, where abolish_all_tables/0 cost 2N
+%     [tested: test_an_equation_change_does_not_pay_for_a_dropped_table;
+%     commit=WORKTREE] [measured 2026-09-17: 467 at each of the three sizes,
+%     the probe recorded in docs/journal/2026-09-11-classes-on-metta.md;
+%     commit=WORKTREE]
 %   - seam:forget_derived/0 drops every declared table's answers and keeps the
 %     declarations, which is the abolition a changed equation already causes,
 %     so a replay of a recorded run over a tabled head takes the first run's
 %     path [tested: tabling_equation_change_drops_tables; commit=e54c3654b9e0d3d040560d12c105a54303f63af7].
-%   - A declared table survives a write to a space it reads, and a change
-%     to any equation drops it [tested: tabling_equation_change_drops_tables,
-%     and end to end by examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
-%     examples/ch18-performance/18-02-memoisation-and-tabling/11-tabling_space_write.metta].
+%   - A declared table survives a write to a space it reads and a change to
+%     a function it cannot reach. A change to the tabled function, to a
+%     function its compiled body reaches through the support graph, or to
+%     anything while its reach is unbounded drops it [tested:
+%     tabling_equation_change_drops_tables,
+%     a_callees_change_drops_its_callers_table,
+%     an_unrelated_functions_change_keeps_the_tables,
+%     an_unbounded_body_drops_on_any_change,
+%     a_static_reach_is_remembered_until_its_program_moves,
+%     test_an_unrelated_definition_keeps_the_table,
+%     test_a_reference_refresh_that_changes_nothing_keeps_the_table, and end to end by
+%     examples/ch18-performance/18-02-memoisation-and-tabling/10-tabling_equation_change.metta and
+%     examples/ch18-performance/18-02-memoisation-and-tabling/11-tabling_space_write.metta;
+%     commit=WORKTREE].
 %   - A write the table's own subgoal does not read leaves it VALID, not
 %     merely leaves its answers unchanged, so tabling over a space that is
 %     written to often is worth having. This is finer than the manual's own
@@ -295,6 +310,10 @@ metta_tabling_register(Name, Module, CompiledArity, Declared, InForce, Reads, Or
     retractall(metta_tabling_policy_installed(Name, Module, CompiledArity, _, _, _, _)),
     assertz(metta_tabling_policy_installed(Name, Module, CompiledArity,
                                            Declared, InForce, Reads, Origin)),
+    %The table is a node the tabled function supports, so the invalidation
+    %wave a definition change starts reaches it exactly when it reaches the
+    %function's callers; the action below is what the wave runs on it.
+    support_record(table(Module, Name, CompiledArity), function(Module, Name)),
     metta_tabling_install_dispatch_handler(Name).
 
 %A (tabled ...) call on a table a row already installed makes it the
@@ -323,6 +342,8 @@ metta_tabling_unregister(Name, Module, CompiledArity) :-
                             metta_tabling_transaction)),
     retractall(metta_tabling_registration(Name, Module, CompiledArity)),
     retractall(metta_tabling_policy_installed(Name, Module, CompiledArity, _, _, _, _)),
+    retractall(metta_tabling_reach(Name, Module, CompiledArity, _)),
+    support_forget(table(Module, Name, CompiledArity)),
     metta_tabling_release_storage(Name, Module, CompiledArity),
     (   metta_tabling_registration(Name, _, _)
     ->  true
@@ -1327,13 +1348,40 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %function, adding a second equation, then calling it answered only the
 %cached first answer, and only an explicit abolish exposed both.
 %
-%Every table goes, not the changed function's alone. Deciding which tables
-%could have read a given equation needs a call graph over compiled clauses
-%that the engine does not keep, and answering that question wrongly is a
-%stale answer with no symptom. Definition changes are rare beside calls,
-%tables rebuild lazily on the next call, and this is the same funnel that
-%already invalidates the specializer and the memo cache
-%[tested: tabling_equation_change_drops_tables].
+%The tables a change to Name can have left stale, and no other. Three kinds
+%read it. The tables of every function whose compiled body reaches Name: a
+%compiled clause is supported by the view of each symbol it mentions, and a
+%declared table is a node its function supports (support_record/2 at
+%registration), so the invalidation wave the engine starts from a change,
+%bounded to the modules the change can reach the way the engine's own
+%repairs are, arrives at exactly those tables and runs the action below on
+%each; this hook does not walk the graph itself, because a walk rooted at
+%every view of the changed name priced a definition by the number of spaces
+%calling the name (838 to 2063 inferences over eight rooms with one table
+%standing) where the engine's wave stays flat [tested:
+%test_a_declared_table_keeps_a_shared_heads_definition_cost_flat]. Name's own
+%tables, abolished here by name so the self case does not depend on the
+%function node outliving a removal. And the tables whose reach the effect
+%planner ranks oracleIO, the lattice's top, which is what a variable head, an
+%eval of a computed term and a read whose template is a variable plan to:
+%such a body can call a function it never names, so any change can be its
+%change. That verdict is cached per table and forgotten when the wave reaches
+%the table, which is when its reachable program moved, so the planner runs
+%once per table per change of what it can reach.
+%
+%Before, every declared table went on every announcement, and the first
+%compile of a deferred library function, which announces the imported heads
+%it settles, emptied a table filled a moment earlier in an unrelated space.
+%Same shape as SWI's own incremental dependency graph, with function
+%definitions in the place of the dynamic predicates it tracks, and the
+%unbounded verdict is the conservative answer a call-graph analysis gives an
+%indirect call
+%[tested: tabling_equation_change_drops_tables,
+%a_callees_change_drops_its_callers_table,
+%an_unrelated_functions_change_keeps_the_tables,
+%an_unbounded_body_drops_on_any_change,
+%a_static_reach_is_remembered_until_its_program_moves,
+%test_an_unrelated_definition_keeps_the_table; commit=WORKTREE].
 :- multifile seam:function_changed/1.
 %If-then-else, not a cut. Every caller of this hook enumerates the whole
 %predicate with forall/2, so a cut in one clause's body cuts THAT predicate's
@@ -1343,22 +1391,94 @@ reportable_table_statistic(Variant, Reported, Value) :-
 %function abolished the tables and never dropped the stale dual, so
 %(not-provable (pq 2)) answered both False from the recompiled path and True
 %from the dual that was never dropped [tested: duals_survive_tabling].
-seam:function_changed(_) :-
-    ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
+seam:function_changed(Name) :-
+    ( metta_tabling_declared -> metta_tabling_abolish_readers(Name) ; true ).
 
 :- multifile seam:function_removed/1.
-seam:function_removed(_) :-
-    ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
+seam:function_removed(Name) :-
+    ( metta_tabling_declared -> metta_tabling_abolish_readers(Name) ; true ).
 
-%Every answer this library derived, dropped, which is the same abolition a
-%changed function already causes. A replay of a recorded run asks for it: a
-%tabled head answers a second run from its table in fewer reductions than the
-%first, so the recorded event stream and the replayed one would differ over
-%the same answers. The DECLARATIONS survive, as they do above, so the tables
-%fill again from the next call.
+%Every answer this library derived, dropped, which is the abolition a change
+%to every function at once would cause. A replay of a recorded run asks for
+%it: a tabled head answers a second run from its table in fewer reductions
+%than the first, so the recorded event stream and the replayed one would
+%differ over the same answers. The DECLARATIONS survive, as they do above, so
+%the tables fill again from the next call. The reach verdicts go with the
+%answers: they are derived from the program too, and the replay then pays
+%the first run's plan.
 :- multifile seam:forget_derived/0.
 seam:forget_derived :-
+    retractall(metta_tabling_reach(_, _, _, _)),
     ( metta_tabling_declared -> metta_tabling_abolish_declared ; true ).
+
+%The wave reached this table: the program beneath it moved, so its answers
+%and its cached reach go. Not on a reference face's wave, which dirties
+%every node that resolved a name through the face so the repair can
+%recompile them and says nothing about a definition moving: the face refresh
+%runs on every settled deferred translation, and a head it does rebind
+%announces itself through a wave that starts at the head, which this action
+%does follow [tested: test_a_reference_refresh_that_changes_nothing_keeps_the_table].
+%A node whose registration is already gone (a rollback, an untable racing
+%the wave) has no trie to abolish.
+:- multifile support_graph:support_invalidation_action/1.
+support_graph:support_invalidation_action(table(Module, Name, CompiledArity)) :-
+    (   metta_reference_face_wave
+    ->  true
+    ;   lib_tabling:metta_tabling_program_moved(Module, Name, CompiledArity)
+    ).
+
+metta_tabling_program_moved(Module, Name, CompiledArity) :-
+    retractall(metta_tabling_reach(Name, Module, CompiledArity, _)),
+    (   metta_tabling_registration(Name, Module, CompiledArity)
+    ->  functor(Head, Name, CompiledArity),
+        metta_tabling_abolish_table(Module, Head)
+    ;   true
+    ).
+
+metta_tabling_abolish_readers(Name) :-
+    forall(metta_tabling_declared_table(Module, Head),
+           metta_tabling_abolish_reader(Name, Module, Head)).
+
+%A table of the changed name goes together with its cached reach; any other
+%table goes here only while its reach is unbounded, its callers' tables
+%having gone with the wave.
+metta_tabling_abolish_reader(Name, Module, Head) :-
+    functor(Head, Tabled, CompiledArity),
+    (   Tabled == Name
+    ->  retractall(metta_tabling_reach(Tabled, Module, CompiledArity, _)),
+        metta_tabling_abolish_table(Module, Head)
+    ;   metta_tabling_reach_of(Tabled, Module, CompiledArity, unbounded)
+    ->  metta_tabling_abolish_table(Module, Head)
+    ;   true
+    ).
+
+%How far a table's evaluation can read: `static` when the effect planner
+%bounds the calls its body and its callees make to names the support graph
+%sees, `unbounded` when the plan ranks oracleIO or the planner refuses the
+%body. Planned on the call form with fresh inputs, in the module that owns
+%the clauses, once per table until its reachable program changes.
+:- dynamic metta_tabling_reach/4.
+
+metta_tabling_reach_of(Name, Module, CompiledArity, Reach) :-
+    (   metta_tabling_reach(Name, Module, CompiledArity, Known)
+    ->  true
+    ;   metta_tabling_plan_reach(Name, Module, CompiledArity, Known),
+        assertz(metta_tabling_reach(Name, Module, CompiledArity, Known))
+    ),
+    Reach = Known.
+
+%Into a fresh variable, then unified: a caller asking whether the reach is
+%unbounded must still record a static answer.
+metta_tabling_plan_reach(Name, Module, CompiledArity, Reach) :-
+    InputArity is CompiledArity - 1,
+    length(Inputs, InputArity),
+    (   catch_recover(metta_host_source_effect_plan(Module, [Name|Inputs],
+                                                    _, Effect),
+                      fail),
+        Effect \== oracleIO
+    ->  Reach = static
+    ;   Reach = unbounded
+    ).
 
 %Every table a MeTTa declaration made, and nothing else.
 %
@@ -1384,8 +1504,11 @@ seam:forget_derived :-
 %carriers), and engine/parser.pl abolishes metta_symbol_writable/1 itself.
 metta_tabling_abolish_declared :-
     forall(metta_tabling_declared_table(Module, Head),
-           ( metta_tabling_table_variant(Module:Head, Variant),
-             abolish_table_subgoals(Variant) )).
+           metta_tabling_abolish_table(Module, Head)).
+
+metta_tabling_abolish_table(Module, Head) :-
+    metta_tabling_table_variant(Module:Head, Variant),
+    abolish_table_subgoals(Variant).
 
 %metta_exec_module_known/2 rather than space_module/2: this is a READ, and
 %space_module/2 would ENSURE a module for a space that has none, which is a
