@@ -281,64 +281,31 @@
 :- dynamic metta_scheduler_deadline/2. % Token, suspended scheduler task
 :- dynamic metta_async_future/4.    % Token, operation name, space, DoneQueue
 
-%THE ONLY WAY THIS LIBRARY JOINS A THREAD. thread_join/2 on its own is unsafe
-%against any thread that can be inside engine_create/3 or engine_destroy/1,
-%which every thread that runs MeTTa can be.
+%THE ONE PLACE THIS LIBRARY JOINS A WORKER IT CHARGES, so a suite can wrap
+%it and count the joins an awaiter makes. thread_join/2 blocks in the host
+%and costs the joiner one inference plus the joinee's credit: SWI adds a
+%joined child's inferences to the thread that created and joins it
+%[source: swipl-devel V10.1.14 src/pl-thread.c, thread_join and
+%LD->thread.child_inferences; commit=55d451b670949c2dc9d2ab7bc678f33f21094bd2]. A worker whose answer the
+%caller did not use is joined through the engine's metta_join_discarding/2
+%instead, which takes that credit back out of the caller's measured work.
 %
-%PL_set_engine's detach_engine() memsets the CALLING thread's own
-%PL_thread_info_t.tid to zero and restores it on the way out, and thread_join/2
-%reads that field once, with no has_tid test, and hands it to
-%pthread_timedjoin_np. A join landing in that window calls
-%pthread_timedjoin_np(0, ...) and glibc dereferences a null struct pthread
-%[source: SWI-Prolog 10.1.13 src/pl-thread.c:7038 detach_engine, :7056
-%PL_set_engine by its line :7077, :4083 '$engine_create'/3 whose PL_set_engine
-%pair is :4134 and :4148, :4164 destroy_interactor whose pair is :4168 and
-%:4170, :2898 thread_join reading .tid at :2927;
-%commit=2421d06e697daffb0797c307a798131616ebdd8e].
-%
-%The window is not this library's to avoid at the other end. A merged match
-%opens one engine per space and destroys them all when it is done
-%[source: engine/spaces/bounded_matching.pl, metta_match_engine/4 and
-%metta_engine_done/1; commit=2421d06e697daffb0797c307a798131616ebdd8e], so any
-%worker evaluating an ordinary
-%query passes through it, and race_stop_/1 and cancel_future_worker_/4 join
-%exactly such workers, straight after a thread_signal(_, abort) that a thread
-%inside engine_create/3 does not survive cleanly either.
-%
-%A thread whose status has left `running` has finished its body. Waiting for
-%that excludes the body's engine-switch window. SWI still runs its exit hooks:
-%start_thread publishes completion before freePrologThread calls them. The
-%default pool hook reports exit to the manager, then calls true; it does not
-%switch engines. This wait does not establish safety for a caller exit hook
-%that itself switches engines [source:
-%https://github.com/SWI-Prolog/swipl-devel/blob/V10.1.13/src/pl-thread.c:start_thread,freePrologThread
-%and library/thread_pool.pl:worker_exitted/3; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043].
-%
-%The wait POLLS, because SWI publishes thread completion only through
-%thread_property/2 and the blocking wait for it IS thread_join/2, the call that
-%is unsafe. It backs off from half a millisecond to 32, so a worker that was
-%just aborted is joined inside a millisecond and one that runs for minutes
-%costs about thirty wakeups a second; SWI's own thread_join/2 polls at 250ms
-%for its signal handling [source: SWI-Prolog 10.1.13 src/pl-thread.c:2873
-%pthread_join_interruptible; commit=2421d06e697daffb0797c307a798131616ebdd8e].
+%Until 2026-09-18 this door polled the joinee's status with a sleep backoff
+%before joining, because thread_join/2 reads the joinee's pthread_t
+%unguarded and the host as shipped zeroes it while the joinee is inside
+%engine_create/3 or engine_destroy/1, which any worker evaluating MeTTa can
+%be, since a merged match opens one engine per space
+%(docs/journal/2026-09-06-materialization-segv.md). The ledger entry
+%swi-thread-join-detach-window carries the reproduction and the patch this
+%tree's host is built with: a real thread keeps its identity while its
+%engine is detached, so there is no window to wait out, and the poll's own
+%inferences, about ten a wakeup, no longer vary a threaded twin's count
+%(docs/journal/2026-09-18-schedule-independent-counters.md)
 %[tested: lib_thread:a_joined_worker_survives_engine_churn_on_its_thread,
 %lib_thread:a_joined_worker_survives_a_merged_match_on_its_thread;
-%commit=2421d06e697daffb0797c307a798131616ebdd8e]
-metta_thread_join_settled(Thread, Status) :-
-    metta_thread_settled_(Thread, 0.0005),
+%commit=55d451b670949c2dc9d2ab7bc678f33f21094bd2].
+metta_thread_join(Thread, Status) :-
     thread_join(Thread, Status).
-
-%A thread that has gone entirely counts as settled: thread_join/2 then reports
-%the existence error, which is what every caller here already catches.
-metta_thread_settled_(Thread, Delay) :-
-    (   catch(thread_property(Thread, status(Status)),
-              error(existence_error(thread, Thread), _), Status = gone),
-        Status \== running
-    ->  true
-    ;   sleep(Delay),
-        Next is min(Delay * 2, 0.032),
-        metta_thread_settled_(Thread, Next)
-    ).
 
 %Handles are small integers rather than blobs so they print, compare and
 %cross the Python boundary as ordinary MeTTa values.
@@ -973,70 +940,102 @@ keep_flagged_([], [], []).
 keep_flagged_([E|Es], [true|Fs], [E|Out]) :- !, keep_flagged_(Es, Fs, Out).
 keep_flagged_([_|Es], [_|Fs], Out) :- keep_flagged_(Es, Fs, Out).
 
-%True when (F Element) answers True for every element, False otherwise.
-%concurrent_forall/2 stops the remaining workers as soon as one fails.
+%True when (F Element) answers True for every element, False otherwise: the
+%first element whose check fails decides, and the rest are stopped.
 par_forall(F, List, Answer) :-
     must_be(list, List),
-    current_metta_module(Module),
-    length(List, Count),
-    setup_call_cleanup(
-        ( metta_capture_python_contexts(Count, Contexts),
-          pairs_keys_values(Pairs, Contexts, List) ),
-        (   concurrent_forall(member(Context-Element, Pairs),
-                              par_true_checked_(Module, F, Context, Element))
-        ->  Answer = true
-        ;   Answer = false
-        ),
-        metta_release_python_contexts(Contexts)).
+    first_wins_(List, check_fails_(F), Outcome),
+    ( Outcome = won(_) -> Answer = false ; Answer = true ).
 
-par_true_checked_(Module, F, Context, Element) :-
-    metta_in_python_context(
-        Context,
-        ( eval_metta_in_module(Module, [F, Element], Answer),
-          Answer == true )).
-
-%True when (F Element) answers True for at least one element.
-%
-%Expressed as "not every element fails" so that concurrent_forall/2's early
-%exit does the work. first_solution/3 is the obvious primitive and is the
-%wrong one: it answers the first goal to COMPLETE, so a branch that finishes
-%by failing makes the whole call fail [measured 2026-08-15:
+%True when (F Element) answers True for at least one element: the first
+%element whose check holds decides, and the rest are stopped.
+%first_solution/3 is the obvious primitive and is the wrong one: it answers
+%the first goal to COMPLETE, so a branch that finishes by failing makes the
+%whole call fail [measured 2026-08-15:
 %first_solution(found, [nope(_), fast(_)], []) fails].
 par_any(F, List, Answer) :-
     must_be(list, List),
-    current_metta_module(Module),
-    length(List, Count),
-    setup_call_cleanup(
-        ( metta_capture_python_contexts(Count, Contexts),
-          pairs_keys_values(Pairs, Contexts, List) ),
-        (   List == []
-        ->  Answer = false
-        ;   concurrent_forall(member(Context-Element, Pairs),
-                              \+ par_true_checked_(Module, F, Context, Element))
-        ->  Answer = false
-        ;   Answer = true
-        ),
-        metta_release_python_contexts(Contexts)).
+    first_wins_(List, check_holds_(F), Outcome),
+    ( Outcome = won(_) -> Answer = true ; Answer = false ).
 
 %Evaluate every expression at once and answer the first to SUCCEED, then stop
-%the rest. A branch that fails drops out without ending the race, which is why
-%this collects through its own mailbox rather than calling first_solution/3.
-%An exception in any branch is raised to the caller rather than counted as a
-%loss, so a broken branch is never silently the reason another one won.
+%the rest. A branch that fails, or answers Empty, drops out without ending
+%the race, and a race every branch drops out of fails. An exception in any
+%branch is raised to the caller rather than counted as a loss, so a broken
+%branch is never silently the reason another one won.
 par_race(Exprs, Out) :-
     must_be(list, Exprs),
-    Exprs \== [],
+    first_wins_(Exprs, race_branch_, Outcome),
+    Outcome = won(Out).
+
+race_branch_(Module, Expr, Decision) :-
+    (   eval_metta_in_module(Module, Expr, Value),
+        Value \== 'Empty'
+    ->  Decision = ok(Value)
+    ;   Decision = lost
+    ).
+
+check_holds_(F, Module, Element, Decision) :-
+    (   eval_metta_in_module(Module, [F, Element], Answer),
+        Answer == true
+    ->  Decision = ok(true)
+    ;   Decision = lost
+    ).
+
+check_fails_(F, Module, Element, Decision) :-
+    (   eval_metta_in_module(Module, [F, Element], Answer),
+        Answer == true
+    ->  Decision = lost
+    ;   Decision = ok(false)
+    ).
+
+% ------------------------------------------------------ first-wins branches
+
+%One worker per branch, released together from a start barrier; the first
+%answer that DECIDES the call wins and every other worker is stopped. Three
+%doors share it: par_race wins on the first branch whose expression
+%succeeds, par_any on the first element whose check holds, par_forall on the
+%first whose check fails. When no branch decides the outcome is `exhausted`
+%and every branch ran to its end.
+%
+%Cost follows the answer. The winner's worker is joined through
+%metta_thread_join/2 and its inferences are the caller's, as the host
+%credits a joined child to the thread that waited for it; every other worker
+%is stopped and joined through metta_join_discarding/2, so what it spent
+%before the stop is not the caller's; an exhausted call charges every
+%branch, since the answer needed all of them. That is what makes a race's
+%count one integer rather than the schedule's: a stopped branch's partial
+%work was the whole spread of the thread_lib twin, 322,447 to 416,925
+%inferences over 25 lane runs, and par_any and par_forall carried the same
+%kind of spread through concurrent_forall/2, whose stopped workers are
+%credited the same way
+%(docs/journal/2026-09-18-schedule-independent-counters.md)
+%[tested: lib_thread:a_race_costs_the_caller_and_the_winner_only;
+%commit=55d451b670949c2dc9d2ab7bc678f33f21094bd2].
+%
+%One worker per branch rather than a bounded pool, because a pooled worker
+%that took several elements before the deciding one would carry their work
+%into the charged count, and which elements it took is the schedule's.
+%Time: one thread and one Python context per branch, and the collector reads
+%at most one message per branch.
+:- meta_predicate first_wins_(+, 3, -).
+first_wins_(Items, Branch, Outcome) :-
     current_metta_module(Module),
-    length(Exprs, Count),
+    length(Items, Count),
     setup_call_cleanup(
         race_resources_create(Count, Start, Results, Contexts),
         setup_call_cleanup(
-            race_start_(Module, Exprs, Contexts, Start, Results, Threads),
+            race_start_(Module, Branch, Items, Contexts, Start, Results,
+                        Threads),
             ( race_release_(Threads, Start),
-              race_collect_(Results, Count, Out) ),
-            race_stop_(Threads)),
+              race_collect_(Results, Count, Decided) ),
+            race_stop_(Threads, Decided)),
         ( metta_release_python_contexts(Contexts),
-          race_queues_destroy(Start, Results) )).
+          race_queues_destroy(Start, Results) )),
+    race_outcome_(Decided, Outcome).
+
+race_outcome_(won(_, Value), won(Value)).
+race_outcome_(exhausted, exhausted).
 
 race_resources_create(Count, Start, Results, Contexts) :-
     race_queues_create(Start, Results),
@@ -1054,27 +1053,28 @@ race_queues_create(Start, Results) :-
           Error,
           ( message_queue_destroy(Start), throw(Error) )).
 
-race_start_(Module, Exprs, Contexts, Start, Results, Threads) :-
-    pairs_keys_values(Pairs, Contexts, Exprs),
-    race_start_pairs_(Pairs, Module, Start, Results, [], Outcome),
+race_start_(Module, Branch, Items, Contexts, Start, Results, Threads) :-
+    pairs_keys_values(Pairs, Contexts, Items),
+    race_start_pairs_(Pairs, Module, Branch, Start, Results, [], Outcome),
     (   Outcome = started(Reverse)
     ->  reverse(Reverse, Threads)
     ;   Outcome = error(Error, Started),
-        race_stop_(Started),
+        race_stop_(Started, _),
         throw(Error)
     ).
 
-race_start_pairs_([], _, _, _, Started, started(Started)).
-race_start_pairs_([Context-Expr|Pairs], Module, Start, Results, Started,
-                  Outcome) :-
-    catch(( thread_create(race_body_(Module, Context, Expr, Start, Results),
+race_start_pairs_([], _, _, _, _, Started, started(Started)).
+race_start_pairs_([Context-Item|Pairs], Module, Branch, Start, Results,
+                  Started, Outcome) :-
+    catch(( thread_create(race_body_(Module, Branch, Context, Item, Start,
+                                     Results),
                           Thread, []),
             Created = thread(Thread) ),
           Error,
           Created = error(Error)),
     (   Created = thread(Thread)
-    ->  race_start_pairs_(Pairs, Module, Start, Results, [Thread|Started],
-                          Outcome)
+    ->  race_start_pairs_(Pairs, Module, Branch, Start, Results,
+                          [Thread|Started], Outcome)
     ;   Created = error(Error),
         Outcome = error(Error, Started)
     ).
@@ -1082,38 +1082,56 @@ race_start_pairs_([Context-Expr|Pairs], Module, Start, Results, Started,
 race_release_(Threads, Start) :-
     forall(member(_, Threads), thread_send_message(Start, go)).
 
-race_body_(Module, Context, Expr, Start, Results) :-
+%The message carries the worker, so the collector knows whose answer won and
+%the stop knows which worker to charge.
+race_body_(Module, Branch, Context, Item, Start, Results) :-
     thread_get_message(Start, go),
+    thread_self(Self),
     metta_in_python_context(
         Context,
-        (   catch((   eval_metta_in_module(Module, Expr, Value),
-                      Value \== 'Empty'
-                  ->  Message = ok(Value)
-                  ;   Message = lost
+        (   catch(( call(Branch, Module, Item, Decision)
+                  -> true
+                  ;  Decision = lost
                   ),
                   Error,
-                  Message = error(Error))
+                  Decision = error(Error))
         ->  true
-        ;   Message = lost
+        ;   Decision = lost
         )),
+    race_message_(Decision, Self, Message),
     thread_send_message(Results, Message).
 
-race_collect_(Queue, Remaining, Out) :-
-    Remaining > 0,
+race_message_(ok(Value), Self, ok(Self, Value)).
+race_message_(lost, _, lost).
+race_message_(error(Error), _, error(Error)).
+
+race_collect_(_, 0, exhausted) :- !.
+race_collect_(Queue, Remaining, Decided) :-
     thread_get_message(Queue, Message),
-    (   Message = ok(Value)
-    ->  Out = Value
+    (   Message = ok(Thread, Value)
+    ->  Decided = won(Thread, Value)
     ;   Message = error(Error)
     ->  throw(Error)
     ;   Next is Remaining - 1,
-        race_collect_(Queue, Next, Out)
+        race_collect_(Queue, Next, Decided)
     ).
 
-race_stop_(Threads) :-
-    forall(member(Thread, Threads),
+%A worker whose answer decided the call, or any worker of an exhausted call,
+%which needed all of them, is joined and charged; every other worker is
+%stopped and its spend discarded. An unbound decision is a call that raised
+%or never started: nothing was answered, so every worker is discarded.
+race_stop_(Threads, Decided) :-
+    forall(( member(Thread, Threads), \+ race_charged_(Decided, Thread) ),
            catch(thread_signal(Thread, abort), _, true)),
     forall(member(Thread, Threads),
-           catch(metta_thread_join_settled(Thread, _), _, true)).
+           (   race_charged_(Decided, Thread)
+           ->  catch(metta_thread_join(Thread, _), _, true)
+           ;   catch(metta_join_discarding(Thread, _), _, true)
+           )).
+
+race_charged_(Decided, Thread) :-
+    nonvar(Decided),
+    ( Decided == exhausted -> true ; Decided = won(Thread, _) ).
 
 race_queues_destroy(Start, Results) :-
     catch(message_queue_destroy(Start), _, true),
@@ -1869,16 +1887,32 @@ future_record_received_(Space, Received, Outcome) :-
         Outcome = Received
     ).
 
-future_join_(scheduler(_)) :- !.
-future_join_(async(_)) :- !.
-future_join_(none) :- !.
 future_join_(ThreadId) :-
-    catch(metta_thread_join_settled(ThreadId, _), Error,
-          future_join_recover_(ThreadId, Error, 0.0005)).
+    future_join_(ThreadId, charged).
+
+%`charged` joins through the library's door; `measured(Credit)` answers the
+%credit the join added to this thread's counter, for a caller that decides
+%afterwards whether the worker's answer was used: cancel_future_worker_/4
+%discards it when the cancel took and keeps it when the worker settled first.
+%A join that finds the worker already joined answers no credit, since none
+%was added here.
+future_join_(scheduler(_), Mode) :- !, future_join_none_(Mode).
+future_join_(async(_), Mode) :- !, future_join_none_(Mode).
+future_join_(none, Mode) :- !, future_join_none_(Mode).
+future_join_(ThreadId, Mode) :-
+    catch(future_join_door_(Mode, ThreadId), Error,
+          future_join_recover_(ThreadId, Error, 0.0005, Mode)).
+
+future_join_door_(charged, ThreadId) :-
+    metta_thread_join(ThreadId, _).
+future_join_door_(measured(Credit), ThreadId) :-
+    metta_join_measured(ThreadId, _, Credit).
+
+future_join_none_(charged).
+future_join_none_(measured(0)).
 
 % SWI admits one joiner; a losing awaiter must still wait for worker cleanup.
-% Retry with metta_thread_settled_/2's backoff so an interrupted joiner can be
-% replaced. Await has no deadline of its own; external timeout, cancellation
+% Retry with a sleep backoff so an interrupted joiner can be replaced. Await has no deadline of its own; external timeout, cancellation
 % and other exceptions propagate through both waits [tested:
 % lib_thread_completion; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043]. The worker is the unaliased thread
 % blob retained by a known future, so disappearance means an earlier join
@@ -1886,8 +1920,10 @@ future_join_(ThreadId) :-
 % [source: lib/lib_thread/lib_thread.pl, pool_submit_context_/5 and
 % timer_dispatch_worker_/7; commit=8ca8a387fc61d0918484b19a1a3baf85b6523043]. The one-join rule is documented
 % at https://www.swi-prolog.org/pldoc/man?predicate=thread_join/2.
-future_join_recover_(Thread, error(existence_error(thread, Thread), _), _) :- !.
-future_join_recover_(Thread, Error, Delay) :-
+future_join_recover_(Thread, error(existence_error(thread, Thread), _), _,
+                     Mode) :- !,
+    future_join_none_(Mode).
+future_join_recover_(Thread, Error, Delay, Mode) :-
     Error = error(permission_error(join, thread, Thread), _), !,
     catch(( thread_property(Thread, detached(false)),
             thread_self(Self), Thread \== Self
@@ -1895,15 +1931,15 @@ future_join_recover_(Thread, Error, Delay) :-
           ; State = invalid ),
           error(existence_error(thread, Thread), _), State = joined),
     (   State == joined
-    ->  true
+    ->  future_join_none_(Mode)
     ;   State == contended
     ->  sleep(Delay),
         Next is min(Delay * 2, 0.032),
-        catch(metta_thread_join_settled(Thread, _), RetryError,
-              future_join_recover_(Thread, RetryError, Next))
+        catch(future_join_door_(Mode, Thread), RetryError,
+              future_join_recover_(Thread, RetryError, Next, Mode))
     ;   throw(Error)
     ).
-future_join_recover_(_, Error, _) :- throw(Error).
+future_join_recover_(_, Error, _, _) :- throw(Error).
 
 known_future_(Space, ThreadId, Done) :-
     (   metta_future(Space, ThreadId, Done)
@@ -1991,10 +2027,17 @@ cancel_future_worker_(ThreadId, Space, Done, Answer) :-
     %installed, ended without settling and did no work, so once it is gone
     %its outcome is cancelled unless it settled itself, in which case the
     %claim below is refused and the recorded outcome answers.
-    future_join_(ThreadId),
+    future_join_(ThreadId, measured(Credit)),
     metta_future_complete(Space, Done, cancelled),
     future_settle_(Space, Outcome),
-    ( Outcome == cancelled -> Answer = true ; Answer = false ).
+    %A cancel that took discards the worker's spend, which produced no
+    %answer; a worker that settled first keeps its credit, since its answer
+    %stands and can still be awaited.
+    (   Outcome == cancelled
+    ->  metta_discard_inferences(Credit),
+        Answer = true
+    ;   Answer = false
+    ).
 
 future_cancel_signal_(Space, Thread) :-
     ( metta_future(Space, Thread, _), \+ metta_future_result(Space, _)
@@ -2005,7 +2048,7 @@ future_cancel_signal_(Space, Thread) :-
 cancel_repeating_worker_(none) :- !.
 cancel_repeating_worker_(ThreadId) :-
     catch(thread_signal(ThreadId, abort), _, true),
-    catch(metta_thread_join_settled(ThreadId, _), _, true).
+    catch(metta_join_discarding(ThreadId, _), _, true).
 
 % ----------------------------------------------------------------- channels
 
@@ -2431,7 +2474,7 @@ timer_dispatch_worker_(Pool, Space, Module, Expr, Repeat, Context, Done) :-
             timer_dispatch_start_(Start) ),
           Error,
           ( catch(thread_signal(ThreadId, abort), _, true),
-            catch(metta_thread_join_settled(ThreadId, _), _, true),
+            catch(metta_join_discarding(ThreadId, _), _, true),
             timer_dispatch_start_destroy_(Start),
             throw(Error) )).
 
