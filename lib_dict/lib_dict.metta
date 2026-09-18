@@ -77,3 +77,55 @@
 
 (: dict-values (-> SpaceType %Undefined%))
 (= (dict-values $d) (match $d ($k $v) $v))
+
+;A key holds one value, so a lookup answers once or not at all, and these four
+;are what a program does with a dict past reading and writing one key.
+
+;The key's value, or the default when the key is absent. dict-values answers
+;nothing for an absent key, which composes with the answer set; this composes
+;with ordinary code, which needs a value.
+(: dict-get (-> SpaceType %Undefined% %Undefined% %Undefined%))
+(= (dict-get $d $k $default)
+   (let $found (collapse (match $d ($k $v) $v))
+     (if (== $found ()) $default (car-atom $found))))
+
+;Apply a function to the key's current value and put the result back, so an
+;update is one operation rather than a read, a call and a write. An absent key
+;leaves the dict alone, because there is nothing to apply the function to.
+(: dict-update (-> SpaceType %Undefined% %Undefined% SpaceType))
+(= (dict-update $d $k $fn)
+   (let $found (collapse (match $d ($k $v) $v))
+     (if (== $found ()) $d (dict-put $d $k ($fn (car-atom $found))))))
+
+;Put every pair of one dict into another, so the second dict's values win
+;wherever the two hold the same key. Answers the dict written into.
+(: dict-merge (-> SpaceType SpaceType SpaceType))
+(= (dict-merge $into $from)
+   (let $done (collapse (match $from ($k $v) (dict-put $into $k $v))) $into))
+
+;The key's value, removed: a read and a remove as one operation. An absent key
+;has no answer, which is what makes it distinguishable from a stored value.
+(: dict-pop (-> SpaceType %Undefined% %Undefined%))
+(= (dict-pop $d $k)
+   (let $found (collapse (match $d ($k $v) $v))
+     (if (== $found ())
+         (empty)
+         (let $value (car-atom $found)
+           (let $gone (dict-remove $d $k) $value)))))
+
+(@doc dict-get
+  (@desc "The key's value, or the supplied default when the key is absent. dict-values answers nothing for an absent key; this answers something a caller can use.")
+  (@params ((@param "the dict") (@param "the key") (@param "the value to answer when the key is absent")))
+  (@return "the value or the default"))
+(@doc dict-update
+  (@desc "Apply a function to the key's current value and put the result back, answering the dict. An absent key leaves the dict unchanged.")
+  (@params ((@param "the dict") (@param "the key") (@param "the function to apply to the value")))
+  (@return "the dict"))
+(@doc dict-merge
+  (@desc "Put every pair of the second dict into the first, so the second's value wins on a shared key. Answers the dict written into.")
+  (@params ((@param "the dict to write into") (@param "the dict to read")))
+  (@return "the dict written into"))
+(@doc dict-pop
+  (@desc "The key's value, removed from the dict. An absent key has no answer, which is how it differs from a stored value.")
+  (@params ((@param "the dict") (@param "the key")))
+  (@return "the removed value"))

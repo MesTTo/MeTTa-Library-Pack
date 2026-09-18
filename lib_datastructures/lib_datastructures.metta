@@ -1,3 +1,15 @@
+; Purpose: immutable maps, priority queues, functional queues and finger trees.
+; Guarantees: map and priority-queue equations preserve literal values, variable
+; identity and every queued occurrence; updates leave their inputs unchanged.
+; [tested: lib_datastructures; commit=9c9e60542491416e2c5e431a2672bb20f04264fa].
+; Fails when: a map or priority queue has a malformed, unordered or cross-kind
+; representation, or a map constructor receives duplicate keys.
+; Decides: maps and priority queues hold ordinary ordered pair expressions.
+; Equal priorities retain insertion order and left-to-right merge order.
+; Validation traverses values; stable pair sorting may take quadratic work.
+
+!(import! &self (library "_support/datastructures.metta"))
+
 ;;; EFFICIENT AMORTIZED O(1) OP FUNCTIONAL QUEUE ;;;
 
 ;Enqueue adds 1 to N
@@ -199,3 +211,198 @@
   (@params ((@param "the left finger tree") (@param "the right finger tree")))
   (@return "one finger tree"))
 (= (ft-concat $l $r) (ft-app3 $l () $r))
+
+; Maps and priority queues share the relation operations. Their distinct tags
+; retain the distinction between one value per key and separate occurrences.
+
+(: map-empty (-> Expression))
+(= (map-empty) (quote (SortedMap ())))
+(@doc map-empty
+  (@desc "The empty sorted map. Every other map grows from it with map-put, and two empty maps are the same value.")
+  (@params ())
+  (@return "Map"))
+
+(: map-from-pairs (-> Expression Expression))
+(= (map-from-pairs $pairs)
+   (let* (($unique (datastructures-unique-keys map-from-pairs (quote $pairs)))
+          ($sorted (sort-atom $pairs)))
+     (quote (SortedMap $sorted))))
+(@doc map-from-pairs
+  (@desc "A map holding every (Key Value) pair. A repeated key raises, because two values for one key is not a map; put the second one with map-put to say which wins.")
+  (@params ((@param "Pairs")))
+  (@return "Map"))
+
+(: map-get (-> %Undefined% %Undefined% %Undefined%))
+(= (map-get $map $key)
+   (pairs-lookup (datastructures-map-rows map-get $map) (quote $key)))
+(@doc map-get
+  (@desc "The value Key holds. An absent key has no answer, so absence and a stored value are different things; map-get-or takes a default instead.")
+  (@params ((@param "Map") (@param "Key")))
+  (@return "Value"))
+
+(: map-get-or (-> %Undefined% %Undefined% %Undefined% %Undefined%))
+(= (map-get-or $map $key $default)
+   (let $rows (datastructures-map-rows map-get-or $map)
+     (if (datastructures-has-key (quote $rows) (quote $key))
+       (pairs-lookup (quote $rows) (quote $key)) (quote $default))))
+(@doc map-get-or
+  (@desc "The value Key holds, or Default when the key is absent.")
+  (@params ((@param "Map") (@param "Key") (@param "Default")))
+  (@return "Value"))
+
+(: map-has (-> %Undefined% %Undefined% Bool))
+(= (map-has $map $key)
+   (datastructures-has-key (datastructures-map-rows map-has $map) (quote $key)))
+(@doc map-has
+  (@desc "True when the map holds Key, False otherwise.")
+  (@params ((@param "Map") (@param "Key")))
+  (@return "Answer"))
+
+(: map-keys (-> %Undefined% Expression))
+(= (map-keys $map) (pairs-keys (datastructures-map-rows map-keys $map)))
+(@doc map-keys
+  (@desc "Every key, in the standard order of terms.")
+  (@params ((@param "Map")))
+  (@return "Keys"))
+
+(: map-max (-> %Undefined% Expression))
+(= (map-max $map)
+   (let ((:seg $before) $last) (datastructures-map-rows map-max $map)
+     (quote $last)))
+(@doc map-max
+  (@desc "The (Key Value) pair with the largest key. An empty map has no answer.")
+  (@params ((@param "Map")))
+  (@return "Pair"))
+
+(: map-min (-> %Undefined% Expression))
+(= (map-min $map)
+   (let ($first (:seg $after)) (datastructures-map-rows map-min $map)
+     (quote $first)))
+(@doc map-min
+  (@desc "The (Key Value) pair with the smallest key. An empty map has no answer.")
+  (@params ((@param "Map")))
+  (@return "Pair"))
+
+(: map-pairs (-> %Undefined% Expression))
+(= (map-pairs $map) (datastructures-map-rows map-pairs $map))
+(@doc map-pairs
+  (@desc "Every (Key Value) pair, in key order. This is the shape map-from-pairs reads, so a map round-trips through it.")
+  (@params ((@param "Map")))
+  (@return "Pairs"))
+
+(: map-put (-> %Undefined% %Undefined% %Undefined% Expression))
+(= (map-put $map $key $value)
+   (let* (($rows (datastructures-map-rows map-put $map))
+          ($rest (datastructures-without-key (quote $rows) (quote $key))))
+     (map-from-pairs (union-atom $rest (quote (($key $value)))))))
+(@doc map-put
+  (@desc "The map with Key holding Value, replacing whatever Key held. The input map is unchanged, because a map is a value.")
+  (@params ((@param "Map") (@param "Key") (@param "Value")))
+  (@return "Result"))
+
+(: map-remove (-> %Undefined% %Undefined% Expression))
+(= (map-remove $map $key)
+   (let $rest (datastructures-without-key
+                (datastructures-map-rows map-remove $map) (quote $key))
+     (quote (SortedMap $rest))))
+(@doc map-remove
+  (@desc "The map without Key. Removing a key that is absent answers the same map, so a caller need not look first.")
+  (@params ((@param "Map") (@param "Key")))
+  (@return "Result"))
+
+(: map-size (-> %Undefined% Number))
+(= (map-size $map) (size-atom (datastructures-map-rows map-size $map)))
+(@doc map-size
+  (@desc "How many keys the map holds.")
+  (@params ((@param "Map")))
+  (@return "Size"))
+
+(: map-values (-> %Undefined% Expression))
+(= (map-values $map) (pairs-values (datastructures-map-rows map-values $map)))
+(@doc map-values
+  (@desc "Every value, in its key's order.")
+  (@params ((@param "Map")))
+  (@return "Values"))
+
+(: pq-empty (-> Expression))
+(= (pq-empty) (quote (PriorityQueue ())))
+(@doc pq-empty
+  (@desc "The empty priority queue. Every other queue grows from it with pq-insert.")
+  (@params ())
+  (@return "Queue"))
+
+(: pq-from-pairs (-> Expression Expression))
+(= (pq-from-pairs $pairs)
+   (let* (($valid (assertEqualMsg (pairs-is (quote $pairs)) True
+                                  (quote (pq-from-pairs pairs $pairs))))
+          ($sorted (pairs-sort-by-key (quote $pairs))))
+     (quote (PriorityQueue $sorted))))
+(@doc pq-from-pairs
+  (@desc "A queue holding every (Priority Value) pair, repeated priorities included. Stable sorting preserves input order among equal priorities.")
+  (@params ((@param "Pairs")))
+  (@return "Queue"))
+
+(: pq-insert (-> %Undefined% %Undefined% %Undefined% Expression))
+(= (pq-insert $queue $priority $value)
+   (let $rows (datastructures-rows PriorityQueue pq-insert $queue)
+     (pq-from-pairs (union-atom $rows (quote (($priority $value)))))))
+(@doc pq-insert
+  (@desc "The queue with Value added at Priority, after existing entries of that priority. Every occurrence is kept; the input queue is unchanged.")
+  (@params ((@param "Queue") (@param "Priority") (@param "Value")))
+  (@return "Result"))
+
+(: pq-merge (-> (:seg %Undefined%) Expression))
+(= (pq-merge (:seg $queues))
+   (pq-from-pairs
+     (foldl-atom $queues () $rows $queue
+       (let $next (datastructures-rows PriorityQueue pq-merge $queue)
+         (union-atom $rows $next)))))
+(@doc pq-merge
+  (@desc "One queue holding every entry of zero or more queues. Zero returns the empty queue; one returns an equal value. Equal priorities retain left-to-right input order. Pass a runtime collection through apply-to.")
+  (@params ((@param "Queues")))
+  (@return "Result"))
+
+(: pq-min (-> %Undefined% Expression))
+(= (pq-min $queue)
+   (let ($first (:seg $after)) (datastructures-rows PriorityQueue pq-min $queue)
+     (quote $first)))
+(@doc pq-min
+  (@desc "The (Priority Value) pair at the smallest priority, without removing it. An empty queue has no answer.")
+  (@params ((@param "Queue")))
+  (@return "Pair"))
+
+(: pq-pairs (-> %Undefined% Expression))
+(= (pq-pairs $queue) (datastructures-rows PriorityQueue pq-pairs $queue))
+(@doc pq-pairs
+  (@desc "Every (Priority Value) pair in priority order, which is the sorted sequence the queue exists to produce. This is the shape pq-from-pairs reads.")
+  (@params ((@param "Queue")))
+  (@return "Pairs"))
+
+(: pq-pop (-> %Undefined% Expression))
+(= (pq-pop $queue)
+   (let (($priority $value) (:seg $rest))
+        (datastructures-rows PriorityQueue pq-pop $queue)
+     (quote ($priority $value (PriorityQueue $rest)))))
+(@doc pq-pop
+  (@desc "The (Priority Value Rest) triple: the first entry at the smallest priority and the queue without that occurrence. An empty queue has no answer.")
+  (@params ((@param "Queue")))
+  (@return "Answer"))
+
+(: pq-remove (-> %Undefined% %Undefined% %Undefined% Expression))
+(= (pq-remove $queue $priority $value)
+   (let $rows (datastructures-rows PriorityQueue pq-remove $queue)
+     (once (let ((:seg $before) ($p $v) (:seg $after)) (quote $rows)
+       (if (and (== $p $priority) (== $v $value))
+         (let $rest (union-atom $before $after) (quote (PriorityQueue $rest)))
+         (empty))))))
+(@doc pq-remove
+  (@desc "The queue without the first entry holding this identical priority and value. Remove one occurrence without binding variables. An absent entry has no answer.")
+  (@params ((@param "Queue") (@param "Priority") (@param "Value")))
+  (@return "Result"))
+
+(: pq-size (-> %Undefined% Number))
+(= (pq-size $queue) (size-atom (datastructures-rows PriorityQueue pq-size $queue)))
+(@doc pq-size
+  (@desc "How many entries the queue holds, counting repeated priorities separately.")
+  (@params ((@param "Queue")))
+  (@return "Size"))

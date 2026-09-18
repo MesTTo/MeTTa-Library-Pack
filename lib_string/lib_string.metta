@@ -1,37 +1,247 @@
-;Text, the way C reaches for string.h: import it when you need it.
-;
-;(string-length $s) counts characters. (string-slice $s $from $to) is
-;half-open, From included and To not, and clamps rather than erroring, so
-;(string-slice "hello" 3 999) is "lo". (string-split $sep $s) splits on every
-;character of $sep and (string-join $sep $parts) puts them back.
-;(string-trim $s), (string-upper $s) and (string-lower $s) do the obvious.
-;
-;(string-starts-with $s $prefix), (string-ends-with $s $suffix) and
-;(string-contains $s $sub) answer True or False, so they guard a query.
-;(string-index-of $s $sub) answers where, or -1 when it is not there, rather
-;than failing, because a caller asking "where" wants an answer either way.
-;(string-replace $s $from $to) replaces EVERY occurrence.
-;
-;(string-chars $s) gives one-character STRINGS, not char symbols, so the
-;pieces feed straight back into these operations; (string-from-chars $list)
-;is its inverse. (string-repeat $s $n), (string-pad-left $s $width $pad) and
-;(string-pad-right ...) round it out.
-;
-;(format-args $template $args) and (sort-strings $list) are corelib names and
-;are always loaded, so this library no longer carries them: importing it is
-;not what makes them work.
-;(parse-number $s) answers a Number, or nothing when the text is not one, so
-;you test it with a match rather than a catch. (number-to-string $n) inverts.
-;
-;Every operation accepts a String, a Symbol or a Number wherever text is
-;wanted, because a symbol arriving where a string was meant is ordinary in
-;MeTTa, and every operation ANSWERS a String, so results compose.
+; Purpose: compose String recipes over the shared text and metric providers.
+; Guarantees: recipes preserve text coercions, codepoints and empty-input cases.
+; [tested: lib_string_surface, test_string_padding_oracles; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
+; Text accepts Strings, Symbols and Numbers; text results remain Strings.
+; See README.md for codepoint, overlap, empty-input and native-provider contracts.
+; Positional formatting remains the engine's format-args operation.
 
+!(import! &self (library lib_combinatorics))
+!(import! &self (library "_support/string.metta"))
+
+(: string-contains (-> %Undefined% %Undefined% Bool))
+(= (string-contains $value $part) (>= (string-index-of $value $part) 0))
+(@doc string-contains
+  (@desc "Test the shared search index for a literal occurrence, including an empty Part.")
+  (@params ((@param "Value") (@param "Part")))
+  (@return "Answer"))
+
+(: string-starts-with (-> %Undefined% %Undefined% Bool))
+(= (string-starts-with $value $prefix) (== (string-index-of $value $prefix) 0))
+(@doc string-starts-with
+  (@desc "Test whether the first literal occurrence is at index zero. An empty prefix matches.")
+  (@params ((@param "Value") (@param "Prefix")))
+  (@return "Answer"))
+
+(: string-ends-with (-> %Undefined% %Undefined% Bool))
+(= (string-ends-with $value $suffix)
+   (let* (($text (string-join "" (quote ($value))))
+          ($part (string-join "" (quote ($suffix))))
+          ($length (string-length $text)))
+     (== (string-slice $text (- $length (string-length $part)) $length) $part)))
+(@doc string-ends-with
+  (@desc "Compare the final codepoint slice with the coerced suffix. An empty suffix matches; a longer suffix does not.")
+  (@params ((@param "Value") (@param "Suffix")))
+  (@return "Answer"))
+
+(: string-from-chars (-> Expression String))
+(= (string-from-chars $chars) (string-join "" (quote $chars)))
+(@doc string-from-chars
+  (@desc "Join text items with an empty separator. Accept zero or several characters per item, Symbols and Numbers; code inside a literal expression stays data and is refused as nontext.")
+  (@params ((@param "Chars")))
+  (@return "Text"))
+
+(: string-repeat (-> %Undefined% Number String))
+(= (string-repeat $value $times)
+   (let* (($text (string-join "" (quote ($value))))
+          ($checked (assertEqualMsg (collections-integer? $times) True
+                       (quote (string-repeat "use an integer count" $times)))))
+     (if (== $text "") ""
+       (string-join "" (collapse (let $_ (range 0 $times) $text))))))
+(@doc string-repeat
+  (@desc "Collect a range of text copies and join once. Validate text and integer Times even when the result is empty. Zero and negative counts produce an empty String; empty text needs no traversal. Invalid counts raise a named assertion.")
+  (@params ((@param "Value") (@param "Times")))
+  (@return "Text"))
+
+(: string-pad-left (-> %Undefined% Number %Undefined% String))
+(= (string-pad-left $value $width $pad)
+   (string-pad $value $width $pad (|-> ($missing) $missing)))
+(@doc string-pad-left
+  (@desc "Assign all missing padding to the left through the shared MeTTa padding equation. Repeat and truncate a multicharacter filler. Empty filler or a width no greater than the input leaves it unchanged; both texts and the integer width still validate.")
+  (@params ((@param "Value") (@param "Width") (@param "Pad")))
+  (@return "Text"))
+
+(: string-pad-right (-> %Undefined% Number %Undefined% String))
+(= (string-pad-right $value $width $pad)
+   (string-pad $value $width $pad (|-> ($missing) 0)))
+(@doc string-pad-right
+  (@desc "Assign no padding to the left, using string-pad-left's width and filler rules. The shared string-pad assertion refuses noninteger widths.")
+  (@params ((@param "Value") (@param "Width") (@param "Pad")))
+  (@return "Text"))
+
+(: string-center (-> %Undefined% Number %Undefined% String))
+(= (string-center $value $width $pad)
+   (string-pad $value $width $pad (|-> ($missing) (floor-div $missing 2))))
+(@doc string-center
+  (@desc "Assign half the missing codepoints to the left; an odd extra character goes on the right. Each side restarts Pad. Empty filler leaves the input unchanged; the shared assertion still validates Width as an integer.")
+  (@params ((@param "Value") (@param "Width") (@param "Pad")))
+  (@return "Text"))
+
+(: string-similarity (-> %Undefined% %Undefined% Number))
+(= (string-similarity $first $second)
+   (let $maximum (max (string-length $first) (string-length $second))
+     (if (== $maximum 0) 1.0
+       (- 1.0 (/ (string-edit-distance $first $second) $maximum)))))
+(@doc string-similarity
+  (@desc "Normalize the shared exact edit distance as 1 - distance/max(lengths), in [0,1]. Two empty Strings score 1.0. An ordinary equation preserves the metric's codepoint and coercion rules.")
+  (@params ((@param "First") (@param "Second")))
+  (@return "Score"))
+
+; begin generated Prolog face
+; GENERATED by extensions/python/tools/prologface.py --write from lib/*/*.pl, tests/data/prologface/*.pl, extensions/python/tools/prologface_source.pl: the prolog-face artifact in extensions/python/tools/artifacts.py, whose prolog-face lane refuses drift.
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_string.pl)
-  (string-length string-slice string-split string-join
-   string-trim string-upper string-lower
-   string-starts-with string-ends-with string-contains string-index-of
-   string-replace string-chars string-from-chars string-repeat
-   string-pad-left string-pad-right
-   parse-number number-to-string))
+!(import_prolog_functions_from_file (library "lib_string/lib_string.pl")
+  (number-to-string parse-number string-chars string-codes string-count string-dedent string-edit-distance string-from-codes string-indent string-index-of string-isub string-join string-last-index-of string-length string-lines string-lower string-replace string-slice string-split string-split-exact string-template string-trim string-unlines string-upper string-wrap))
+
+(: number-to-string (-> Number String))
+(@doc number-to-string
+  (@desc "Return the host String representation of a Number, including rationals.")
+  (@params ((@param "Number")))
+  (@return "Out"))
+
+(: parse-number (-> %Undefined% Number))
+(@doc parse-number
+  (@desc "Parse the host numeric syntax. Ordinary nonnumbers produce no answer; type, resource and interruption exceptions remain visible.")
+  (@params ((@param "Value")))
+  (@return "Number"))
+
+(: string-chars (-> %Undefined% Expression))
+(@doc string-chars
+  (@desc "Return one-character Strings, preserving Unicode and embedded NUL.")
+  (@params ((@param "Value")))
+  (@return "Chars"))
+
+(: string-codes (-> %Undefined% Expression))
+(@doc string-codes
+  (@desc "Return Unicode scalar integers. NUL is 0; supplementary characters count once.")
+  (@params ((@param "Value")))
+  (@return "Codes"))
+
+(: string-count (-> %Undefined% %Undefined% Bool Number))
+(: string-count (-> %Undefined% %Undefined% Number))
+(@doc string-count
+  (@desc "Count literal occurrences, nonoverlapping by default. True enables overlap. An empty Part counts every boundary, including both ends, giving length+1.")
+  (@params ((@param "Value") (@param "Part") (@param "Overlap")))
+  (@return "Count"))
+
+(: string-dedent (-> %Undefined% String))
+(@doc string-dedent
+  (@desc "Remove the common literal space/tab prefix of nonblank LF-separated lines. Blank lines become empty and the final LF is preserved. Tabs are not expanded.")
+  (@params ((@param "Value")))
+  (@return "Out"))
+
+(: string-edit-distance (-> %Undefined% %Undefined% Number))
+(@doc string-edit-distance
+  (@desc "Return exact unit-cost Levenshtein distance over Unicode codepoints. NUL is data. No normalization or score cutoff changes the comparison.")
+  (@params ((@param "First") (@param "Second")))
+  (@return "Distance"))
+
+(: string-from-codes (-> Expression String))
+(@doc string-from-codes
+  (@desc "Build a String from Unicode scalar integers. Reject improper lists, nonintegers, surrogates and values outside 0 through 0x10FFFF.")
+  (@params ((@param "Codes")))
+  (@return "Out"))
+
+(: string-indent (-> %Undefined% %Undefined% String))
+(@doc string-indent
+  (@desc "Prefix each LF-separated line except lines containing only spaces and tabs. Preserve blank-line contents and a final LF.")
+  (@params ((@param "Prefix") (@param "Value")))
+  (@return "Out"))
+
+(: string-index-of (-> %Undefined% %Undefined% Number))
+(@doc string-index-of
+  (@desc "Return the first zero-based codepoint index, or -1. An empty Part returns 0.")
+  (@params ((@param "Value") (@param "Part")))
+  (@return "Index"))
+
+(: string-isub (-> %Undefined% %Undefined% Expression Number))
+(: string-isub (-> %Undefined% %Undefined% Number))
+(@doc string-isub
+  (@desc "Return SWI's substring-based ontology-label ISub score, preserving complete text. Unique options are (normalize Bool), (zero-to-one Bool) and (substring-threshold Number), defaulting to False, False and 2. Threshold is nonnegative; matched substrings must be longer than it. Normalization lowercases and removes dot, underscore and ASCII space. The usual range is [-1,1], or [0,1] with zero-to-one. Both empty score 1; one empty scores 0.")
+  (@params ((@param "First") (@param "Second") (@param "Options")))
+  (@return "Score"))
+
+(: string-join (-> %Undefined% Expression String))
+(@doc string-join
+  (@desc "Join coerced text parts once with Separator; an empty list produces \"\".")
+  (@params ((@param "Separator") (@param "Parts")))
+  (@return "Out"))
+
+(: string-last-index-of (-> %Undefined% %Undefined% Number))
+(@doc string-last-index-of
+  (@desc "Return the last zero-based codepoint index, including overlapping matches, or -1. An empty Part returns the input length.")
+  (@params ((@param "Value") (@param "Part")))
+  (@return "Index"))
+
+(: string-length (-> %Undefined% Number))
+(@doc string-length
+  (@desc "Count Unicode codepoints, including embedded NUL. Text coercions apply.")
+  (@params ((@param "Value")))
+  (@return "Length"))
+
+(: string-lines (-> %Undefined% Expression))
+(@doc string-lines
+  (@desc "Split at LF and omit one terminal empty component. Empty input gives (). CR and NUL remain data. Duplicate and internal empty lines survive.")
+  (@params ((@param "Value")))
+  (@return "Lines"))
+
+(: string-lower (-> %Undefined% String))
+(@doc string-lower
+  (@desc "Apply the host Unicode lowercase mapping and return a String.")
+  (@params ((@param "Value")))
+  (@return "Out"))
+
+(: string-replace (-> %Undefined% %Undefined% %Undefined% String))
+(@doc string-replace
+  (@desc "Replace every nonoverlapping literal occurrence. An empty From preserves the original input. Matching and output assembly do not copy shrinking suffixes.")
+  (@params ((@param "Value") (@param "From") (@param "To")))
+  (@return "Out"))
+
+(: string-slice (-> %Undefined% Number Number String))
+(@doc string-slice
+  (@desc "Return the half-open codepoint interval [From,To). Clamp each endpoint to the input; negative starts and reversed or beyond-end intervals are safe.")
+  (@params ((@param "Value") (@param "From") (@param "To")))
+  (@return "Out"))
+
+(: string-split (-> %Undefined% %Undefined% Expression))
+(@doc string-split
+  (@desc "Split on each character in Separators, retaining empty fields. An empty separator set returns the whole input; NUL splits only when explicitly listed.")
+  (@params ((@param "Separators") (@param "Value")))
+  (@return "Parts"))
+
+(: string-split-exact (-> %Undefined% %Undefined% Expression))
+(@doc string-split-exact
+  (@desc "Split at nonoverlapping occurrences of the complete, nonempty Separator. Preserve empty fields and text verbatim. An empty separator raises.")
+  (@params ((@param "Separator") (@param "Value")))
+  (@return "Parts"))
+
+(: string-template (-> %Undefined% Expression String))
+(@doc string-template
+  (@desc "Replace {Name} or {Name,Default} using unique (Name Value) pairs. Names are Prolog variable identifiers. Render values through the engine's console renderer. Missing names raise; unrecognized braces remain literal. Goals never run.")
+  (@params ((@param "Template") (@param "Bindings")))
+  (@return "Out"))
+
+(: string-trim (-> %Undefined% String))
+(@doc string-trim
+  (@desc "Remove ASCII space, tab, LF and CR from both ends. Interior text and NUL stay.")
+  (@params ((@param "Value")))
+  (@return "Out"))
+
+(: string-unlines (-> Expression String))
+(@doc string-unlines
+  (@desc "Append LF to every coerced line and concatenate. An empty list produces \"\".")
+  (@params ((@param "Lines")))
+  (@return "Out"))
+
+(: string-upper (-> %Undefined% String))
+(@doc string-upper
+  (@desc "Apply the host Unicode uppercase mapping and return a String.")
+  (@params ((@param "Value")))
+  (@return "Out"))
+
+(: string-wrap (-> %Undefined% Number %Undefined% String))
+(: string-wrap (-> %Undefined% Number String))
+(@doc string-wrap
+  (@desc "Greedily wrap words to a positive codepoint width. Collapse ASCII space, tab, LF and CR. Keep long words whole. Alignment is left (default), right, center or justify. The final justified line aligns left; no final LF is added.")
+  (@params ((@param "Value") (@param "Width") (@param "Alignment")))
+  (@return "Out"))
+; end generated Prolog face

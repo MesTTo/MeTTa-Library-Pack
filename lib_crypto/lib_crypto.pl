@@ -1,82 +1,227 @@
-% Purpose: cryptographic hashes and secure randomness for MeTTa programs.
-%   library(crypto) supplies every algorithm and secure randomness where the
-%   platform has it; library(sha) preserves SHA-1, SHA-224, SHA-256, SHA-384
-%   and SHA-512 where it does not.
-% Guarantees:
-%   - hashes answer lowercase hex strings, and the five shared SHA providers
-%     agree byte for byte [tested:
-%     platform_capabilities_reduced:sha_hashing_survives_without_crypto,
-%     test_hashes_are_deterministic_and_agree_with_hashlib;
-%     commit=59792b524568755a2fbfe1c5f7cdb571bd78a3bf]
-%   - a build without library(crypto) refuses secure randomness and a
-%     non-SHA hash by the crypto capability's name instead of calling an
-%     undefined predicate [tested:
-%     platform_capabilities_reduced:crypto_only_operations_refuse_by_name_without_crypto;
-%     commit=59792b524568755a2fbfe1c5f7cdb571bd78a3bf]
-% Fails when: a requested algorithm is unknown. Where library(crypto) is
-%   present its own domain error remains authoritative; where it is absent an
-%   algorithm outside the five portable SHA names needs that capability.
-% Open Obligations:
-%   To Do: None
-%   Hacks: None
-%   Future Enhancements: None
-
+% Purpose: native digests, HMAC, secure values and password records.
+% Guarantees: provider failures raise; the reduced platform retains five SHA
+% digests and two HMAC algorithms; password mismatches return False
+% [tested: lib_crypto_surface, test_native_provider_failures_raise; commit=28c6146d805b5adba3047ffc72b2508c11816636].
+% Owns resources: file hashing closes its binary stream on success, failure
+% and output mismatch; native temporary buffers remain within each call
+% [tested: lib_crypto_surface; commit=28c6146d805b5adba3047ffc72b2508c11816636].
+% Decides: byte lists are integers 0..255; integer intervals are [Lower, Upper).
+% Password records use PBKDF2-SHA512, 16 random salt bytes and default cost 18
+% [tested: test_password_records_interoperate_with_swi_and_hashlib; commit=28c6146d805b5adba3047ffc72b2508c11816636].
 
 :- module(lib_crypto,
-          [ crypto_hash/3,
-            crypto_random_hex/2
-          ]).
-
-% Guarantees: private helpers and autoload declarations belong to this module.
-% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
-% Assumes: engine operations resolve through metta_engine's published exports.
-% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+          [crypto_hash/3, 'crypto-hash'/3, crypto_random_hex/2,
+           'crypto-random-hex'/2, 'crypto-hash-bytes'/3, 'crypto-hash-file!'/3,
+           'crypto-hmac'/4, 'crypto-hmac-bytes'/4, 'crypto-random-bytes'/2,
+           'crypto-random-integer'/3, 'crypto-password-hash'/2,
+           'crypto-password-hash'/3, 'crypto-password-verify'/3]).
 :- set_module(base(metta_engine)).
+:- metta_platform_load(crypto, []).
+:- if(metta_platform(crypto, present, _, _)).
+:- use_module('support/native', []).
+:- endif.
+:- use_module(library(sha), [sha_hash/3, sha_new_ctx/2, sha_hash_ctx/4,
+                             hmac_sha/4, hash_atom/2]).
+:- use_module(library(base64), [base64_encoded/3]).
+:- use_module(library(error), [must_be/2, domain_error/2]).
+:- use_module(library(apply), [maplist/2]).
 
-%The load and census are one act, as they are for library(json). A missing
-%crypto library records the capability absent without swallowing any failure
-%from a library that did resolve. library(sha) is part of the reduced seat and
-%is the deliberately narrow fallback for hashing, not for randomness.
-%hex_bytes/2 is on this list because crypto_random_hex/2 calls it. It was not,
-%and the library-index autoloader was what had been finding it: with the
-%autoloader off, on a platform that HAS crypto, `(crypto-random-hex 4)` raised
-%`Unknown procedure: hex_bytes/2` while the same form answered "edf2d01d" with
-%autoload on [measured 2026-09-07: NO_AUTOLOAD=1 sh run.sh over
-%`!(import! &self (library lib_crypto))` and `!(println! (crypto-random-hex 4))`,
-%exit 2 against exit 0; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3]. No corpus example calls it, so the
-%no-autoload GATE never reached the line; the lib-autoload lane reads every
-%shipped library's clauses instead of waiting for an example to
-%[tested: sh check.sh lib-autoload; commit=e52b9b2eeb4b303b57c93e6e6844664a25ce0da3].
-:- metta_platform_load(crypto, [crypto_data_hash/3, crypto_n_random_bytes/2,
-                                hex_bytes/2]).
-:- use_module(library(sha), [sha_hash/3, hash_atom/2]).
+%! crypto_hash(+Algorithm:any, +Text:any, -Hex:string) is det.
+%
+% Hash UTF-8 text to lowercase hexadecimal. Text may be a String, Symbol or
+% character-code expression. Use a fixed-output OpenSSL digest name such as
+% sha256, sha512, sha3_256 or blake2b512. Unknown algorithms raise. A platform
+% without crypto retains sha1, sha224, sha256, sha384 and sha512 through sha.
+crypto_hash(Algorithm, Text, Hex) :- crypto_digest(Algorithm, utf8(Text), none, Hex).
 
-crypto_hash(Algorithm, Text, Hex) :-
-    ( atom(Algorithm) -> A = Algorithm ; atom_string(A, Algorithm) ),
+%! 'crypto-hash'(+Algorithm:any, +Text:any, -Hex:string) is det.
+%
+% Hash UTF-8 text, with the same contract as crypto_hash.
+'crypto-hash'(Algorithm, Text, Hex) :- crypto_hash(Algorithm, Text, Hex).
+
+%! 'crypto-hash-bytes'(+Algorithm:any, +Bytes:list, -Hex:string) is det.
+%
+% Hash an expression of byte integers 0..255 without text transcoding. Empty
+% bytes are valid. Algorithms and reduced-platform support match crypto-hash.
+'crypto-hash-bytes'(Algorithm, Bytes, Hex) :-
+    must_be(list(between(0,255)), Bytes),
+    crypto_digest(Algorithm, octets(Bytes), none, Hex).
+
+%! 'crypto-hash-file!'(+Algorithm:any, +Path:any, -Hex:string) is det.
+%
+% Hash a file's bytes through a bounded buffer. Missing files and read failures
+% raise. The binary stream closes on every exit; the file is never modified.
+'crypto-hash-file!'(Algorithm, Path, Hex) :-
+    setup_call_cleanup(open(Path, read, Stream, [type(binary)]),
+                       crypto_digest(Algorithm, stream(Stream), none, Hex),
+                       close(Stream)).
+
+%! 'crypto-hmac'(+Algorithm:any, +Key:any, +Text:any, -Hex:string) is det.
+%
+% Authenticate UTF-8 text with a UTF-8 key and a fixed-output digest. The
+% result is lowercase hexadecimal. Empty keys/text are valid. Without crypto,
+% sha1 and sha256 remain available; other algorithms name the missing capability.
+'crypto-hmac'(Algorithm, Key, Text, Hex) :-
+    text_bytes(Key, Bytes),
+    crypto_digest(Algorithm, utf8(Text), Bytes, Hex).
+
+%! 'crypto-hmac-bytes'(+Algorithm:any, +Key:list, +Bytes:list, -Hex:string) is det.
+%
+% Authenticate raw bytes with a raw byte key; both expressions contain only
+% integers 0..255. Algorithms and reduced support match crypto-hmac.
+'crypto-hmac-bytes'(Algorithm, Key, Bytes, Hex) :-
+    must_be(list(between(0,255)), Key),
+    must_be(list(between(0,255)), Bytes),
+    crypto_digest(Algorithm, octets(Bytes), Key, Hex).
+
+crypto_digest(Algorithm0, Source, Key, Hex) :-
+    ( atom(Algorithm0) -> Algorithm = Algorithm0 ; atom_string(Algorithm, Algorithm0) ),
     (   metta_platform(crypto, present, _, _)
-    ->  crypto_data_hash(Text, Hash, [algorithm(A)]),
-        atom_string(Hash, Hex)
-    ;   crypto_sha_hash(A, Text, Hex)
+    ->  lib_crypto_native:digest(Algorithm, Source, Key, Bytes)
+    ;   portable_digest(Algorithm, Source, Key, Bytes)
+    ),
+    hash_atom(Bytes, Atom),
+    atom_string(Atom, Hex).
+
+portable_digest(Algorithm, Source, none, Bytes) :- !,
+    ( sha_algorithm(Algorithm) -> true ; metta_require_platform('(crypto-hash ...)', crypto) ),
+    portable_hash(Source, Algorithm, Bytes).
+portable_digest(Algorithm, Source, Key, Bytes) :-
+    ( hmac_algorithm(Algorithm) -> true ; metta_require_platform('(crypto-hmac ...)', crypto) ),
+    source_bytes(Source, Data),
+    hmac_sha(Key, Data, Bytes, [algorithm(Algorithm), encoding(octet)]).
+
+sha_algorithm(sha1).
+sha_algorithm(sha224).
+sha_algorithm(sha256).
+sha_algorithm(sha384).
+sha_algorithm(sha512).
+hmac_algorithm(sha1).
+hmac_algorithm(sha256).
+
+portable_hash(utf8(Text), Algorithm, Bytes) :-
+    sha_hash(Text, Bytes, [algorithm(Algorithm), encoding(utf8)]).
+portable_hash(octets(Data), Algorithm, Bytes) :-
+    sha_hash(Data, Bytes, [algorithm(Algorithm), encoding(octet)]).
+portable_hash(stream(Stream), Algorithm, Bytes) :-
+    sha_new_ctx(Context, [algorithm(Algorithm), encoding(octet)]),
+    sha_stream(Stream, Context, Bytes).
+
+sha_stream(Stream, Context, Bytes) :-
+    read_string(Stream, 65536, Chunk),
+    (   Chunk == ""
+    ->  sha_hash_ctx(Context, "", _, Bytes)
+    ;   sha_hash_ctx(Context, Chunk, Next, _),
+        sha_stream(Stream, Next, Bytes)
     ).
 
-crypto_sha_hash(Algorithm, Text, Hex) :-
-    (   crypto_sha_algorithm(Algorithm)
-    ->  sha_hash(Text, Bytes, [algorithm(Algorithm)]),
-        hash_atom(Bytes, Hash),
-        atom_string(Hash, Hex)
-    ;   metta_require_platform('(crypto-hash ...)', crypto)
+source_bytes(utf8(Text), Bytes) :- text_bytes(Text, Bytes).
+source_bytes(octets(Bytes), Bytes).
+
+text_bytes(Text, Bytes) :-
+    ( is_list(Text) -> string_codes(String, Text) ; String = Text ),
+    string_bytes(String, Bytes, utf8).
+
+%! crypto_random_hex(+Count:integer, -Hex:string) is det.
+%
+% Return Count secure random bytes as 2*Count lowercase hexadecimal characters.
+% Count may be zero. Negative counts and absent crypto capability raise.
+crypto_random_hex(Count, Hex) :-
+    secure_bytes(Count, '(crypto-random-hex ...)', Bytes),
+    hash_atom(Bytes, Atom),
+    atom_string(Atom, Hex).
+
+%! 'crypto-random-hex'(+Count:integer, -Hex:string) is det.
+%
+% Return secure random hexadecimal, with the same contract as crypto_random_hex.
+'crypto-random-hex'(Count, Hex) :- crypto_random_hex(Count, Hex).
+
+%! 'crypto-random-bytes'(+Count:integer, -Bytes:list) is det.
+%
+% Return Count cryptographically secure byte integers. Zero returns (). Negative
+% or unrepresentable sizes raise; native allocation and entropy failures raise.
+'crypto-random-bytes'(Count, Bytes) :-
+    secure_bytes(Count, '(crypto-random-bytes ...)', Bytes).
+
+secure_bytes(Count, Operation, Bytes) :-
+    must_be(nonneg, Count),
+    metta_require_platform(Operation, crypto),
+    lib_crypto_native:random_bytes(Count, Bytes).
+
+%! 'crypto-random-integer'(+Lower:integer, +Upper:integer, -Value:integer) is det.
+%
+% Uniformly sample Lower <= Value < Upper with secure randomness. Bounds may
+% be arbitrary-size signed integers. Empty/reversed intervals raise. A singleton
+% returns its sole integer without drawing entropy. Requires crypto capability.
+'crypto-random-integer'(Lower, Upper, Value) :-
+    must_be(integer, Lower),
+    must_be(integer, Upper),
+    ( Lower < Upper -> true ; domain_error(nonempty_integer_interval, [Lower, Upper]) ),
+    metta_require_platform('(crypto-random-integer ...)', crypto),
+    Span is Upper - Lower,
+    format(string(Bound), '~16r', [Span]),
+    lib_crypto_native:random_below_hex(Bound, Hex),
+    string_concat("0x", Hex, Literal),
+    number_string(Offset, Literal),
+    Value is Lower + Offset.
+
+%! 'crypto-password-hash'(+Password:any, -Record:string) is det.
+%! 'crypto-password-hash'(+Password:any, +Cost:integer, -Record:string) is det.
+%
+% Derive a PBKDF2-SHA512 password record from UTF-8 Password with 16 random salt
+% bytes and 2^Cost iterations. Default Cost is 18 (262144 iterations). Explicit
+% costs must fit the provider's positive C int iteration count (0..30 on this
+% ABI); low costs are for fixtures, not stored credentials. The record preserves
+% SWI's format. Native failures and absent crypto capability raise.
+'crypto-password-hash'(Password, Record) :- 'crypto-password-hash'(Password, 18, Record).
+'crypto-password-hash'(Password, Cost, Record) :-
+    metta_require_platform('(crypto-password-hash ...)', crypto),
+    lib_crypto_native:password_iterations(Cost, Iterations),
+    lib_crypto_native:random_bytes(16, Salt),
+    lib_crypto_native:password_hash(Password, Salt, Iterations, Digest),
+    bytes_base64(Salt, Salt64),
+    bytes_base64(Digest, Digest64),
+    format(string(Record), '$pbkdf2-sha512$t=~d$~s$~s', [Iterations, Salt64, Digest64]).
+
+%! 'crypto-password-verify'(+Password:any, +Record:any, -Matches:bool) is det.
+%
+% Verify a PBKDF2-SHA512 record, returning True or False for a valid record.
+% Malformed records, invalid iteration counts and native failures raise. Legacy
+% salt lengths remain valid. Parsing checks the complete envelope and canonical
+% unpadded Base64; the equal-length digest comparison uses CRYPTO_memcmp.
+'crypto-password-verify'(Password, Record, Matches) :-
+    metta_require_platform('(crypto-password-verify ...)', crypto),
+    password_record(Record, Iterations, Salt, Digest),
+    lib_crypto_native:password_verify(Password, Salt, Iterations, Digest, Matches).
+
+password_record(Record, Iterations, Salt, Digest) :-
+    split_string(Record, "$", "", Parts),
+    (   Parts = ["", "pbkdf2-sha512", Parameters, Salt64, Digest64],
+        sub_string(Parameters, 0, 2, _, "t="),
+        sub_string(Parameters, 2, _, 0, Decimal),
+        string_codes(Decimal, Codes), Codes = [_|_], maplist(decimal_digit, Codes),
+        number_string(Iterations, Decimal), Iterations > 0
+    ->  true
+    ;   domain_error(crypto_password_record, envelope)
+    ),
+    canonical_base64(Salt64, Salt),
+    canonical_base64(Digest64, Digest),
+    ( length(Digest, 64) -> true ; domain_error(crypto_password_record, digest_length) ).
+
+decimal_digit(Code) :- Code >= 0'0, Code =< 0'9.
+
+bytes_base64(Bytes, Encoded) :-
+    string_codes(String, Bytes),
+    base64_encoded(String, Encoded, [padding(false), encoding(iso_latin_1)]).
+
+canonical_base64(Encoded, Bytes) :-
+    (   base64_encoded(String, Encoded, [padding(false), encoding(iso_latin_1)]),
+        base64_encoded(String, Canonical, [padding(false), encoding(iso_latin_1)]),
+        Canonical == Encoded
+    ->  string_codes(String, Bytes)
+    ;   domain_error(crypto_password_record, base64)
     ).
 
-crypto_sha_algorithm(sha1).
-crypto_sha_algorithm(sha224).
-crypto_sha_algorithm(sha256).
-crypto_sha_algorithm(sha384).
-crypto_sha_algorithm(sha512).
-
-%N cryptographically secure random bytes as 2N hex characters.
-crypto_random_hex(NBytes, Hex) :-
-    must_be(positive_integer, NBytes),
-    metta_require_platform('(crypto-random-hex ...)', crypto),
-    crypto_n_random_bytes(NBytes, Bytes),
-    hex_bytes(HexAtom, Bytes),
-    atom_string(HexAtom, Hex).
+:- multifile prolog:error_message//1.
+prolog:error_message(crypto_native_error(Operation, Code, Message)) -->
+    ['crypto native operation ~w failed (~d): ~w'-[Operation, Code, Message]].

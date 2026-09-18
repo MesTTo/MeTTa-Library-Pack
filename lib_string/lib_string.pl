@@ -1,288 +1,296 @@
-% Purpose: the text surface of the language. Before this the whole of it was
-%   atom_concat, atom_chars, repr, repra, parse and sread, so there was no way
-%   to take a substring, split on a separator, join a list, trim, change case
-%   or test a prefix. Every real program needs those.
-%
-%   Loaded from metta.pl's ensure_loaded rather than imported, the same way
-%   lib_gitimport is, because strings are core rather than optional.
-% Assumes:
-%   - a MeTTa string is an SWI string and a MeTTa symbol is an atom
-%     [verified 2026-08-15: sread("(f \"hello\" world 42)", T) gives
-%     [f,"hello",world,42] with string/1, atom/1 and number/1 respectively]
-% Guarantees:
-%   - every operation answers a String, never an atom, so results compose with
-%     each other without a coercion step in between [tested 2026-08-16: lib_string:every_operation_that_answers_text_answers_a_String]
-%   - text input is accepted as a String, a Symbol or a Number, because a
-%     symbol arriving where a string was meant is ordinary in MeTTa; anything
-%     else is a loud type error naming the operation [tested: lib_string:length_accepts_a_symbol, length_accepts_a_number]
-% Fails when:
-%   - an index is out of range. string-slice clamps rather than failing, which
-%     is what every language with slicing does; string-index-of answers -1.
-% Open Obligations:
-%   To Do: None
-%   Hacks: None
-%   Future Enhancements: None
-
+% Purpose: supply shared text boundaries, host layout, templates and exact metrics.
+% Assumes: text accepts String, Symbol or Number; indexes count codepoints.
+% [tested: lib_string, lib_string_surface; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
+% Guarantees: text results are Strings and NUL survives every text boundary.
+% [tested: lib_string_surface, test_string_unicode_oracles; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
+% Literal search, exact splitting and replacement share KMP traversal.
+% [source: lib/lib_string/support/string_native.cpp:occurrences; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
+% Decides: slices clamp, absent indexes are -1, empty replacement patterns
+% preserve their input, and parse-number fails on ordinary nonnumbers.
+% [tested: lib_string, lib_string_surface; commit=118b805aedbee6de22be4f6131d97c3d6b9156de].
 
 :- module(lib_string,
-          [ 'number-to-string'/2,
-            'parse-number'/2,
-            'string-chars'/2,
-            'string-contains'/3,
-            'string-ends-with'/3,
-            'string-from-chars'/2,
-            'string-index-of'/3,
-            'string-join'/3,
-            'string-length'/2,
-            'string-lower'/2,
-            'string-pad-left'/4,
-            'string-pad-right'/4,
-            'string-repeat'/3,
-            'string-replace'/4,
-            'string-slice'/4,
-            'string-split'/3,
-            'string-starts-with'/3,
-            'string-trim'/2,
-            'string-upper'/2,
-            metta_text/2
-          ]).
-
-% Guarantees: private helpers and autoload declarations belong to this module.
-% [tested: engine_modules; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
-% Assumes: engine operations resolve through metta_engine's published exports.
-% [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
+          ['number-to-string'/2, 'parse-number'/2,
+           'string-chars'/2,
+           'string-codes'/2, 'string-from-codes'/2,
+           'string-length'/2, 'string-slice'/4,
+           'string-split'/3, 'string-split-exact'/3, 'string-join'/3,
+           'string-trim'/2, 'string-upper'/2, 'string-lower'/2,
+           'string-index-of'/3, 'string-last-index-of'/3,
+           'string-count'/3, 'string-count'/4, 'string-replace'/4,
+           'string-lines'/2, 'string-unlines'/2,
+           'string-dedent'/2, 'string-indent'/3,
+           'string-wrap'/3, 'string-wrap'/4, 'string-template'/3,
+           'string-edit-distance'/3,
+           'string-isub'/3, 'string-isub'/4, metta_text/2]).
 :- set_module(base(metta_engine)).
+:- use_module('support/native', []).
+:- use_module('vendor/string_lines', []).
+:- use_module(library(error), [must_be/2, domain_error/2]).
+:- use_module(library(apply), [maplist/2, maplist/3, exclude/3]).
+:- use_module(library(strings), [interpolate_string/4]).
+:- use_module(library(dcg/basics), [prolog_var_name//1]).
+:- use_module(library(lynx/format), [format_paragraph/2]).
 
-:- use_module(library(lists)).
-:- use_module(library(apply)).
-
-%Accept a String, Symbol or Number wherever text is wanted. A symbol reaching
-%a string operation is ordinary in MeTTa, so coercing is right; a compound is
-%a mistake and says so.
+%! metta_text(+Value:any, -Text:string) is det.
 %
-%The chain is the cheapest of the four spellings and the order inside it is
-%free, because SWI inlines string/1, atom/1 and number/1: a number tested
-%third costs 3.00 inferences, exactly what testing it first costs. Per call,
-%same inputs [measured 2026-08-16]: this 4.17, a clause per type with guard
-%and cut 6.17, SSU =>/2 rules 8.17, compute-a-tag-then-dispatch 11.17. A type
-%test cannot be a clause index, and computing a tag to make one does not help:
-%the four-clause dispatch predicate is still `indexed: none` after 50,000
-%calls. SSU is the right move where the clauses would otherwise leave a CHOICE
-%POINT, which is why lib_json.pl uses it and this does not.
+% Coerce the library's String, Symbol and Number text inputs.
+% @private
 metta_text(Value, Text) :-
-    (   string(Value)
-    ->  Text = Value
-    ;   atom(Value)
-    ->  atom_string(Value, Text)
-    ;   number(Value)
-    ->  number_string(Value, Text)
+    (   string(Value) -> Text = Value
+    ;   atom(Value) -> atom_string(Value, Text)
+    ;   number(Value) -> number_string(Value, Text)
     ;   throw_metta_type_error('string-op', 'String', Value)
     ).
 
-'string-length'(Value, Length) :-
-    metta_text(Value, Text),
-    string_length(Text, Length).
+%! 'string-length'(+Value:any, -Length:integer) is det.
+%
+% Count Unicode codepoints, including embedded NUL. Text coercions apply.
+'string-length'(Value, Length) :- metta_text(Value, Text), string_length(Text, Length).
 
-%Half-open, like every language with slicing: From is included, To is not.
-%Out-of-range ends clamp instead of failing, and From beyond the end answers
-%the empty string rather than an error.
+%! 'string-slice'(+Value:any, +From:integer, +To:integer, -Out:string) is det.
+%
+% Return the half-open codepoint interval [From,To). Clamp each endpoint to
+% the input; negative starts and reversed or beyond-end intervals are safe.
 'string-slice'(Value, From, To, Out) :-
-    metta_text(Value, Text),
-    must_be(integer, From),
-    must_be(integer, To),
-    string_length(Text, Length),
-    Start is max(0, min(From, Length)),
-    End is max(Start, min(To, Length)),
-    Span is End - Start,
+    metta_text(Value, Text), must_be(integer, From), must_be(integer, To),
+    string_length(Text, Length), Start is max(0, min(From, Length)),
+    End is max(Start, min(To, Length)), Span is End - Start,
     sub_string(Text, Start, Span, _, Out).
 
-%Every separator character splits, which is split_string/4's contract, so
-%(string-split "," "a,b") and (string-split ", " "a, b") both give ("a" "b")
-%only when the separator is one character. Use string-replace first for a
-%multi-character separator.
-'string-split'(Separator, Value, Parts) :-
-    metta_text(Separator, SepText),
-    metta_text(Value, Text),
-    split_string(Text, SepText, "", Parts).
+%! 'string-split'(+Separators:any, +Value:any, -Parts:list) is det.
+%
+% Split on each character in Separators, retaining empty fields. An empty
+% separator set returns the whole input; NUL splits only when explicitly listed.
+'string-split'(Separators, Value, Parts) :-
+    metta_text(Separators, Set), metta_text(Value, Text),
+    lib_string_native:split_text(Text, Set, "", Parts).
 
-%One pass. Interleaving the separator and concatenating the whole list once
-%costs O(total length); folding string_concat/3 over the parts recopies
-%everything already joined at every step, which is O(total length squared)
-%[measured 2026-08-15, 4000 parts: 0.0476s folding, 0.0001s here]. The
-%inference counter barely moves between the two, 16002 against 4005, because
-%it does not see bytes being copied, so this one has to be timed.
+%! 'string-split-exact'(+Separator:any, +Value:any, -Parts:list) is det.
+%
+% Split at nonoverlapping occurrences of the complete, nonempty Separator.
+% Preserve empty fields and text verbatim. An empty separator raises.
+'string-split-exact'(Separator, Value, Parts) :-
+    metta_text(Separator, Sep), metta_text(Value, Text),
+    lib_string_native:split_exact(Text, Sep, Parts).
+
+%! 'string-join'(+Separator:any, +Parts:list, -Out:string) is det.
+%
+% Join coerced text parts once with Separator; an empty list produces "".
 'string-join'(Separator, Parts, Out) :-
-    must_be(list, Parts),
-    metta_text(Separator, SepText),
-    maplist(metta_text, Parts, Texts),
-    (   Texts == []
-    ->  Out = ""
-    ;   Texts = [First|Rest],
-        separated_by(Rest, SepText, Tail),
-        atomics_to_string([First|Tail], Out)
-    ).
+    must_be(list, Parts), metta_text(Separator, Sep), maplist(metta_text, Parts, Texts),
+    atomics_to_string(Texts, Sep, Out).
 
-separated_by([], _, []).
-separated_by([Text|Rest], Separator, [Separator, Text|Tail]) :-
-    separated_by(Rest, Separator, Tail).
-
+%! 'string-trim'(+Value:any, -Out:string) is det.
+%
+% Remove ASCII space, tab, LF and CR from both ends. Interior text and NUL stay.
 'string-trim'(Value, Out) :-
-    metta_text(Value, Text),
-    split_string(Text, "", " \t\n\r", [Out]).
+    metta_text(Value, Text), lib_string_native:split_text(Text, "", " \t\n\r", [Out]).
 
-'string-upper'(Value, Out) :-
-    metta_text(Value, Text),
-    string_upper(Text, Out).
+%! 'string-upper'(+Value:any, -Out:string) is det.
+%
+% Apply the host Unicode uppercase mapping and return a String.
+'string-upper'(Value, Out) :- metta_text(Value, Text), string_upper(Text, Out).
 
-'string-lower'(Value, Out) :-
-    metta_text(Value, Text),
-    string_lower(Text, Out).
+%! 'string-lower'(+Value:any, -Out:string) is det.
+%
+% Apply the host Unicode lowercase mapping and return a String.
+'string-lower'(Value, Out) :- metta_text(Value, Text), string_lower(Text, Out).
 
-'string-starts-with'(Value, Prefix, Answer) :-
-    metta_text(Value, Text),
-    metta_text(Prefix, PrefixText),
-    ( sub_string(Text, 0, _, _, PrefixText) -> Answer = true ; Answer = false ).
+%! 'string-index-of'(+Value:any, +Part:any, -Index:integer) is det.
+%
+% Return the first zero-based codepoint index, or -1. An empty Part returns 0.
+'string-index-of'(Value, Part, Index) :-
+    metta_text(Value, Text), metta_text(Part, Needle),
+    lib_string_native:find_index(Text, Needle, false, Index).
 
-'string-ends-with'(Value, Suffix, Answer) :-
-    metta_text(Value, Text),
-    metta_text(Suffix, SuffixText),
-    ( sub_string(Text, _, _, 0, SuffixText) -> Answer = true ; Answer = false ).
+%! 'string-last-index-of'(+Value:any, +Part:any, -Index:integer) is det.
+%
+% Return the last zero-based codepoint index, including overlapping matches,
+% or -1. An empty Part returns the input length.
+'string-last-index-of'(Value, Part, Index) :-
+    metta_text(Value, Text), metta_text(Part, Needle),
+    lib_string_native:find_index(Text, Needle, true, Index).
 
-'string-contains'(Value, Sub, Answer) :-
-    metta_text(Value, Text),
-    metta_text(Sub, SubText),
-    ( sub_string(Text, _, _, _, SubText) -> Answer = true ; Answer = false ).
+%! 'string-count'(+Value:any, +Part:any, -Count:integer) is det.
+%! 'string-count'(+Value:any, +Part:any, +Overlap:boolean, -Count:integer) is det.
+%
+% Count literal occurrences, nonoverlapping by default. True enables overlap.
+% An empty Part counts every boundary, including both ends, giving length+1.
+'string-count'(Value, Part, Count) :- 'string-count'(Value, Part, false, Count).
+'string-count'(Value, Part, Overlap, Count) :-
+    metta_text(Value, Text), metta_text(Part, Needle), must_be(boolean, Overlap),
+    lib_string_native:count_matches(Text, Needle, Overlap, Count).
 
-%The index of the first occurrence, or -1 when there is none, rather than
-%failing: a caller asking "where is it" wants an answer either way, and -1 is
-%the answer every language gives.
-'string-index-of'(Value, Sub, Index) :-
-    metta_text(Value, Text),
-    metta_text(Sub, SubText),
-    (   sub_string(Text, Before, _, _, SubText)
-    ->  Index = Before
-    ;   Index = -1
-    ).
-
-%Every occurrence, which is what replace means to most people; there is no
-%first-only form because string-index-of plus string-slice expresses it.
+%! 'string-replace'(+Value:any, +From:any, +To:any, -Out:string) is det.
+%
+% Replace every nonoverlapping literal occurrence. An empty From preserves
+% the original input. Matching and output assembly do not copy shrinking suffixes.
 'string-replace'(Value, From, To, Out) :-
-    metta_text(Value, Text),
-    metta_text(From, FromText),
-    metta_text(To, ToText),
-    (   FromText == ""
-    ->  Out = Text
-    ;   replacement_pieces(Text, FromText, ToText, Pieces),
-        atomics_to_string(Pieces, Out)
-    ).
+    metta_text(Value, Text), metta_text(From, Pattern), metta_text(To, Replacement),
+    lib_string_native:replace_all(Text, Pattern, Replacement, Out).
 
-%Collect the pieces and join once. Concatenating the processed tail onto the
-%head at every level recopies the whole remainder each time [measured
-%2026-08-15, 4000 occurrences: 0.0089s that way, 0.0014s this way].
-replacement_pieces(Text, From, To, Pieces) :-
-    (   sub_string(Text, Before, Length, After, From)
-    ->  sub_string(Text, 0, Before, _, Head),
-        Rest is Before + Length,
-        sub_string(Text, Rest, After, _, Tail),
-        Pieces = [Head, To|More],
-        replacement_pieces(Tail, From, To, More)
-    ;   Pieces = [Text]
-    ).
-
-%One-character STRINGS rather than Prolog char atoms, so the pieces are the
-%same kind of thing as the whole and feed straight back into these operations.
+%! 'string-chars'(+Value:any, -Chars:list) is det.
+%
+% Return one-character Strings, preserving Unicode and embedded NUL.
 'string-chars'(Value, Chars) :-
-    metta_text(Value, Text),
-    string_chars(Text, CharAtoms),
-    maplist(char_to_string, CharAtoms, Chars).
+    metta_text(Value, Text), string_chars(Text, Atoms), maplist(atom_string, Atoms, Chars).
 
-%A named predicate rather than a yall lambda. yall copy_terms the lambda once
-%per element, which costs about four times the inferences and seven times the
-%cpu of an ordinary call [measured 2026-08-15, maplist over 100,000 elements:
-%1301283 inferences with the lambda, 300004 with a named predicate].
-char_to_string(Char, String) :- atom_string(Char, String).
-
-'string-from-chars'(Chars, Out) :-
-    must_be(list, Chars),
-    maplist(metta_text, Chars, Texts),
-    atomics_to_string(Texts, Out).
-
-'string-repeat'(Value, Times, Out) :-
-    metta_text(Value, Text),
-    must_be(integer, Times),
-    Count is max(0, Times),
-    length(Copies, Count),
-    maplist(=(Text), Copies),
-    atomics_to_string(Copies, Out).
-
-'string-pad-left'(Value, Width, Pad, Out) :-
-    pad_with(Value, Width, Pad, left, Out).
-
-'string-pad-right'(Value, Width, Pad, Out) :-
-    pad_with(Value, Width, Pad, right, Out).
-
-pad_with(Value, Width, Pad, Side, Out) :-
-    metta_text(Value, Text),
-    metta_text(Pad, PadText),
-    must_be(integer, Width),
-    string_length(Text, Length),
-    Missing is Width - Length,
-    %The parentheses are load-bearing: ; binds looser than ->, so
-    %( A ; B -> C ; D ) reads as ( A ; (B -> C ; D) ), which left Out unbound
-    %on the short-width case and then fell through to sub_string/5 with a
-    %negative length [caught by padding_shorter_than_the_string_leaves_it_alone].
-    (   ( Missing =< 0 ; PadText == "" )
-    ->  Out = Text
-    ;   string_length(PadText, PadLength),
-        Repeats is (Missing + PadLength - 1) // max(1, PadLength),
-        'string-repeat'(PadText, Repeats, Filler),
-        sub_string(Filler, 0, Missing, _, Fill),
-        ( Side == left -> string_concat(Fill, Text, Out)
-        ; string_concat(Text, Fill, Out) )
-    ).
-
-%Text to Number, with no answer when the text is not a number, so a caller
-%can test with a match rather than catching.
-'parse-number'(Value, Number) :-
-    metta_text(Value, Text),
-    catch(number_string(Number, Text), _, fail).
-
-'number-to-string'(Number, Out) :-
-    must_be(number, Number),
-    number_string(Number, Out).
-
-%Every operation here succeeds exactly once. det/1 is SWI's own directive, not
-%a library, and it makes that a checked claim rather than a comment: a
-%predicate declared det raises determinism_error if it fails or if it returns
-%holding a choice point.
+%! 'string-codes'(+Value:any, -Codes:list) is det.
 %
-%It costs nothing. Measured 2026-08-15 over 200,000 calls: 0.0186s undeclared
-%against 0.0191s declared, within noise, and the inference counts are identical
-%at 3.00 per call. So this is a permanent guard rather than a trade.
+% Return Unicode scalar integers. NUL is 0; supplementary characters count once.
+'string-codes'(Value, Codes) :-
+    metta_text(Value, Text), string_codes(Text, Codes), maplist(scalar_code, Codes).
+
+%! 'string-from-codes'(+Codes:list, -Out:string) is det.
 %
-%parse-number is deliberately absent. It FAILS when the text is not a number,
-%which is its contract, so it is semidet and declaring it det would raise on
-%the ordinary case.
+% Build a String from Unicode scalar integers. Reject improper lists,
+% nonintegers, surrogates and values outside 0 through 0x10FFFF.
+'string-from-codes'(Codes, Out) :-
+    must_be(list, Codes), maplist(scalar_code, Codes), string_codes(Out, Codes).
+
+scalar_code(Code) :-
+    must_be(integer, Code),
+    ( Code >= 0, Code =< 0x10ffff, (Code < 0xd800 ; Code > 0xdfff) -> true
+    ; domain_error(unicode_scalar_value, Code) ).
+
+%! 'string-lines'(+Value:any, -Lines:list) is det.
+%
+% Split at LF and omit one terminal empty component. Empty input gives ().
+% CR and NUL remain data. Duplicate and internal empty lines survive.
+'string-lines'(Value, Lines) :- metta_text(Value, Text), lib_string_lines:string_lines(Text, Lines).
+
+%! 'string-unlines'(+Lines:list, -Out:string) is det.
+%
+% Append LF to every coerced line and concatenate. An empty list produces "".
+'string-unlines'(Lines, Out) :-
+    must_be(list, Lines), maplist(metta_text, Lines, Texts), lib_string_lines:string_lines(Out, Texts).
+
+%! 'string-dedent'(+Value:any, -Out:string) is det.
+%
+% Remove the common literal space/tab prefix of nonblank LF-separated lines.
+% Blank lines become empty and the final LF is preserved. Tabs are not expanded.
+'string-dedent'(Value, Out) :- metta_text(Value, Text), lib_string_lines:dedent_lines(Text, Out, []).
+
+%! 'string-indent'(+Prefix:any, +Value:any, -Out:string) is det.
+%
+% Prefix each LF-separated line except lines containing only spaces and tabs.
+% Preserve blank-line contents and a final LF.
+'string-indent'(Prefix, Value, Out) :-
+    metta_text(Prefix, Before), metta_text(Value, Text), lib_string_lines:indent_lines(Before, Text, Out).
+
+%! 'string-wrap'(+Value:any, +Width:integer, -Out:string) is det.
+%! 'string-wrap'(+Value:any, +Width:integer, +Alignment:any, -Out:string) is det.
+%
+% Greedily wrap words to a positive codepoint width. Collapse ASCII space,
+% tab, LF and CR. Keep long words whole. Alignment is left (default), right,
+% center or justify. The final justified line aligns left; no final LF is added.
+'string-wrap'(Value, Width, Out) :- 'string-wrap'(Value, Width, left, Out).
+'string-wrap'(Value, Width, Alignment, Out) :-
+    metta_text(Value, Text), must_be(positive_integer, Width),
+    metta_text(Alignment, Name), atom_string(Align, Name),
+    must_be(oneof([left,right,center,justify]), Align),
+    lib_string_native:split_text(Text, " \t\n\r", " \t\n\r", Parts),
+    exclude(=(""), Parts, Words), phrase(word_tokens(Words), Tokens),
+    with_output_to(string(Out), format_paragraph(Tokens, [width(Width),text_align(Align)])).
+
+word_tokens([]) --> [].
+word_tokens([Word|Rest]) -->
+    { string_length(Word, Length) }, [w(Word,Length,[])],
+    ( {Rest == []} -> [] ; [b(1,_)], word_tokens(Rest) ).
+
+%! 'string-template'(+Template:any, +Bindings:list, -Out:string) is det.
+%
+% Replace {Name} or {Name,Default} using unique (Name Value) pairs. Names are
+% Prolog variable identifiers. Render values through the engine's console
+% renderer. Missing names raise; unrecognized braces remain literal. Goals never run.
+'string-template'(Template, Bindings, Out) :-
+    metta_text(Template, Text), must_be(list, Bindings),
+    maplist(template_binding, Bindings, Pairs), dict_create(_, template, Pairs),
+    maplist(template_assignment, Pairs, Assignments),
+    once(interpolate_string(Text, Out, Assignments, [goals(false)])).
+
+template_binding(Binding, Name-Text) :-
+    ( nonvar(Binding), Binding = [Key,Value] -> true ; domain_error(template_binding, Binding) ),
+    metta_text(Key, KeyText), string_codes(KeyText, Codes),
+    ( phrase(prolog_var_name(Name), Codes) -> true ; domain_error(template_name, Key) ),
+    metta_engine:metta_console_text(Value, Text).
+
+template_assignment(Name-Value, Name=Value).
+
+%! 'string-edit-distance'(+First:any, +Second:any, -Distance:integer) is det.
+%
+% Return exact unit-cost Levenshtein distance over Unicode codepoints.
+% NUL is data. No normalization or score cutoff changes the comparison.
+'string-edit-distance'(First, Second, Distance) :-
+    metta_text(First, Left), metta_text(Second, Right), lib_string_native:edit_distance(Left, Right, Distance).
+
+%! 'string-isub'(+First:any, +Second:any, -Score:float) is det.
+%! 'string-isub'(+First:any, +Second:any, +Options:list, -Score:float) is det.
+%
+% Return SWI's substring-based ontology-label ISub score, preserving complete
+% text. Unique options are (normalize Bool), (zero-to-one Bool) and
+% (substring-threshold Number), defaulting to False, False and 2. Threshold
+% is nonnegative; matched substrings must be longer than it. Normalization
+% lowercases and removes dot, underscore and ASCII space. The usual range is
+% [-1,1], or [0,1] with zero-to-one. Both empty score 1; one empty scores 0.
+'string-isub'(First, Second, Score) :- 'string-isub'(First, Second, [], Score).
+'string-isub'(First, Second, Options, Score) :-
+    must_be(list, Options), maplist(isub_option, Options, Pairs), dict_create(Explicit, isub, Pairs),
+    Config = isub{normalize:false,zero_to_one:false,threshold:2}.put(Explicit),
+    metta_text(First, Text1), metta_text(Second, Text2),
+    isub_text(Config.normalize, Text1, Left), isub_text(Config.normalize, Text2, Right),
+    string_length(Left, L), string_length(Right, R), Threshold is min(Config.threshold,max(L,R)),
+    lib_string_native:substring_similarity(Left, Right, Threshold, Config.zero_to_one, Score).
+
+isub_option(Option, Key-Value) :-
+    ( nonvar(Option), Option = [Name,Value] -> true ; domain_error(isub_option, Option) ),
+    ( Name == normalize -> Key = normalize, must_be(boolean, Value)
+    ; Name == 'zero-to-one' -> Key = zero_to_one, must_be(boolean, Value)
+    ; Name == 'substring-threshold' -> Key = threshold, must_be(nonneg, Value)
+    ; domain_error(isub_option, Option) ).
+
+isub_text(false, Text, Text).
+isub_text(true, Text, Out) :-
+    string_lower(Text, Lower), lib_string_native:split_text(Lower, "._ ", "", Parts),
+    atomics_to_string(Parts, Out).
+
+%! 'parse-number'(+Value:any, -Number:number) is semidet.
+%
+% Parse the host numeric syntax. Ordinary nonnumbers produce no answer;
+% type, resource and interruption exceptions remain visible.
+'parse-number'(Value, Number) :- metta_text(Value, Text), number_string(Number, Text).
+
+%! 'number-to-string'(+Number:number, -Out:string) is det.
+%
+% Return the host String representation of a Number, including rationals.
+'number-to-string'(Number, Out) :- must_be(number, Number), number_string(Number, Out).
+
+:- det(metta_text/2).
 :- det('string-length'/2).
 :- det('string-slice'/4).
 :- det('string-split'/3).
+:- det('string-split-exact'/3).
 :- det('string-join'/3).
 :- det('string-trim'/2).
 :- det('string-upper'/2).
 :- det('string-lower'/2).
-:- det('string-starts-with'/3).
-:- det('string-ends-with'/3).
-:- det('string-contains'/3).
 :- det('string-index-of'/3).
+:- det('string-last-index-of'/3).
+:- det('string-count'/3).
+:- det('string-count'/4).
 :- det('string-replace'/4).
 :- det('string-chars'/2).
-:- det('string-from-chars'/2).
-:- det('string-repeat'/3).
-:- det('string-pad-left'/4).
-:- det('string-pad-right'/4).
+:- det('string-codes'/2).
+:- det('string-from-codes'/2).
+:- det('string-lines'/2).
+:- det('string-unlines'/2).
+:- det('string-dedent'/2).
+:- det('string-indent'/3).
+:- det('string-wrap'/3).
+:- det('string-wrap'/4).
+:- det('string-template'/3).
+:- det('string-edit-distance'/3).
+:- det('string-isub'/3).
+:- det('string-isub'/4).
 :- det('number-to-string'/2).
-:- det(metta_text/2).
-:- det(char_to_string/2).
-:- det(separated_by/3).
-:- det(replacement_pieces/4).
-:- det(pad_with/5).
