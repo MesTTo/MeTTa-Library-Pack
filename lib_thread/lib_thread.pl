@@ -1126,7 +1126,7 @@ race_stop_(Threads, Decided) :-
     forall(member(Thread, Threads),
            (   race_charged_(Decided, Thread)
            ->  catch(metta_thread_join(Thread, _), _, true)
-           ;   catch(metta_join_discarding(Thread, _), _, true)
+           ;   catch(metta_engine:metta_join_discarding(Thread, _), _, true)
            )).
 
 race_charged_(Decided, Thread) :-
@@ -1906,7 +1906,7 @@ future_join_(ThreadId, Mode) :-
 future_join_door_(charged, ThreadId) :-
     metta_thread_join(ThreadId, _).
 future_join_door_(measured(Credit), ThreadId) :-
-    metta_join_measured(ThreadId, _, Credit).
+    metta_engine:metta_join_measured(ThreadId, _, Credit).
 
 future_join_none_(charged).
 future_join_none_(measured(0)).
@@ -2034,7 +2034,7 @@ cancel_future_worker_(ThreadId, Space, Done, Answer) :-
     %answer; a worker that settled first keeps its credit, since its answer
     %stands and can still be awaited.
     (   Outcome == cancelled
-    ->  metta_discard_inferences(Credit),
+    ->  metta_engine:metta_discard_inferences(Credit),
         Answer = true
     ;   Answer = false
     ).
@@ -2048,7 +2048,7 @@ future_cancel_signal_(Space, Thread) :-
 cancel_repeating_worker_(none) :- !.
 cancel_repeating_worker_(ThreadId) :-
     catch(thread_signal(ThreadId, abort), _, true),
-    catch(metta_join_discarding(ThreadId, _), _, true).
+    catch(metta_engine:metta_join_discarding(ThreadId, _), _, true).
 
 % ----------------------------------------------------------------- channels
 
@@ -2474,7 +2474,7 @@ timer_dispatch_worker_(Pool, Space, Module, Expr, Repeat, Context, Done) :-
             timer_dispatch_start_(Start) ),
           Error,
           ( catch(thread_signal(ThreadId, abort), _, true),
-            catch(metta_join_discarding(ThreadId, _), _, true),
+            catch(metta_engine:metta_join_discarding(ThreadId, _), _, true),
             timer_dispatch_start_destroy_(Start),
             throw(Error) )).
 
