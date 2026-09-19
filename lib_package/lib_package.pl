@@ -7,6 +7,8 @@
 % [tested: lib_package; commit=WORKTREE].
 % Owns resources: package_acquired/5 records live answers until reverse release
 % on withdrawal, replacement, failed activation, space release or process exit.
+% Artifact streams, metadata spaces, directory locks and staged files close on
+% all outcomes. Persistent receipts and lock files survive source withdrawal.
 % Guarded by: source single-flight protects loads; package_claims protects seam
 % installation; the directory mutex and OS write lock protect setup publication.
 % Decides: package-load equations supplied by requirements replace this default;
@@ -50,10 +52,6 @@ seam:builtin_type_declaration('package-prolog', [->, 'Atom', 'Atom', 'Bool']).
 :- seam:context_reader(package_mode(Mode), '$metta_package_mode', value(Mode)).
 :- seam:context_reader(package_setup_state(State), '$metta_package_setup', value(State)).
 :- seam:context_reader(package_stack(Stack), '$metta_package_stack', value(Stack)).
-
-:- include('catalog.pl').
-:- include('native.pl').
-:- include('setup.pl').
 
 % No per-atom work occurs here. A source without package rows pays two indexed
 % load lookups and the deterministic cleanup scope, independently of its size.
@@ -405,3 +403,512 @@ package_release_one(held(Space, Row, Handle), Outcome) :-
       metta_engine:metta_reference_library_home(Home, Path) ),
     ( Key == available -> metta_host_stored(Home, [available, Value])
     ; metta_host_stored(Home, ['=', [package, Key], Value]) ).
+
+% Requirement resolution and the catalog.
+
+seam:foreign_space('&catalogs').
+seam:foreign_capability('&catalogs', match).
+seam:foreign_capability('&catalogs', enumerate).
+seam:foreign_capability('&catalogs', add).
+seam:foreign_capability('&catalogs', remove).
+seam:foreign_atoms('&catalogs', Row) :- package_catalog_row(Row).
+seam:foreign_match('&catalogs', Row, _) :- package_catalog_row(Row).
+seam:foreign_add('&catalogs', Row) :-
+    ( Row = [package, Name, Path], atom(Name), (atom(Path);string(Path))
+    ; Row = [catalog, Space], nonvar(Space), 'is-space'(Space, true) ), !,
+    assertz(package_catalog_entry(Row), Ref), filereader:record_source_assertion(Ref).
+seam:foreign_add('&catalogs', Row) :-
+    throw(error(type_error(package_catalog_row, Row), none)).
+seam:foreign_remove('&catalogs', Row, Result) :-
+    ( retract(package_catalog_entry(Row)) -> Result = true ; Result = false ).
+
+package_catalog_row(Row) :- package_catalog_entry(Row).
+package_catalog_row([package, Name, Where]) :-
+    package_catalog_entry([catalog, Space]),
+    metta_host_stored(Space, [package, Name, Where]).
+
+package_catalog_row([package, Name, Where]) :-
+    metta_engine:standard_library_path(Base),
+    ( nonvar(Name) -> atom(Name)
+    ; directory_files(Base, Entries), member(Name, Entries) ),
+    \+ memberchk(Name, ['.', '..']),
+    directory_file_path(Base, Name, Directory), exists_directory(Directory),
+    file_name_extension(Name, metta, File),
+    directory_file_path(Directory, File, Source), exists_file(Source),
+    absolute_file_name(Source, Where).
+
+package_require(Source, Space, Required) :-
+    package_resolve_requirement(Source, Required, Path, Pin),
+    filereader:metta_source_load(Source, Space, Load, _),
+    Owner = owner(Source, Space, Load),
+    setup_call_cleanup(
+        with_mutex(package_catalog,
+            ( package_check_pin(Source, Pin),
+              package_check_cycle(Source, Path),
+              ( package_dependency(Owner, Required, Path, Pin) -> true
+              ; assertz(package_dependency(Owner, Required, Path, Pin), Ref),
+                filereader:record_source_assertion(Ref) ),
+              assertz(package_pending_requirement(Source, Path), Flight) )),
+        ( package_collect_requirement(Required, Path),
+          metta_engine:importer_helper(Space, Path) ),
+        erase(Flight)).
+
+package_resolve_requirement(Source, Required, Path, Pin) :-
+    ( nonvar(Required), Required = [git, Url0, Rev0]
+    -> lib_gitimport:git_atom(Url0, Url),
+       lib_gitimport:git_validate_sha('package requires', Rev0, Rev),
+       lib_gitimport:git_repository_name(Url, Name),
+       Pin = pin(Name, Url, Rev),
+       with_mutex(package_catalog, package_check_pin(Source, Pin)),
+       package_git_requirement(Source, Url, Rev, Name, Path)
+    ; Pin = none,
+      ( package_relative_requirement(Required)
+      -> file_directory_name(Source, Directory),
+         absolute_file_name(Required, Candidate,
+                            [relative_to(Directory), access(none)]),
+         package_existing_source(Required, Candidate, Path)
+      ; atom(Required),
+        findall(Where, eval([match, '&catalogs', [package, Required, Where], Where], _), Found),
+        Found \== []
+      -> with_mutex(package_catalog, package_named_identity(Required, Found, Path))
+      ; package_missing_requirement(Required) ) ).
+
+% Catalog names determine identity; path-only requirements have no name claim.
+% Equal source digests collapse aliases to the first canonical path. Every
+% catalog answer is checked, so an ambiguous second answer cannot hide behind
+% once/1. Source withdrawal retires its name claim with the ordinary journal.
+package_named_identity(Name, Found, Path) :-
+    maplist(package_existing_source(Name), Found, Paths),
+    Paths = [First|_], filereader:metta_source_digest(First, Digest),
+    forall(member(Candidate, Paths),
+           package_same_identity(Name, First, Digest, Candidate)),
+    ( package_identity(Name, Existing, Earlier)
+    -> package_same_identity(Name, Existing, Earlier, First), Path = Existing
+    ; Path = First, assertz(package_identity(Name, First, Digest), Ref),
+      filereader:record_source_assertion(Ref) ).
+
+package_same_identity(Name, Existing, Digest, Candidate) :-
+    filereader:metta_source_digest(Candidate, Other),
+    ( Digest == Other -> true
+    ; throw(error(permission_error(resolve, package_identity, Name),
+                  context(package, different_sources(Existing, Candidate)))) ).
+
+package_relative_requirement(Required) :-
+    ( atom(Required) -> atom_string(Required, Text) ; string(Required), Text = Required ),
+    ( sub_string(Text, _, _, _, "/") ; sub_string(Text, _, 6, 0, ".metta") ), !.
+
+package_existing_source(Required, Candidate, Path) :-
+    catch(metta_engine:resolve_metta_import_path(Candidate, Path),
+          error(existence_error(source_sink, _), _),
+          package_missing_requirement(Required)).
+
+package_missing_requirement(Required) :-
+    throw(error(existence_error(package_requirement, Required),
+                context('package requires',
+                        'requirement is absent; run !(setup! (library X)) or add its catalog row'))).
+
+package_check_pin(_, none).
+package_check_pin(Source, pin(Name, Url, Rev)) :-
+    ( package_pin(Name, OtherRev, OtherUrl, OtherSource),
+      (OtherRev \== Rev ; OtherUrl \== Url)
+    -> throw(error(domain_error(conflicting_package_pin, Name),
+                   context(package, pins(OtherSource-OtherUrl-OtherRev, Source-Url-Rev))))
+    ; package_pin(Name, Rev, Url, Source) -> true
+    ; assertz(package_pin(Name, Rev, Url, Source), Ref),
+      filereader:record_source_assertion(Ref) ).
+
+% Check the dependency graph before entering another source flight. This also
+% detects a cycle split between two threads, which a thread-local stack misses.
+% O((v+e) log v) reachable nodes/edges with a shared assoc visited set.
+% Every node expands once, including when a diamond reaches it by two paths.
+package_check_cycle(Source, Path) :-
+    empty_assoc(Seen),
+    ( package_dependency_route([Path-[Path]], Source, Seen, Reverse)
+    -> reverse(Reverse, Route),
+       throw(error(permission_error(load, package_cycle, [Source|Route]),
+                   context(package, 'move the shared definitions into a third library')))
+    ; true ).
+
+package_dependency_route([Path-Route|_], Path, _, Route) :- !.
+package_dependency_route([Path-Route|Pending], Target, Seen, Found) :-
+    ( get_assoc(Path, Seen, _) -> Next = Seen, Work = Pending
+    ; put_assoc(Path, Seen, true, Next),
+      findall(Child-[Child|Route],
+              (package_dependency(owner(Path, _, _), _, Child, _)
+              ;package_pending_requirement(Path, Child)), Children),
+      append(Children, Pending, Work) ),
+    package_dependency_route(Work, Target, Next, Found).
+
+package_git_requirement(Source, Url, Rev, Name, Path) :-
+    ( package_mode(setup)
+    -> package_setup_root(Source, Root), file_directory_name(Root, Directory),
+       directory_file_path(Directory, repos, Base),
+       lib_gitimport:'git-import!'(Url, '', Base, Rev, _),
+       lib_gitimport:git_library_path(Name, Checkout),
+       directory_file_path(Checkout, Name, Stem),
+       package_existing_source([git, Url, Rev], Stem, Path)
+    ; package_locked_requirement(Source, [git, Url, Rev], Locked)
+    -> package_existing_source([git, Url, Rev], Locked, Path)
+    ; lib_gitimport:git_pinned_dependency(Url, Rev),
+      lib_gitimport:git_library_path(Name, Checkout)
+    -> directory_file_path(Checkout, Name, Stem),
+       package_existing_source([git, Url, Rev], Stem, Path)
+    ; package_missing_requirement([git, Url, Rev]) ).
+
+package_setup_root(Default, Root) :-
+    ( package_stack(Stack), Stack \== [] -> last(Stack, Root) ; Root = Default ).
+
+package_locked_requirement(Source, Required, Path) :-
+    package_setup_root(Source, Root), file_directory_name(Root, Directory),
+    directory_file_path(Directory, 'lock.metta', File), exists_file(File),
+    package_read_rows(File, Rows),
+    member([requires, Stored, Path], Rows),
+    Stored = [git, Url0, Rev0], Required = [git, Url, Rev],
+    lib_gitimport:git_atom(Url0, Url), lib_gitimport:git_atom(Rev0, Rev).
+
+package_collect_requirement(Required, Path) :-
+    ( package_setup_state(State)
+    -> arg(1, State, Rows), Row = [requires, Required, Path],
+       ( memberchk(Row, Rows) -> true ; nb_setarg(1, State, [Row|Rows]) )
+    ; true ).
+
+package_resolve_source(Spec, Path) :-
+    ( nonvar(Spec), Spec = [library|_]
+    -> metta_engine:resolve_module_form(Spec, File)
+    ; Spec = File ),
+    package_existing_source(Spec, File, Path).
+
+% Native artifact contracts and selected publication.
+
+package_perform_row(Path, Space, [prolog, Locator, Names], [prolog, File, Names]) :- !,
+    package_native_path(Path, Space, Locator, File).
+package_perform_row(_, _, Row, Row).
+
+% A home may already contain a required source's backing. Check that source
+% before consulting another file, while its directives have made no changes.
+package_native_admission(Path, Space, [prolog, Locator, _], Names, Contracts) :- !,
+    package_native_path(Path, Space, Locator, File),
+    metta_engine:check_prolog_function_names(Names, File, true),
+    space_module(Space, Module),
+    forall((member(contract(Name, Arity, _), Contracts), memberchk(Name, Names),
+            metta_engine:metta_reference_prolog_head(Space, Name, Arity),
+            functor(Head, Name, Arity), predicate_property(Module:Head, file(Owner))),
+           ( Owner == File -> true
+           ; throw(error(metta_name_owned_by_source(Name, Owner),
+                         context(package, File))) )).
+package_native_admission(_, _, _, _, _).
+
+% Reusing the same artifact does not replace an occupied host predicate.
+% Every other case passes through OPEN before the artifact can run directives.
+package_open_head(Path, Space, [prolog, Locator, _], Name, Arity) :-
+    package_native_path(Path, Space, Locator, File),
+    space_module(Space, Module), functor(Head, Name, Arity),
+    predicate_property(Module:Head, file(File)), !.
+package_open_head(_, _, [Token|_], Name, Arity) :-
+    metta_host_open_function(Name, Token, Arity).
+
+% Native clauses have process lifetime; only their MeTTa registration belongs
+% to the source. Direct load_files/2 keeps import offline even when a compiled
+% artifact is stale and the ordinary loader would invoke a compiler child.
+'package-prolog'(File, Names, true) :-
+    metta_engine:check_prolog_function_names(Names, File, true),
+    current_metta_space(Home), space_module(Home, Module),
+    metta_engine:metta_reference_check_prolog_source(File),
+    package_load_native(File, Owner),
+    % Declarations also apply when SWI reuses an already-loaded module. Read
+    % them before selecting exports, so an alternative cannot register names
+    % assigned to an earlier backing or leak an undeclared arity.
+    package_native_declarations(File, Home, Owner, Names),
+    package_native_manifest(File, Declared, Inferred), append(Declared, Inferred, All),
+    forall((member(Name, Names), package_named_contract(Name, Declared, All, Arity, _)),
+           ( ( Owner == Module -> true
+             ; Owner:export(Name/Arity), Module:import(Owner:Name/Arity) ),
+             metta_engine:metta_reference_register_prolog(Home, Module, Name, Arity) )).
+
+% Artifact clauses have process lifetime in their own namespace. Import only
+% selected heads into the home: importing all exports also occupies unselected
+% equation names, even though those predicates were never registered in MeTTa.
+% SWI load_files/2 imports([]) separates loading from namespace publication:
+% https://www.swi-prolog.org/pldoc/doc_for?object=load_files/2
+% [tested: lib_package:unselected_native_exports_leave_equation_heads_free; commit=WORKTREE].
+package_load_native(File, Owner) :-
+    ( source_file_property(File, module(Context)) -> true
+    ; source_file_property(File, load_context(Context, _, _)) -> true
+    ; atom_concat('$metta_package:', File, Context),
+      set_module(Context:base(metta_engine)) ),
+    filereader:with_owning_source_load(none,
+        metta_engine:loading_loudly(
+            load_files(Context:File, [expand(true), if(changed), imports([])]))),
+    ( source_file_property(File, module(Owner)) -> true ; Owner = Context ).
+
+package_native_declarations(File, Home, Module, Names) :-
+    retractall(metta_engine:pending_metta_export(File, _, _)),
+    ( module_property(Owner, file(File)) -> true ; Owner = Module ),
+    setup_call_cleanup(open(File, read, Input, [encoding(utf8)]),
+        metta_engine:metta_reference_read_exports(Input, File, Owner), close(Input)),
+    findall(File-Name-Type, retract(metta_engine:pending_metta_export(File, Name, Type)), Pending),
+    include(package_named_declaration(Names), Pending, Selected),
+    forall(member(File-Name-Type, Selected),
+           ( ( Type = arity(_) -> true ; metta_add_atom(Home, [':', Name, Type], _) ),
+             metta_engine:record_extension_membership(File, Name) )).
+
+package_named_declaration(Names, _-Name-_) :- memberchk(Name, Names).
+
+package_contract(Path, Space, [prolog, Locator, Pattern], Pattern, Names, Contracts) :- !,
+    package_native_path(Path, Space, Locator, File),
+    package_native_manifest(File, Declared, Inferred),
+    ( ( var(Pattern) ; package_segment_pattern(Pattern, _, _) )
+    -> package_native_exports(Declared, Exports),
+       package_heads_pattern(Pattern, Exports, Names),
+       include(package_contract_named(Names), Declared, Contracts)
+    ; must_be(list, Pattern), maplist(must_be(atom), Pattern), Names = Pattern,
+      append(Declared, Inferred, All),
+      findall(contract(Name, Arity, Type),
+              ( member(Name, Names),
+                package_named_contract(Name, Declared, All, Arity, Type) ), Raw),
+      sort(Raw, Contracts),
+      forall(member(Name, Names),
+             ( memberchk(contract(Name, _, _), Contracts) -> true
+             ; throw(error(existence_error(procedure, Name),
+                           context(package, File))) )) ).
+package_contract(_, _, [_, _, Pattern], Pattern, [], []) :- Pattern == [], !.
+package_contract(_, _, Row, Pattern, Names, Contracts) :-
+    Row = [_, Artifact, _],
+    ( nonvar(Artifact), 'is-space'(Artifact, true)
+    -> metta_engine:metta_reference_face(Artifact, [], Face),
+       findall(contract(Name, Arity, Type),
+           ( member(Name/Arity-_, Face), integer(Arity),
+             ( metta_host_stored(Artifact, [':', Name, Type]) -> true
+             ; package_unknown_arrow(Arity, Type) ) ), All)
+    ; package_claim('package-contract', Row, _)
+    -> metta_engine:metta_package_normalise('&metta', ['package-contract', Row], Exported),
+       must_be(list, Exported), maplist(package_contract_row, Exported, All)
+    ; throw(error(existence_error(package_export_contract, Row),
+                  context(package, 'the claimant must supply package-contract equations or an artifact space'))) ),
+    findall(Name, member(contract(Name, _, _), All), ExportNames), sort(ExportNames, Exports),
+    ( is_list(Pattern), maplist(atom, Pattern)
+    -> Names = Pattern,
+       forall(member(Name, Names),
+              (memberchk(Name, Exports) -> true
+              ; throw(error(existence_error(package_export, Name), none))))
+    ; package_heads_pattern(Pattern, Exports, Names) ),
+    include(package_contract_named(Names), All, Contracts).
+
+package_contract_row([':', Name, Type], contract(Name, Arity, Type)) :-
+    !,
+    must_be(atom, Name),
+    ( metta_engine:declared_predicate_arity(Type, Arity) -> true
+    ; throw(error(type_error(package_export_arrow, Type), none)) ).
+package_contract_row(Row, _) :- throw(error(type_error(package_export_contract, Row), none)).
+
+package_named_contract(Name, Declared, All, Arity, Type) :-
+    ( memberchk(export_declaration, Declared)
+    -> member(contract(Name, Arity, Type), Declared)
+    ; member(contract(Name, Arity, Type), All) ).
+
+package_contract_named(Names, contract(Name, _, _)) :- memberchk(Name, Names).
+
+package_native_exports(Contracts, Names) :-
+    findall(Name, member(contract(Name, _, _), Contracts), All), sort(All, Names),
+    ( Names == [], \+ memberchk(export_declaration, Contracts)
+    -> throw(error(existence_error(package_export_declaration, prolog),
+                   context(package, 'variable heads require the artifact export declaration')))
+    ; true ).
+
+package_segment_pattern(Pattern, Prefix, Tail) :-
+    nonvar(Pattern), is_list(Pattern),
+    append(Prefix, [[':seg', Tail]], Pattern).
+
+package_heads_pattern(Pattern, Exports, Exports) :- var(Pattern), !, Pattern = Exports.
+package_heads_pattern(Pattern, Exports, Exports) :-
+    package_segment_pattern(Pattern, Prefix, Tail), !,
+    maplist(must_be(atom), Prefix),
+    forall(member(Name, Prefix),
+           ( memberchk(Name, Exports) -> true
+           ; throw(error(existence_error(package_export, Name), none)) )),
+    subtract(Exports, Prefix, Rest),
+    ( Tail = Rest -> true
+    ; throw(error(domain_error(package_export_pattern, Pattern), none)) ).
+package_heads_pattern(Pattern, _, _) :-
+    throw(error(domain_error(package_export_pattern, Pattern), none)).
+
+package_native_path(Path, Space, Locator, File) :-
+    ( nonvar(Locator), Locator = [library|_]
+    -> metta_engine:resolve_module_form(Locator, Resolved)
+    ; atomic(Locator) -> Resolved = Locator
+    ; metta_engine:metta_package_normalise(Space, Locator, Resolved) ),
+    ( (atom(Resolved) ; string(Resolved)) -> true
+    ; throw(error(type_error(package_artifact_path, Resolved), context(package, Path))) ),
+    file_directory_name(Path, Directory),
+    absolute_file_name(Resolved, File,
+                       [relative_to(Directory), file_type(prolog), access(none)]),
+    ( exists_file(File) -> true
+    ; throw(error(existence_error(source_sink, File),
+                  context(package, 'backing artifact is missing; run !(setup! (library X))'))) ).
+
+% O(t) Prolog terms in a selected artifact. Source declarations are read once
+% per plan. Clause heads are the compatibility contract for an explicit name
+% list; a variable head pattern requires actual module/metta_export declarations.
+package_native_manifest(File, Declared, Inferred) :-
+    setup_call_cleanup(open(File, read, Stream, [encoding(utf8)]),
+        package_native_terms(Stream, [], Exports0, [], Heads0), close(Stream)),
+    sort(Exports0, Exported), sort(Heads0, Inferred),
+    findall(Contract,
+        ( member(Export, Exported),
+          ( Export == export_declaration -> Contract = export_declaration
+          ; ( Export = contract(Name, Arity, Type)
+            ; Export = Name/Arity,
+              \+ member(contract(Name, Arity, _), Exported),
+              package_unknown_arrow(Arity, Type) ),
+            Contract = contract(Name, Arity, Type) ) ), Declared).
+
+package_native_terms(Stream, Exports0, Exports, Heads0, Heads) :-
+    read_term(Stream, Term, [module(user), syntax_errors(error)]),
+    ( Term == end_of_file -> Exports = Exports0, Heads = Heads0
+    ; package_native_term(Term, ExportRows, HeadRows),
+      append(ExportRows, Exports0, Exports1), append(HeadRows, Heads0, Heads1),
+      package_native_terms(Stream, Exports1, Exports, Heads1, Heads) ).
+
+package_native_term((:- module(_, Exports)), [export_declaration|Exports], []) :- !.
+package_native_term((:- metta_export(Text)), [export_declaration|Contracts], []) :- !,
+    parse_metta_source(Text, Forms),
+    findall(contract(Name, Arity, Type),
+        ( member(Form, Forms), parsed_form_parts(Form, _, _, Row),
+          ( Row = [':', Name, Type], metta_engine:declared_predicate_arity(Type, Arity)
+          ; Row = [export, Name, Inputs], integer(Inputs), Inputs >= 0,
+            Arity is Inputs + 1,
+            package_unknown_arrow(Arity, Type) ) ), Contracts).
+package_native_term((:- _), [], []) :- !.
+package_native_term((Head :- _), [], Contracts) :- !, package_native_head(Head, Contracts).
+package_native_term(Head, [], Contracts) :- package_native_head(Head, Contracts).
+
+package_native_head(Head, [contract(Name, Arity, Type)]) :-
+    callable(Head), \+ Head = (_:_), functor(Head, Name, Arity), Arity > 0,
+    package_unknown_arrow(Arity, Type), !.
+package_native_head(_, []).
+
+package_unknown_arrow(Arity, [->|Types]) :-
+    length(Types, Arity), maplist(=('%Undefined%'), Types).
+
+% Explicit preparation and persistent receipts.
+
+'setup!'(Spec, true) :-
+    package_resolve_source(Spec, Path), package_register_claims,
+    State = setup([]),
+    metta_with_trailed('$metta_package_mode', setup,
+        metta_with_trailed('$metta_package_setup', State,
+            ( package_setup_path(Path), arg(1, State, Reverse),
+              reverse(Reverse, LockRows), file_directory_name(Path, Directory),
+              package_with_directory_lock(Directory,
+                  package_publish_rows(Directory, 'lock.metta', LockRows)) ))).
+
+package_setup_path(Path) :-
+    'new-space'(Space),
+    setup_call_cleanup(true,
+        metta_engine:importer_helper(Space, Path),
+        metta_release_space(Space)).
+
+package_prepare(Path, Space, Rows) :-
+    findall(Row,
+        ( member(setup-Written, Rows),
+          metta_engine:metta_package_normalise(Space, Written, Row),
+          package_validate_boot(Space, Row) ), Setup),
+    file_directory_name(Path, Directory),
+    package_with_directory_lock(Directory,
+        package_prepare_locked(Path, Space, Rows, Directory, Setup)).
+
+:- meta_predicate package_with_directory_lock(+, 0).
+package_with_directory_lock(Directory, Goal) :-
+    directory_file_path(Directory, '.package.lock', Lock),
+    % SWI open/4 uses blocking fcntl locks. The mutex covers sibling threads,
+    % which POSIX process locks alone do not exclude.
+    % https://www.swi-prolog.org/pldoc/man?predicate=open%2F4
+    with_mutex(Directory,
+        setup_call_cleanup(open(Lock, append, Guard, [type(binary), lock(write)]),
+                           Goal, close(Guard))).
+
+package_prepare_locked(Path, Space, Rows, Directory, Setup) :-
+    directory_file_path(Directory, 'performed.metta', Receipt),
+    ( package_setup_current(Path, Space, Rows, Receipt, Setup, Performed)
+    -> debug(packages, 'reuse setup for ~q because rows and outputs are current', [Path])
+    ; debug(packages, 'run setup for ~q because receipt, rows or outputs changed', [Path]),
+      maplist(package_setup_perform(Space), Setup, Groups), append(Groups, Performed),
+      package_setup_artifacts(Path, Space, Rows),
+      package_publish_receipt(Directory, Setup, Performed) ),
+    forall(member(Row, Performed), metta_add_atom(Space, Row, _)).
+
+package_setup_current(Path, Space, Rows, Receipt, Setup, Performed) :-
+    exists_file(Receipt), variant_sha1(Setup, Digest),
+    setup_call_cleanup(open(Receipt, read, Input, [encoding(utf8)]),
+                       read_line_to_string(Input, Header), close(Input)),
+    format(string(Header), '; package-setup ~w', [Digest]),
+    package_read_rows(Receipt, Performed),
+    maplist(package_performed_row, Performed, Written),
+    package_receipt_sequence(Setup, Written),
+    catch(package_setup_artifacts(Path, Space, Rows),
+          error(existence_error(source_sink, _), _), fail).
+
+package_performed_row([performed, Row, _], Row).
+
+% The digest preserves source multiplicity. Equal adjacent rows form one run:
+% every occurrence requires at least one result, with linear comparison cost.
+package_receipt_sequence([], []).
+package_receipt_sequence([Row|Rows], [Written|Rest]) :-
+    Row =@= Written,
+    package_receipt_run(Row, Rows, Need, Later),
+    package_receipt_run(Row, Rest, Have, Next), Have >= Need,
+    package_receipt_sequence(Later, Next).
+
+package_receipt_run(Row, [Written|Rows], Count, Rest) :-
+    Row =@= Written, !,
+    package_receipt_run(Row, Rows, N, Rest), Count is N + 1.
+package_receipt_run(_, Rows, 0, Rows).
+
+package_setup_artifacts(Path, Space, Rows) :-
+    findall(backing-Row,
+            (member(backing-Written, Rows),
+             metta_engine:metta_package_normalise(Space, Written, Row)), Backings),
+    package_backings(Path, Space, Backings, _).
+
+package_setup_perform(Space, Row, Receipts) :-
+    findall([performed, Row, Answer],
+        ( metta_engine:metta_package_perform(Space, [perform, Row], Answer),
+          package_answer([perform, Row], Answer) ), Receipts),
+    ( Receipts == []
+    -> throw(error(existence_error(package_result, Row),
+                   context('setup!', 'the claimant returned no answer')))
+    ; true ).
+
+package_read_rows(File, Rows) :-
+    read_file_to_string(File, Text, [encoding(utf8)]), parse_metta_source(Text, Forms),
+    maplist(package_record_form(File), Forms, Rows).
+
+package_record_form(File, Parsed, Row) :-
+    parsed_form_parts(Parsed, Kind, _, Row),
+    ( Kind == expression -> true
+    ; throw(error(domain_error(package_record, Row),
+                  context(package, File))) ).
+
+% Reuse lib_file's same-filesystem staged publication. It owns and removes the
+% stage even when the writer or rename fails; the receipt remains unchanged.
+package_publish_rows(Directory, Name, Rows) :-
+    metta_engine:library('lib_file.pl', Library), use_module(Library, []),
+    directory_file_path(Directory, Name, File),
+    lib_file:metta_staged_publish(File, lib_package:package_write_rows(Rows)).
+
+package_publish_receipt(Directory, Setup, Rows) :-
+    metta_engine:library('lib_file.pl', Library), use_module(Library, []),
+    directory_file_path(Directory, 'performed.metta', File), variant_sha1(Setup, Digest),
+    lib_file:metta_staged_publish(File, lib_package:package_write_receipt(Digest, Rows)).
+
+package_write_receipt(Digest, Rows, File) :-
+    setup_call_cleanup(open(File, write, Stream, [encoding(utf8)]),
+        ( format(Stream, '; package-setup ~w~n', [Digest]),
+          package_write_stream(Rows, Stream) ), close(Stream)).
+
+package_write_rows(Rows, File) :-
+    setup_call_cleanup(open(File, write, Stream, [encoding(utf8)]),
+        package_write_stream(Rows, Stream), close(Stream)).
+
+package_write_stream(Rows, Stream) :-
+    forall(member(Row, Rows), (swrite(Row, Text), format(Stream, '~s~n', [Text]))).
