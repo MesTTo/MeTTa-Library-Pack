@@ -243,6 +243,7 @@ package_validate_boot(Space, Row) :-
                   context(package, 'no perform equation claims this boot row'))) ),
     Row = [Token|Arguments],
     findall(Type,
+            % policy-inventory-exempt: mechanism-internal; reason=the two places a boot row's declaration can be written, the file's own space and the seam where claims live; evidence=lib/lib_package/lib_package.pl:package_validate_boot/2
             ( member(Home, [Space, '&metta']),
               metta_host_stored(Home, [':', Token, Type]) ), Types),
     ( Types == [] -> true
@@ -255,6 +256,7 @@ package_validate_boot(Space, Row) :-
     ; throw(error(type_error(package_boot_signature(Token, Types), Row),
                   context(package, 'all boot rows are checked before any performs'))) ).
 
+% policy-inventory-exempt: mechanism-internal; reason=the two declarations that accept any argument, so a boot row carrying one is checked no further; evidence=engine/metta/prelude.pl:prelude_declaration/2
 package_argument_type(_, Type) :- memberchk(Type, ['Atom', '%Undefined%']), !.
 package_argument_type(Value, Type) :- metta_engine:has_type(Value, Type).
 
@@ -433,6 +435,7 @@ package_catalog_row([package, Name, Where]) :-
     metta_engine:standard_library_path(Base),
     ( nonvar(Name) -> atom(Name)
     ; directory_files(Base, Entries), member(Name, Entries) ),
+    % policy-inventory-exempt: mechanism-internal; reason=POSIX's own two directory entries, which directory_files/2 always returns and no operator chooses; evidence=lib/lib_package/lib_package.pl:package_catalog_row/1
     \+ memberchk(Name, ['.', '..']),
     directory_file_path(Base, Name, Directory), exists_directory(Directory),
     file_name_extension(Name, metta, File),
