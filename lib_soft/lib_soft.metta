@@ -28,7 +28,7 @@
 ;match, ws-softmax over them is attention over terms.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_soft.pl) (soft-symbol?))
+(= (package backing) (prolog (library lib_soft.pl) (soft-symbol?)))
 (: soft-symbol? (-> Atom Bool))
 (@doc soft-symbol?
       (@desc "Tests written symbol representation, regardless of function registration")

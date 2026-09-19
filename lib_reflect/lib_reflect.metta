@@ -35,10 +35,10 @@
 !(import! &self (library lib_json))
 !(import! &self (library lib_pairs))
 !(import! &self (library lib_strategy))
-!(import_prolog_functions_from_file (library lib_reflect.pl)
+(= (package backing) (prolog (library lib_reflect.pl)
   (engine-builtin engine-special-form engine-arity engine-function
    engine-user-function engine-knows engine-origin engine-extension-point
-   engine-surface-counts))
+   engine-surface-counts)))
 
 (@doc builtins (@desc "Every builtin name, one per solution"))
 (= (builtins) (engine-builtin))

@@ -1,6 +1,6 @@
 ; Purpose: make execution observations queryable with match and get-atoms.
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_observe.pl) (trace-source observe-source))
+(= (package backing) (prolog (library lib_observe.pl) (trace-source observe-source)))
 
 (: trace-source (-> SpaceType String Atom Number SpaceType))
 (@doc trace-source

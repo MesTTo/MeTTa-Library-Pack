@@ -16,8 +16,8 @@
 ;   Future Enhancements: None
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_constraints.pl)
-  (clpq clpq-entailed clpb clpb-labeling clpb-taut))
+(= (package backing) (prolog (library lib_constraints.pl)
+  (clpq clpq-entailed clpb clpb-labeling clpb-taut)))
 
 ;Atom on every constraint parameter, so it arrives UNEVALUATED. Without it
 ;`(clpq (= (* 2 $x) 1))` runs `(* 2 $x)` as ordinary arithmetic, which refuses

@@ -43,9 +43,9 @@
 ;to 16 walk each policy.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_tabling.pl)
+(= (package backing) (prolog (library lib_tabling.pl)
   (metta_tabled_decl metta_untabled_decl metta_table_clear metta_table_clear_all
-   metta_table_statistics))
+   metta_table_statistics)))
 
 ;Keep arbitrary Prolog-source loading available for experts; tabling no
 ;longer rides through it.

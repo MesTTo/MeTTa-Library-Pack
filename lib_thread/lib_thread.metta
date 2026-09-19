@@ -92,7 +92,7 @@
 ;(cpu-count) and (thread-count) report what the machine is doing.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_thread.pl)
+(= (package backing) (prolog (library lib_thread.pl)
   (par_map par_filter par_forall par_any par_race
    thread_spawn thread_await thread_settled thread_cancel
    channel_new channel_send channel_recv channel_try_recv
@@ -101,7 +101,7 @@
    timer_after timer_every
    scope_body scope_defer space_drop capture
    space_await space_take space_await_where space_take_where
-   with_lock cpu_count thread_count))
+   with_lock cpu_count thread_count)))
 
 ;Anything that defers evaluation has to say so. MeTTa evaluates arguments, so
 ;without these declarations (par-race ((slow 1) (fast 2))) would compute both

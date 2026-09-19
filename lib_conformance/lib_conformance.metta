@@ -18,8 +18,8 @@
 ;`exact` pushdown claim is true, which is the one claim that costs answers.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_conformance.pl)
-  (metta_check_space_provider))
+(= (package backing) (prolog (library lib_conformance.pl)
+  (metta_check_space_provider)))
 
 ;(check-space-provider &mine) answers the checks that ran.
 (: check-space-provider (-> Atom Expression))

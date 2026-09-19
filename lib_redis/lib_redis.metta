@@ -12,6 +12,6 @@
 ;heard exactly once per process. (redis-detach &shared) releases the
 ;binding and leaves the stored facts in Redis for the next attach.
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file
+(= (package backing) (prolog
   (library lib_redis.pl)
-  (redis-attach redis-detach))
+  (redis-attach redis-detach)))

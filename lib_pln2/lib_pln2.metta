@@ -14,7 +14,7 @@
 ; clipping, ratio inversion, or negative-branch heuristic is library policy.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library lib_pln2.pl)
+(= (package backing) (prolog (library lib_pln2.pl)
   (pln2-confidence-count
    pln2-count-confidence
    pln2-stv-moments
@@ -23,5 +23,5 @@
    pln2-beta-update
    pln2-require-independent-supports
    pln2-product-independent
-   pln2-total-probability-independent))
+   pln2-total-probability-independent)))
 
