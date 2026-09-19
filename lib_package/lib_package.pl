@@ -51,9 +51,9 @@ seam:builtin_type_declaration('package-prolog', [->, 'Atom', 'Atom', 'Bool']).
 :- seam:context_reader(package_setup_state(State), '$metta_package_setup', value(State)).
 :- seam:context_reader(package_stack(Stack), '$metta_package_stack', value(Stack)).
 
-:- include('support/catalog.pl').
-:- include('support/native.pl').
-:- include('support/setup.pl').
+:- include('catalog.pl').
+:- include('native.pl').
+:- include('setup.pl').
 
 % No per-atom work occurs here. A source without package rows pays two indexed
 % load lookups and the deterministic cleanup scope, independently of its size.
@@ -339,7 +339,7 @@ package_default_claim :-
     Pattern-Body =@= [prolog, File, Names]-['package-prolog', File, Names], !.
 
 package_loader_source("(: release (-> Atom Atom %Undefined%))").
-package_loader_source("(: package-contract (-> Atom Atom))").
+package_loader_source("(: package-contract (-> Atom %Undefined%))").
 package_loader_source("(= (perform (prolog $file $names)) (package-prolog $file $names))").
 
 package_install_hooks :-

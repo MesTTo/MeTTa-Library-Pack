@@ -96,7 +96,7 @@ package_contract(Path, Space, [prolog, Locator, Pattern], Pattern, Names, Contra
              ( memberchk(contract(Name, _, _), Contracts) -> true
              ; throw(error(existence_error(procedure, Name),
                            context(package, File))) )) ).
-package_contract(_, _, [_, _, []], [], [], []) :- !.
+package_contract(_, _, [_, _, Pattern], Pattern, [], []) :- Pattern == [], !.
 package_contract(_, _, Row, Pattern, Names, Contracts) :-
     Row = [_, Artifact, _],
     ( nonvar(Artifact), 'is-space'(Artifact, true)
