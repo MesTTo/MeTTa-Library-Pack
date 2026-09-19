@@ -39,15 +39,32 @@ package_open_head(_, _, [Token|_], Name, Arity) :-
     metta_engine:check_prolog_function_names(Names, File, true),
     current_metta_space(Home), space_module(Home, Module),
     metta_engine:metta_reference_check_prolog_source(File),
-    filereader:with_owning_source_load(none,
-        metta_engine:loading_loudly(load_files(Module:File, [expand(true), if(changed)]))),
+    package_load_native(File, Owner),
     % Declarations also apply when SWI reuses an already-loaded module. Read
     % them before selecting exports, so an alternative cannot register names
     % assigned to an earlier backing or leak an undeclared arity.
-    package_native_declarations(File, Home, Module, Names),
+    package_native_declarations(File, Home, Owner, Names),
     package_native_manifest(File, Declared, Inferred), append(Declared, Inferred, All),
     forall((member(Name, Names), package_named_contract(Name, Declared, All, Arity, _)),
-           metta_engine:metta_reference_register_prolog(Home, Module, Name, Arity)).
+           ( ( Owner == Module -> true
+             ; Owner:export(Name/Arity), Module:import(Owner:Name/Arity) ),
+             metta_engine:metta_reference_register_prolog(Home, Module, Name, Arity) )).
+
+% Artifact clauses have process lifetime in their own namespace. Import only
+% selected heads into the home: importing all exports also occupies unselected
+% equation names, even though those predicates were never registered in MeTTa.
+% SWI load_files/2 imports([]) separates loading from namespace publication:
+% https://www.swi-prolog.org/pldoc/doc_for?object=load_files/2
+% [tested: lib_package:unselected_native_exports_leave_equation_heads_free; commit=WORKTREE].
+package_load_native(File, Owner) :-
+    ( source_file_property(File, module(Context)) -> true
+    ; source_file_property(File, load_context(Context, _, _)) -> true
+    ; atom_concat('$metta_package:', File, Context),
+      set_module(Context:base(metta_engine)) ),
+    filereader:with_owning_source_load(none,
+        metta_engine:loading_loudly(
+            load_files(Context:File, [expand(true), if(changed), imports([])]))),
+    ( source_file_property(File, module(Owner)) -> true ; Owner = Context ).
 
 package_native_declarations(File, Home, Module, Names) :-
     retractall(metta_engine:pending_metta_export(File, _, _)),
@@ -110,7 +127,7 @@ package_contract_row([':', Name, Type], contract(Name, Arity, Type)) :-
 package_contract_row(Row, _) :- throw(error(type_error(package_export_contract, Row), none)).
 
 package_named_contract(Name, Declared, All, Arity, Type) :-
-    ( member(contract(Name, _, _), Declared)
+    ( memberchk(export_declaration, Declared)
     -> member(contract(Name, Arity, Type), Declared)
     ; member(contract(Name, Arity, Type), All) ).
 

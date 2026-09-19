@@ -168,12 +168,12 @@ package_check_selection(Path, Space, Row, Known) :-
 package_choose([], Covered, Covered, []).
 package_choose([info(Row, Claim, Names, Contracts)|Infos], Seen, Covered, Selected) :-
     ( Claim == claimed
-    -> exclude(package_head_seen(Seen), Names, Fresh),
+    -> partition(package_head_seen(Seen), Names, Used, Fresh),
        foldl(package_cover_head(Row), Fresh, Seen, Next),
        ( ( Names == [] ; Fresh \== [] )
        -> Row = [Token, Artifact, _],
           Chosen = [Token, Artifact, Fresh],
-          Selected = [selected(Row, Chosen, Contracts)|Rest]
+          Selected = [selected([Token, Artifact, Used], Chosen, Contracts)|Rest]
        ; Next = Seen, Selected = [available(Row)|Rest] )
     ; Next = Seen, Selected = [available(Row)|Rest] ),
     package_choose(Infos, Next, Covered, Rest).
@@ -263,8 +263,10 @@ package_perform_rows(Path, Space, [Kind-Row|Rows], Selected) :-
     ( Kind == boot -> package_perform(Path, Space, boot, Row), Next = Selected
     ; Kind == backing
     -> Selected = [Selection|Next],
-       ( Selection = selected(_, Chosen, _)
-       -> package_perform(Path, Space, backing, Chosen)
+       ( Selection = selected(Alternative, Chosen, _)
+       -> package_perform(Path, Space, backing, Chosen),
+          ( Alternative = [_, _, []] -> true
+          ; metta_add_atom(Space, [available, Alternative], _) )
        ; metta_add_atom(Space, [available, Row], _) )
     ; Next = Selected ),
     package_perform_rows(Path, Space, Rows, Next).
