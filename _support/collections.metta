@@ -5,8 +5,8 @@
 ; These equations are internal support for the public library operations.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file
-   (library "_support/collections_data.pl") (collections-expression))
+(= (package backing) (prolog
+   (library "_support/collections_data.pl") (collections-expression)))
 (: collections-expression (-> Atom Expression))
 
 (: collections-size (-> Atom Number))

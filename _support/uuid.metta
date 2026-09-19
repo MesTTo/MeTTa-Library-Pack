@@ -3,7 +3,7 @@
 ; supplies the same field widths to validation and formatting.
 ; [tested: lib_uuid:standard_names_agree_with_ossp, lib_uuid:generated_bytes_round_trip_every_position; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 
-!(import_prolog_functions_from_file (library "lib_uuid/lib_uuid.pl") (uuid-layout))
+(= (package backing) (prolog (library "lib_uuid/lib_uuid.pl") (uuid-layout)))
 (: uuid-layout (-> Expression))
 (@doc uuid-layout
   (@desc "Hex digit widths shared by strict native validation and MeTTa formatting. Private UUID value.")

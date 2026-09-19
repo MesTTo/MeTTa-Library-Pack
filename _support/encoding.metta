@@ -5,8 +5,8 @@
 ; preserves every byte value. Literal nonbytes never become executable elements.
 ; [tested: lib_encoding, test_encoding_python_oracles; commit=8fe20f1bdcde1af8b3e1753c545924f978246dba].
 
-!(import_prolog_functions_from_file (library "lib_encoding/lib_encoding.pl")
-  (encoding-bytes encoding-text))
+(= (package backing) (prolog (library "lib_encoding/lib_encoding.pl")
+  (encoding-bytes encoding-text)))
 (: encoding-bytes (-> Atom Atom Expression))
 (@doc encoding-bytes
   (@desc "Validate a finite expression of byte integers and return the same value. Head names the caller in a refusal. Private codec boundary.")

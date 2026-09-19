@@ -34,8 +34,8 @@
 ;       would break every `import! &self` caller, which is why it stays.
 
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library minimal_metta_lib.pl)
-  (unify-mod))
+(= (package backing) (prolog (library minimal_metta_lib.pl)
+  (unify-mod)))
 
 ; Atom on a parameter means it reaches the operation UNEVALUATED, which is what
 ; every instruction here needs: `function` walks its body, and unify-mod

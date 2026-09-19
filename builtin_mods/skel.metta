@@ -18,5 +18,5 @@
 
 (: skel-swap-pair-native (-> (PairType $ta $tb) (PairType $tb $ta)))
 !(import! &self (library lib_import))
-!(import_prolog_functions_from_file (library "builtin_mods/skel.pl")
-  (skel-swap-pair-native))
+(= (package backing) (prolog (library "builtin_mods/skel.pl")
+  (skel-swap-pair-native)))
