@@ -5,6 +5,11 @@
 % Guarantees: local boot validation precedes effects; receipts belong to the
 % source; setup publishes only successful work under a directory lock.
 % [tested: lib_package; commit=561cfeaa23b27fc84f86a9bcccf6ccf8b9d2e73f].
+% Guarantees: asking whether a head is already loaded never DEFINES it, so
+% performing a backing row cannot re-enter the translation of a name that
+% row is registering.
+% [tested: lib_package:a_backing_row_registers_before_the_equations_calling_it_translate;
+% commit=5e710132966080bc7abdbfe1e182a389b29464f9].
 % Owns resources: package_acquired/5 records live answers until reverse release
 % on withdrawal, replacement, failed activation, space release or process exit.
 % Artifact streams, metadata spaces, directory locks and staged files close on
@@ -589,6 +594,25 @@ package_perform_row(Path, Space, [prolog, Locator, Names], [prolog, File, Names]
     package_native_path(Path, Space, Locator, File).
 package_perform_row(_, _, Row, Row).
 
+% The file a head's clauses came from, asked WITHOUT resolving the predicate.
+% predicate_property/2 resolves its head first, and on an undefined one that
+% resolution fires SWI's undefined-procedure hook, which this engine answers by
+% translating the name's MeTTa equations. Asked while a backing row is being
+% performed, that turns registering `math-rational`/3 into a re-entrant
+% translation of `math-rational`/1, whose body calls arity 3 -- still
+% unregistered, because the frame that would have registered it is the one
+% asking. The unary equation then compiles to a function_overapplication goal,
+% and by the time that goal runs and renders its message the arity set it
+% prints contains the very arity it refuses, so the error refutes itself
+% [measured 2026-09-21: predicate_property(M:H, file(F)) fires the hook on an
+% undefined head while current_predicate/2 does not and still answers for an
+% imported one; tested: lib_package:a_backing_row_registers_before_the_equations_calling_it_translate].
+% Guarding on current_predicate/2 is what makes "asking never defines" true by
+% shape, rather than by which of the load's two halves happens to run first.
+package_head_source(Module, Head, File) :-
+    current_predicate(_, Module:Head),
+    predicate_property(Module:Head, file(File)).
+
 % A home may already contain a required source's backing. Check that source
 % before consulting another file, while its directives have made no changes.
 package_native_admission(Path, Space, [prolog, Locator, _], Names, Contracts) :- !,
@@ -597,7 +621,7 @@ package_native_admission(Path, Space, [prolog, Locator, _], Names, Contracts) :-
     space_module(Space, Module),
     forall((member(contract(Name, Arity, _), Contracts), memberchk(Name, Names),
             metta_engine:metta_reference_prolog_head(Space, Name, Arity),
-            functor(Head, Name, Arity), predicate_property(Module:Head, file(Owner))),
+            functor(Head, Name, Arity), package_head_source(Module, Head, Owner)),
            ( Owner == File -> true
            ; throw(error(metta_name_owned_by_source(Name, Owner),
                          context(package, File))) )).
@@ -608,7 +632,7 @@ package_native_admission(_, _, _, _, _).
 package_open_head(Path, Space, [prolog, Locator, _], Name, Arity) :-
     package_native_path(Path, Space, Locator, File),
     space_module(Space, Module), functor(Head, Name, Arity),
-    predicate_property(Module:Head, file(File)), !.
+    package_head_source(Module, Head, File), !.
 package_open_head(_, _, [Token|_], Name, Arity) :-
     metta_host_open_function(Name, Token, Arity).
 
