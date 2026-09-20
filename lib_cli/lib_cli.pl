@@ -25,6 +25,26 @@
 % Conversion functions stay in the call's declaration map. The provider only
 % retains a printable type label and tags raw tokens separately from defaults.
 lib_cli_optparse:parse_type(cli_value(_),Codes,raw_value(Text)) :- atom_codes(Text,Codes).
+
+%And what a cli_value IS, for the other extension point. The vendored parser
+%checks a DECLARED DEFAULT against its option's type, guarded by
+%current_type/3, which asks `clause(has_type(Type,_), _)`: a HEAD match, with
+%no body run. quickcheck's composite extension point is a clause whose head is
+%`has_type(Type, Term)` with Type unbound, so once the development build loads
+%it every term answers that guard, the vendored check fires on a type nothing
+%defines, and must_be/2 raises `type_error(cli_value(string), "guest")` --
+%naming the value, because must_be falls to is_not/2 without asking whether
+%the type exists. Under the ordinary build current_type fails and the branch
+%never runs, which is why eight lib_cli tests were red in one build only
+%[measured 2026-09-21: current_type(cli_value(string),_,_) fails on a plain
+%engine and succeeds once vendor/quickcheck.pl is loaded].
+%
+%Total on purpose. This says only that a cli_value is a well-formed thing to
+%ask about; WHICH values are admissible is cli_validate_value/2's job, and it
+%already checks a default against the MeTTa type the declaration names, so a
+%narrower clause here would duplicate that decision in a second place.
+:- multifile error:has_type/2.
+error:has_type(cli_value(_), _).
 lib_cli_optparse:format_default(default_value(Value),Text) :- sdisplay(Value,Text).
 
 %! 'cli-parse'(+Specification:'Atom', +Arguments:'Expression', +Duplicates:'Symbol', -Parsed:list) is det.

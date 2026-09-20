@@ -42,7 +42,7 @@
 
 :- use_module(library(apply),[maplist/3]).
 :- use_module(library(debug),[assertion/1]).
-:- use_module(library(error),[must_be/2, current_type/3, existence_error/2]).
+:- use_module(library(error),[must_be/2, is_of_type/2, current_type/3, existence_error/2]).
 :- use_module(library(lists),[member/2,memberchk/2,max_list/2,reverse/2,append/3]).
 :- use_module(library(option),[merge_options/3,option/3]).
 
@@ -726,7 +726,13 @@ invalidate_opts_spec(OptsSpec, ParseOptions) :-
         memberchk(default(Default), OptSpec),
         Default \== '_'
     ->  ( Default = default_value(Value) -> Checked=Value ; Checked=Default ),
-        \+ must_be(Type, Checked)
+        %CHANGED HERE. must_be/2 THROWS on a mismatch rather than failing, so
+        %negating it cannot be the test this branch wants: a bad default
+        %escaped as a raw type_error instead of reaching the invalid-optspec
+        %path below, and a type whose has_type/2 clause does not match did the
+        %same. is_of_type/2 is the semidet form, which quickcheck and mavis
+        %both use for exactly this.
+        \+ is_of_type(Type, Checked)
 
     ;   fail
     ).
