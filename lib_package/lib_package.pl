@@ -9,7 +9,7 @@
 % performing a backing row cannot re-enter the translation of a name that
 % row is registering.
 % [tested: lib_package:a_backing_row_registers_before_the_equations_calling_it_translate;
-% commit=5e710132966080bc7abdbfe1e182a389b29464f9].
+% commit=WORKTREE].
 % Owns resources: package_acquired/5 records live answers until reverse release
 % on withdrawal, replacement, failed activation, space release or process exit.
 % Artifact streams, metadata spaces, directory locks and staged files close on
