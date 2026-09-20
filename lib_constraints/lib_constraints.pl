@@ -13,7 +13,7 @@
 %   - library(clpq)'s and library(clpb)'s own internal, undeclared
 %     references into library(ugraphs), library(lists), library(pairs) and
 %     library(apply) work under autoload=false, not only the engine's
-%     default [measured 2026-08-18: NO_AUTOLOAD=1 sh test.sh,
+%     default [measured 2026-08-18: NO_AUTOLOAD=1 sh tools/test.sh,
 %     examples/ch05-equations-and-evaluation/05-04-arithmetic-that-runs-backwards/03-constraint_domains.metta].
 % Open Obligations:
 %   To Do: None
