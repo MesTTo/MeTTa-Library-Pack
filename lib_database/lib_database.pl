@@ -89,7 +89,7 @@
 %`Atom` -- what the face advertised while the argument carried no type at all
 %-- named a narrower set than this predicate accepts.
 
-%! 'database-add!'(+Handle:any, +Value:any, -Done:boolean) is det.
+%! 'database-add!'(+Handle:any, +Value:'Atom', -Done:boolean) is det.
 %
 % Append one held value, retaining duplicate occurrences. Values may contain
 % native Symbols, Strings, Numbers, plain Variables and proper expressions.
@@ -104,7 +104,7 @@
 %A removal pattern carries variables and must compare alpha-identical to a
 %stored term, so it takes `any` for the reason given on 'database-add!'/3.
 
-%! 'database-remove!'(+Handle:any, +Value:any, -Removed:boolean) is det.
+%! 'database-remove!'(+Handle:any, +Value:'Atom', -Removed:boolean) is det.
 %
 % Remove one alpha-identical held occurrence, returning False if absent.
 % Variable names may differ, but their sharing must agree. Variables are data,
@@ -117,7 +117,7 @@
 %attribute to every one of them; `any` is dropped before the clause is built,
 %for the reason given on 'database-add!'/3.
 
-%! 'database-atoms'(+Handle:any, -Rows:any) is det.
+%! 'database-atoms'(+Handle:any, -Rows:'Atom') is det.
 %
 % Return an expression containing every stored value in insertion order,
 % including duplicates. Each value has fresh variables on each snapshot, with
