@@ -1,10 +1,10 @@
 % Purpose: interpret package argument records, prepare them explicitly, and own
 % their activation and retirement through the existing source loader.
 % Assumes: the engine sequences requires first and bounds normalisation.
-% [source: engine/metta/interop.pl:metta_perform_package_rows/2; commit=WORKTREE].
+% [source: engine/metta/interop.pl:metta_perform_package_rows/2; commit=561cfeaa23b27fc84f86a9bcccf6ccf8b9d2e73f].
 % Guarantees: local boot validation precedes effects; receipts belong to the
 % source; setup publishes only successful work under a directory lock.
-% [tested: lib_package; commit=WORKTREE].
+% [tested: lib_package; commit=561cfeaa23b27fc84f86a9bcccf6ccf8b9d2e73f].
 % Owns resources: package_acquired/5 records live answers until reverse release
 % on withdrawal, replacement, failed activation, space release or process exit.
 % Artifact streams, metadata spaces, directory locks and staged files close on
@@ -324,7 +324,7 @@ package_release_claim(Row, Handle) :-
 
 % Source rollback and seam withdrawal can remove equations. Derive readiness
 % from the claim itself, and never charge the bootstrap to an importing source.
-% [tested: lib_package:default_claim_recovers_after_withdrawal_and_failed_activation; commit=WORKTREE].
+% [tested: lib_package:default_claim_recovers_after_withdrawal_and_failed_activation; commit=561cfeaa23b27fc84f86a9bcccf6ccf8b9d2e73f].
 package_register_claims :-
     ( package_default_claim -> true
     ; with_mutex(package_claims,
@@ -635,7 +635,7 @@ package_open_head(_, _, [Token|_], Name, Arity) :-
 % equation names, even though those predicates were never registered in MeTTa.
 % SWI load_files/2 imports([]) separates loading from namespace publication:
 % https://www.swi-prolog.org/pldoc/doc_for?object=load_files/2
-% [tested: lib_package:unselected_native_exports_leave_equation_heads_free; commit=WORKTREE].
+% [tested: lib_package:unselected_native_exports_leave_equation_heads_free; commit=561cfeaa23b27fc84f86a9bcccf6ccf8b9d2e73f].
 package_load_native(File, Owner) :-
     ( source_file_property(File, module(Context)) -> true
     ; source_file_property(File, load_context(Context, _, _)) -> true

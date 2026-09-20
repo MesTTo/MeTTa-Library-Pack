@@ -1,7 +1,7 @@
 ; Purpose: document the default package interpreter and its explicit setup door.
 ; Guarantees: package policy is implemented by the adjacent Prolog library;
 ; required libraries may supply package-load to interpret their argument record.
-; [tested: lib_package; commit=WORKTREE].
+; [tested: lib_package; commit=561cfeaa23b27fc84f86a9bcccf6ccf8b9d2e73f].
 (= (package version) "1.0.0")
 
 (@doc setup!
