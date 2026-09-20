@@ -31,6 +31,7 @@ The implementation is available to `match`, like any other equation. A relation
 read from a Space can supply the rules directly:
 
 ```metta
+!(import! &self (library lib_reflect))
 (rename old new)
 (rename old alternative)
 !(test
@@ -57,12 +58,14 @@ internal result bags with one-element expressions. Use the same composition
 when collecting literal replacements that may themselves be `Empty`:
 
 ```metta
+!(import! &self (library lib_reflect))
 !(test (collapse (let $result (atom-replace a ((a Empty) (a b)))
                    (noeval ($result))))
        (noeval ((Empty) (b))))
 ```
 
 ```metta
+!(import! &self (library lib_reflect))
 !(test (alltd (|-> ($node)
                 (if (== $node a) (noeval (+ 1 2)) (empty)))
              (f a))

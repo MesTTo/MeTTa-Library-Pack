@@ -51,6 +51,7 @@ stream. `random-normal-vector` folds fresh `random-float` answers with
 You can inspect their equations with `match` and reuse their bodies as functions:
 
 ```metta
+!(import! &self (library lib_vector))
 !(let $recipe (match &self (= (vector-fill $count $value) $body)
                (quote (|-> ($count $value) $body)))
    (let $fill (eval $recipe) ($fill 3 7))) ; (7 7 7)

@@ -26,6 +26,7 @@ The host supplies random/time generation, validation and version 1 timestamps.
 versions have no timestamp answer. Use Crypto's random bytes for secrets.
 
 ```metta
+!(import! &self (library lib_uuid))
 !(let $recipe
    (match &self (= (uuid-version $id) $body) (quote (|-> ($id) $body)))
    (let $inspect (eval $recipe)

@@ -7,7 +7,7 @@ directory on every exit. Import it with `!(import! &self (library lib_file))`.
 !(import! &self (library lib_file))
 !(replace-file! "report.txt" "one line\n")   ; publish by rename
 !(write-bytes! "blob.bin" (0 1 255))         ; bytes are integers 0 to 255
-!(collapse (dir-glob "src" "**/*.metta"))    ; every source below src
+!(collapse (dir-glob "." "**/*.metta"))      ; every source below a directory
 !(with-file "report.txt" "r" file-read-to-string!)  ; the handle closes after
 ```
 

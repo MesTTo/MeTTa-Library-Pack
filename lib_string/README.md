@@ -5,6 +5,7 @@ line layout, named templates and two distinct similarity calculations. Import it
 `!(import! &self (library lib_string))`.
 
 ```metta
+!(import! &self (library lib_string))
 !(string-split-exact "::" "a::b::::c") ; ("a" "b" "" "c")
 !(string-count "aaaaa" "aa" True)     ; 4 overlapping occurrences
 !(string-wrap "one two three" 7)      ; "one two\nthree"
@@ -59,6 +60,7 @@ the exact distance. The nine recipes are stored equations that you can inspect
 with `match` and reconstruct as functions:
 
 ```metta
+!(import! &self (library lib_string))
 !(let $recipe (match &self (= (string-repeat $value $count) $body)
                (quote (|-> ($value $count) $body)))
    (let $repeat (eval $recipe) ($repeat "ab" 3))) ; "ababab"

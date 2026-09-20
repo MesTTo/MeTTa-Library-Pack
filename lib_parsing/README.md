@@ -21,6 +21,7 @@ executable expressions and shared variables separate from skipping. The text
 doors surface a skipped result as `()` and join the unread character tokens.
 
 ```metta
+!(import! &self (library lib_parsing))
 !(let $parser (grammar-parser (any))
    (apply-to $parser (quote (((+ 1 2) Empty)))))
 ; (((+ 1 2)) (Empty))
@@ -31,6 +32,7 @@ composition are MeTTa equations over String, Pairs and Functional. A custom form
 adds one metadata row and an ordinary parsing function:
 
 ```metta
+!(import! &self (library lib_parsing))
 (parsing-form pure-value (Atom) keep-value)
 (: keep-value (-> Atom Atom Expression))
 (= (keep-value $value $input) (quote (($value) $input)))

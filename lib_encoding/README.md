@@ -23,6 +23,7 @@ values. Assertions make recording replay conservative.
 The equation is data that you can inspect, return and apply:
 
 ```metta
+!(import! &self (library lib_encoding))
 !(let $recipe
    (match &self (= (hex-encode $bytes) $body) (quote (|-> ($bytes) $body)))
    (let $format (eval $recipe) ($format (0 255)))) ; "00ff"
