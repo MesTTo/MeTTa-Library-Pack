@@ -7,13 +7,13 @@
 (= (package backing) (prolog (library "lib_database/lib_database.pl")
   (database-add! database-atoms database-close! database-open! database-remove! database-sync! with-database)))
 
-(: database-add! (-> %Undefined% Atom Bool))
+(: database-add! (-> %Undefined% %Undefined% Bool))
 (@doc database-add!
   (@desc "Append one held value, retaining duplicate occurrences. Values may contain native Symbols, Strings, Numbers, plain Variables and proper expressions. Each occurrence owns fresh variables, preserving sharing within that value. Equations remain passive syntax until a caller explicitly evaluates them. Attributed variables, cycles and foreign resource/Python objects raise before writing. Bind computed values before this held argument. A write error closes the store; its journal may need repair before reopening.")
   (@params ((@param "Handle") (@param "Value")))
   (@return "Done"))
 
-(: database-atoms (-> %Undefined% Expression))
+(: database-atoms (-> %Undefined% %Undefined%))
 (@doc database-atoms
   (@desc "Return an expression containing every stored value in insertion order, including duplicates. Each value has fresh variables on each snapshot, with sharing preserved within that value. Binding a snapshot never changes the store. Nothing is evaluated. Compose selection and joins with let segment patterns, and explicit rule reconstruction with eval or add-atom. Snapshot memory is proportional to the complete stored syntax.")
   (@params ((@param "Handle")))
@@ -31,7 +31,7 @@
   (@params ((@param "Directory") (@param "Sync")))
   (@return "Handle"))
 
-(: database-remove! (-> %Undefined% Atom Bool))
+(: database-remove! (-> %Undefined% %Undefined% Bool))
 (@doc database-remove!
   (@desc "Remove one alpha-identical held occurrence, returning False if absent. Variable names may differ, but their sharing must agree. Variables are data, not deletion wildcards. Duplicates need one removal each; integer 1 and float 1.0 remain distinct. A native write failure closes the store and propagates.")
   (@params ((@param "Handle") (@param "Value")))

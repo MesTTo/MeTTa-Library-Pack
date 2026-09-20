@@ -69,21 +69,27 @@
         ( arg(1,State,published) -> 'database-close!'(Engine,true)
         ; engine_destroy(Engine) )).
 
-%! 'database-add!'(+Handle:any, +Value, -Done:boolean) is det.
+%A held value is typed `any`, the top type, and that is documentation only:
+%mavis drops every `the(any, _)` before it builds the clause, so no runtime
+%check is emitted and no attribute is attached
+%[source: tests/prolog/vendor/mavis.pl, exclude(subsumes_term(the(any,_)),
+%AllTypes, Types), added for this exact hazard].
 %
-% The held value records only its MODE. A mode line type on an argument
-% that carries VARIABLES becomes `when(ground(V), must_be(T, V))` under the
-% development build, and an unbound `when/2` leaves an attribute on every
-% variable in the term. This store's whole contract is that a value may hold
-% plain variables and comes back alpha-identical, and an attributed term is
-% not a variant of the same term without one, so the annotation changed what
-% this predicate stores and what the next read compares equal to
-% [measured 2026-09-21: with the types, `database-add!` refuses `[pair,X,X]`
-% with domain_error(persistent_value, _) because `persistent_value/1` rejects
-% an attributed term on purpose; with only the inputs untyped the store
-% succeeds and the READ still answers a term carrying an attribute, so
-% `=@=` is false. tests/prolog/dev_typed.pl decides this: an argument that is
-% a term under construction is left untyped; commit=WORKTREE].
+%A NARROWER type is what cannot be written here. It becomes
+%`when(ground(V), must_be(T, V))` under the development build, and an unbound
+%`when/2` leaves an attribute on every variable in the term. This store's whole
+%contract is that a value may hold plain variables and comes back
+%alpha-identical, and an attributed term is not a variant of the same term
+%without one [measured 2026-09-21: with `Atom` on the inputs, `database-add!`
+%refuses `[pair,X,X]` with domain_error(persistent_value, _), because
+%`persistent_value/1` rejects an attributed term on purpose].
+%
+%The face reads `any` as `%Undefined%`, which is the honest MeTTa type: a held
+%value may be a Symbol, String, Number, plain Variable or expression, and
+%`Atom` -- what the face advertised while the argument carried no type at all
+%-- named a narrower set than this predicate accepts.
+
+%! 'database-add!'(+Handle:any, +Value:any, -Done:boolean) is det.
 %
 % Append one held value, retaining duplicate occurrences. Values may contain
 % native Symbols, Strings, Numbers, plain Variables and proper expressions.
@@ -95,10 +101,10 @@
 'database-add!'(Handle,Value,true) :-
     encode_value(Value,Encoded),database_request(Handle,add(Encoded),true).
 
-%! 'database-remove!'(+Handle:any, +Value, -Removed:boolean) is det.
-%
-% A removal pattern carries variables and must compare alpha-identical to a
-% stored term, for the reason given on 'database-add!'/3.
+%A removal pattern carries variables and must compare alpha-identical to a
+%stored term, so it takes `any` for the reason given on 'database-add!'/3.
+
+%! 'database-remove!'(+Handle:any, +Value:any, -Removed:boolean) is det.
 %
 % Remove one alpha-identical held occurrence, returning False if absent.
 % Variable names may differ, but their sharing must agree. Variables are data,
@@ -107,10 +113,11 @@
 'database-remove!'(Handle,Value,Removed) :-
     encode_value(Value,Encoded),database_request(Handle,remove(Encoded),Removed).
 
-%! 'database-atoms'(+Handle:any, -Rows) is det.
-%
-% The ANSWER carries the stored variables, so typing it attaches an attribute
-% to every one of them; same reason as 'database-add!'/3.
+%The ANSWER carries the stored variables, so a NARROW type would attach an
+%attribute to every one of them; `any` is dropped before the clause is built,
+%for the reason given on 'database-add!'/3.
+
+%! 'database-atoms'(+Handle:any, -Rows:any) is det.
 %
 % Return an expression containing every stored value in insertion order,
 % including duplicates. Each value has fresh variables on each snapshot, with
