@@ -1339,7 +1339,7 @@ metta_copy_file(From, To) :-
     ),
     metta_staged_publish(To, metta_copy_bytes(From)).
 
-%! metta_staged_publish(+Destination:string, :Writer:callable) is det.
+%! metta_staged_publish(+Destination:any, :Writer:callable) is det.
 %
 % Own a sibling staging directory and apply Writer to its contents pathname.
 % Writer closes its streams before returning. Publish with one rename and
