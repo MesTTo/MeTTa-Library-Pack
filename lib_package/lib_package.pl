@@ -35,7 +35,7 @@
              seam:foreign_add/2, seam:foreign_remove/3.
 seam:extension_builtin('setup!', oracleIO).
 seam:extension_builtin('package-prolog', oracleIO).
-% Extend the existing arity family without re-declaring its one-input facet.
+% Extend the existing arity family without redeclaring its one-input facet.
 :- multifile metta_engine:builtin_implementation/2.
 metta_engine:builtin_implementation('get-property'/2, prolog(lib_package)).
 seam:builtin_type_declaration('setup!', [->, 'Atom', 'Bool']).
