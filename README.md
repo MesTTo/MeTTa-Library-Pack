@@ -31,10 +31,13 @@ Enumerates finite choices, products, permutations and subsets, with exact combin
 
 [Source](lib_combinatorics/lib_combinatorics.metta); heads:
 
-```text
-binomial cartesian-power choose2 choose2l chooseK chooseKl factorial permutation-count
-permutations range range-step subsets takeK tuples
-```
+| Feature | Heads |
+|---|---|
+| Choices | `choose2`, `choose2l`, `chooseK`, `chooseKl`, `takeK` |
+| Products and tuples | `cartesian-power`, `tuples` |
+| Permutations | `permutation-count`, `permutations` |
+| Ranges | `range`, `range-step` |
+| Counts and subsets | `binomial`, `factorial`, `subsets` |
 
 Choose pairs and distinguish an empty choice from no choices ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/11-combinatorics_lib.metta)).
 
@@ -63,10 +66,14 @@ Composes collection transformations, folds, grouping, function application and h
 
 [Source](lib_functional/lib_functional.metta); heads:
 
-```text
-apply-to chunk drop flatten-deep flatten-once group-by partition pipe repeat scan
-sort-by unfold unless unzip while window zip
-```
+| Feature | Heads |
+|---|---|
+| Flattening | `flatten-deep`, `flatten-once` |
+| Grouping and windows | `chunk`, `group-by`, `partition`, `window` |
+| Pairing | `unzip`, `zip` |
+| Folds and generation | `scan`, `unfold` |
+| Control and application | `apply-to`, `pipe`, `repeat`, `unless`, `while` |
+| Other heads | `drop`, `sort-by` |
 
 Zip collections and reject malformed pairs ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/22-functional_lib.metta)).
 
@@ -92,15 +99,13 @@ Provides immutable sorted maps, priority queues, functional queues and finger tr
 
 [Source](lib_datastructures/lib_datastructures.metta); heads:
 
-```text
-FTDeep FTEmpty FTSingle FTree add-unique-or-fail dequeue empty-queue enqueue ft-app3
-ft-back ft-borrow-l ft-borrow-r ft-concat ft-empty ft-from-list ft-front ft-is-empty
-ft-node-digit ft-nodes ft-pop-back ft-pop-front ft-push-back ft-push-front
-ft-push-list-back ft-push-list-front ft-to-list map-empty map-from-pairs map-get
-map-get-or map-has map-keys map-max map-min map-pairs map-put map-remove map-size
-map-values pq-empty pq-from-pairs pq-insert pq-merge pq-min pq-pairs pq-pop pq-remove
-pq-size
-```
+| Feature | Heads |
+|---|---|
+| Finger trees | `FTDeep`, `FTEmpty`, `FTSingle`, `FTree`, `ft-app3`, `ft-back`, `ft-borrow-l`, `ft-borrow-r`, `ft-concat`, `ft-empty`, `ft-from-list`, `ft-front`, `ft-is-empty`, `ft-node-digit`, `ft-nodes`, `ft-pop-back`, `ft-pop-front`, `ft-push-back`, `ft-push-front`, `ft-push-list-back`, `ft-push-list-front`, `ft-to-list` |
+| Maps | `map-empty`, `map-from-pairs`, `map-get`, `map-get-or`, `map-has`, `map-keys`, `map-max`, `map-min`, `map-pairs`, `map-put`, `map-remove`, `map-size`, `map-values` |
+| Priority queues | `pq-empty`, `pq-from-pairs`, `pq-insert`, `pq-merge`, `pq-min`, `pq-pairs`, `pq-pop`, `pq-remove`, `pq-size` |
+| Queues | `dequeue`, `empty-queue`, `enqueue` |
+| Other heads | `add-unique-or-fail` |
 
 ### lib_dict
 
@@ -108,10 +113,9 @@ Provides mutable dictionaries as spaces of key/value pairs.
 
 [Source](lib_dict/lib_dict.metta); heads:
 
-```text
-dict-get dict-has dict-merge dict-pairs dict-pop dict-put dict-remove dict-remove-pair
-dict-size dict-update dict-values
-```
+| Feature | Heads |
+|---|---|
+| Dictionaries | `dict-get`, `dict-has`, `dict-merge`, `dict-pairs`, `dict-pop`, `dict-put`, `dict-remove`, `dict-remove-pair`, `dict-size`, `dict-update`, `dict-values` |
 
 Update a dictionary and query it as a space ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/12-dict_lib.metta)).
 
@@ -141,10 +145,9 @@ Projects, sorts, groups and queries expressions of key/value pairs.
 
 [Source](lib_pairs/lib_pairs.metta); heads:
 
-```text
-pairs-group pairs-is pairs-keys pairs-lookup pairs-sort-by-key pairs-sort-by-value
-pairs-swap pairs-ungroup pairs-values
-```
+| Feature | Heads |
+|---|---|
+| Pairs | `pairs-group`, `pairs-is`, `pairs-keys`, `pairs-lookup`, `pairs-sort-by-key`, `pairs-sort-by-value`, `pairs-swap`, `pairs-ungroup`, `pairs-values` |
 
 ### lib_sets
 
@@ -152,10 +155,9 @@ Provides ordered, duplicate-free sets with identity-based membership and set ope
 
 [Source](lib_sets/lib_sets.metta); heads:
 
-```text
-set-difference set-disjoint set-insert set-intersection set-is set-member set-of
-set-remove set-subset set-symmetric-difference set-union
-```
+| Feature | Heads |
+|---|---|
+| Sets | `set-difference`, `set-disjoint`, `set-insert`, `set-intersection`, `set-is`, `set-member`, `set-of`, `set-remove`, `set-subset`, `set-symmetric-difference`, `set-union` |
 
 Canonicalize sets and distinguish identity from variable binding ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/23-sets_lib.metta)).
 
@@ -185,11 +187,9 @@ Builds directed graphs and computes reachability, closure, transposition and top
 
 [Source](lib_graph/lib_graph.metta); heads:
 
-```text
-graph-add-edges graph-add-vertices graph-closure graph-edges graph-is graph-is-acyclic
-graph-neighbours graph-of graph-reachable graph-remove-edges graph-remove-vertices
-graph-topological-order graph-transpose graph-union graph-vertices
-```
+| Feature | Heads |
+|---|---|
+| Graphs | `graph-add-edges`, `graph-add-vertices`, `graph-closure`, `graph-edges`, `graph-is`, `graph-is-acyclic`, `graph-neighbours`, `graph-of`, `graph-reachable`, `graph-remove-edges`, `graph-remove-vertices`, `graph-topological-order`, `graph-transpose`, `graph-union`, `graph-vertices` |
 
 Build a graph with an isolated vertex and inspect its edges ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/25-graph_lib.metta)).
 
@@ -218,10 +218,10 @@ Copies, moves, drains, snapshots and counts atoms through space queries.
 
 [Source](lib_spaces/lib_spaces.metta); heads:
 
-```text
-find match-count migrateAtoms move-atoms remove-all-atoms space-copy space-drain
-space-snapshot space-subtract succeedsPredicate
-```
+| Feature | Heads |
+|---|---|
+| Space operations | `space-copy`, `space-drain`, `space-snapshot`, `space-subtract` |
+| Other heads | `find`, `match-count`, `migrateAtoms`, `move-atoms`, `remove-all-atoms`, `succeedsPredicate` |
 
 ### lib_mm2
 
@@ -229,9 +229,9 @@ Provides add, remove, query and transformation notation over the MORK extension'
 
 [Source](lib_mm2/lib_mm2.metta); heads:
 
-```text
-? ~> ＋ ＋* －
-```
+| Feature | Heads |
+|---|---|
+| Space notation | `?`, `~>`, `＋`, `＋*`, `－` |
 
 ## Text and encoding
 
@@ -241,15 +241,13 @@ Provides text search, splitting, formatting, codepoint conversion and string sim
 
 [Source](lib_string/lib_string.metta); heads:
 
-```text
-number-to-string parse-number string-center string-chars string-codes string-contains
-string-count string-dedent string-edit-distance string-ends-with string-from-chars
-string-from-codes string-indent string-index-of string-isub string-join
-string-last-index-of string-length string-lines string-lower string-pad-left
-string-pad-right string-repeat string-replace string-similarity string-slice
-string-split string-split-exact string-starts-with string-template string-trim
-string-unlines string-upper string-wrap
-```
+| Feature | Heads |
+|---|---|
+| Conversion | `number-to-string`, `parse-number`, `string-chars`, `string-codes`, `string-from-chars`, `string-from-codes` |
+| Search and comparison | `string-contains`, `string-count`, `string-edit-distance`, `string-ends-with`, `string-index-of`, `string-isub`, `string-last-index-of`, `string-similarity`, `string-starts-with` |
+| Splitting and joining | `string-join`, `string-lines`, `string-split`, `string-split-exact`, `string-unlines` |
+| Case and layout | `string-center`, `string-dedent`, `string-indent`, `string-lower`, `string-pad-left`, `string-pad-right`, `string-trim`, `string-upper`, `string-wrap` |
+| Construction and slicing | `string-length`, `string-repeat`, `string-replace`, `string-slice`, `string-template` |
 
 ### lib_unicode
 
@@ -257,10 +255,9 @@ Provides Unicode normalization, case folding, grapheme segmentation and characte
 
 [Source](lib_unicode/lib_unicode.metta); heads:
 
-```text
-unicode-casefold unicode-codepoint-valid unicode-graphemes unicode-is unicode-map
-unicode-normalize unicode-property unicode-version
-```
+| Feature | Heads |
+|---|---|
+| Unicode | `unicode-casefold`, `unicode-codepoint-valid`, `unicode-graphemes`, `unicode-is`, `unicode-map`, `unicode-normalize`, `unicode-property`, `unicode-version` |
 
 ### lib_regex
 
@@ -268,11 +265,11 @@ Provides compiled PCRE2 patterns, matching, typed captures, scans and substituti
 
 [Source](lib_regex/lib_regex.metta); heads:
 
-```text
-re-captures re-compile re-count re-escape re-find re-fullmatch re-match re-ranges
-re-replace re-replace-all re-scan re-split regex_captures regex_find regex_match
-regex_replace regex_replace_all regex_split
-```
+| Feature | Heads |
+|---|---|
+| Patterns | `re-compile`, `re-escape` |
+| Matching and captures | `re-captures`, `re-count`, `re-find`, `re-fullmatch`, `re-match`, `re-ranges`, `re-scan`, `regex_captures`, `regex_find`, `regex_match` |
+| Replacement and splitting | `re-replace`, `re-replace-all`, `re-split`, `regex_replace`, `regex_replace_all`, `regex_split` |
 
 Match text, decode named captures and replace matches ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/04-regex_lib.metta)).
 
@@ -295,9 +292,9 @@ Builds ordinary parser functions from grammar expressions, preserving ambiguous 
 
 [Source](lib_parsing/lib_parsing.metta); heads:
 
-```text
-grammar-forms grammar-is grammar-parse grammar-parse-prefix grammar-parser
-```
+| Feature | Heads |
+|---|---|
+| Grammars | `grammar-forms`, `grammar-is`, `grammar-parse`, `grammar-parse-prefix`, `grammar-parser` |
 
 Compose recursive grammars as ordinary equations ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/27-parsing_lib.metta)).
 
@@ -317,10 +314,11 @@ Decodes JSON objects into spaces and provides paths, serialization and JSON Line
 
 [Source](lib_json/lib_json.metta); heads:
 
-```text
-dict-space get-keys get-value json-at json-decode json-encode json-lines-decode
-json-lines-encode json-lines-read! json-lines-write! json-pretty json-read! json-write!
-```
+| Feature | Heads |
+|---|---|
+| JSON Lines | `json-lines-decode`, `json-lines-encode`, `json-lines-read!`, `json-lines-write!` |
+| JSON values | `json-at`, `json-decode`, `json-encode`, `json-pretty`, `json-read!`, `json-write!` |
+| Object spaces | `dict-space`, `get-keys`, `get-value` |
 
 Query decoded objects and retain duplicate fields ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/05-json_lib.metta)).
 
@@ -364,9 +362,9 @@ Provides CSV parsing, encoding, streamed rows, live file views and mutable snaps
 
 [Source](lib_csv/lib_csv.metta); heads:
 
-```text
-csv-append! csv-encode csv-parse csv-read! csv-snapshot! csv-space csv-write!
-```
+| Feature | Heads |
+|---|---|
+| CSV | `csv-append!`, `csv-encode`, `csv-parse`, `csv-read!`, `csv-snapshot!`, `csv-space`, `csv-write!` |
 
 ### lib_yaml
 
@@ -374,9 +372,9 @@ Reads and writes single YAML documents using spaces for mappings and expressions
 
 [Source](lib_yaml/lib_yaml.metta); heads:
 
-```text
-yaml-decode yaml-encode yaml-read! yaml-write!
-```
+| Feature | Heads |
+|---|---|
+| YAML | `yaml-decode`, `yaml-encode`, `yaml-read!`, `yaml-write!` |
 
 ### lib_markup
 
@@ -384,10 +382,9 @@ Parses HTML and XML into element expressions and selects attributes, descendants
 
 [Source](lib_markup/lib_markup.metta); heads:
 
-```text
-markup-attribute markup-parse-html markup-parse-xml markup-select markup-text
-markup-write
-```
+| Feature | Heads |
+|---|---|
+| Markup | `markup-attribute`, `markup-parse-html`, `markup-parse-xml`, `markup-select`, `markup-text`, `markup-write` |
 
 ### lib_encoding
 
@@ -395,9 +392,11 @@ Converts text and byte expressions through UTF-8, hexadecimal and Base64.
 
 [Source](lib_encoding/lib_encoding.metta); heads:
 
-```text
-base64-decode base64-encode hex-decode hex-encode utf8-decode utf8-encode
-```
+| Feature | Heads |
+|---|---|
+| Base64 | `base64-decode`, `base64-encode` |
+| Hexadecimal | `hex-decode`, `hex-encode` |
+| UTF-8 | `utf8-decode`, `utf8-encode` |
 
 Count UTF-8 bytes separately from characters ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/30-encoding_lib.metta)).
 
@@ -424,10 +423,10 @@ Parses, builds, resolves and normalizes URIs, with component encoding and query 
 
 [Source](lib_uri/lib_uri.metta); heads:
 
-```text
-uri-build uri-contexts uri-decode uri-encode uri-normalize uri-parts uri-query-build
-uri-query-parse uri-resolve
-```
+| Feature | Heads |
+|---|---|
+| Queries | `uri-query-build`, `uri-query-parse` |
+| URIs | `uri-build`, `uri-contexts`, `uri-decode`, `uri-encode`, `uri-normalize`, `uri-parts`, `uri-resolve` |
 
 ### lib_uuid
 
@@ -435,10 +434,9 @@ Constructs, validates and inspects UUIDs, including byte conversion and namespac
 
 [Source](lib_uuid/lib_uuid.metta); heads:
 
-```text
-uuid-bytes uuid-is uuid-name uuid-namespaces uuid-nil uuid-of-bytes uuid-random!
-uuid-time! uuid-timestamp uuid-variant uuid-version
-```
+| Feature | Heads |
+|---|---|
+| UUIDs | `uuid-bytes`, `uuid-is`, `uuid-name`, `uuid-namespaces`, `uuid-nil`, `uuid-of-bytes`, `uuid-random!`, `uuid-time!`, `uuid-timestamp`, `uuid-variant`, `uuid-version` |
 
 ## Numerics and probability
 
@@ -448,11 +446,11 @@ Provides exact rational arithmetic, integer roots, modular powers, factors and n
 
 [Source](lib_math/lib_math.metta); heads:
 
-```text
-math-class math-factor-pairs math-float math-gcd math-integer-root math-lcm
-math-power-mod math-ratio math-rational math-rationalize math-real math-real-functions
-math-sqrt
-```
+| Feature | Heads |
+|---|---|
+| Classification and conversion | `math-class`, `math-float`, `math-ratio`, `math-rational`, `math-rationalize`, `math-real` |
+| Integer arithmetic | `math-factor-pairs`, `math-gcd`, `math-integer-root`, `math-lcm`, `math-power-mod` |
+| Real functions | `math-real-functions`, `math-sqrt` |
 
 ### lib_vector
 
@@ -460,10 +458,11 @@ Provides numeric vector arithmetic, exact intermediate reductions, norms, distan
 
 [Source](lib_vector/lib_vector.metta); heads:
 
-```text
-cosine cosine-of-normalized dot norm random-normal-vector vector-add vector-distance
-vector-divide vector-fill vector-multiply vector-normalize vector-scale vector-subtract
-```
+| Feature | Heads |
+|---|---|
+| Vectors | `vector-add`, `vector-distance`, `vector-divide`, `vector-fill`, `vector-multiply`, `vector-normalize`, `vector-scale`, `vector-subtract` |
+| Cosine similarity | `cosine`, `cosine-of-normalized` |
+| Other heads | `dot`, `norm`, `random-normal-vector` |
 
 Compute dot products, lengths and directional similarity ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/13-vector_lib.metta)).
 
@@ -489,11 +488,10 @@ Constructs inspectable sampling programs and provides sampling without replaceme
 
 [Source](lib_random/lib_random.metta); heads:
 
-```text
-random-bernoulli random-beta random-choice random-exponential random-gamma
-random-lognormal random-normal random-pareto random-sample! random-shuffle!
-random-triangular random-uniform random-weibull
-```
+| Feature | Heads |
+|---|---|
+| Distributions | `random-bernoulli`, `random-beta`, `random-exponential`, `random-gamma`, `random-lognormal`, `random-normal`, `random-pareto`, `random-triangular`, `random-uniform`, `random-weibull` |
+| Selection and shuffling | `random-choice`, `random-sample!`, `random-shuffle!` |
 
 ### lib_measure
 
@@ -501,11 +499,11 @@ Normalizes, ranks, samples and combines weighted alternatives.
 
 [Source](lib_measure/lib_measure.metta); heads:
 
-```text
-ws-best ws-choose ws-collapse ws-expect ws-filter ws-flip ws-merge-into ws-normalize
-ws-peak ws-pickmax ws-ranked ws-sample! ws-sample-walk ws-softmax ws-take ws-top
-ws-total
-```
+| Feature | Heads |
+|---|---|
+| Ranking and selection | `ws-best`, `ws-choose`, `ws-peak`, `ws-pickmax`, `ws-ranked`, `ws-take`, `ws-top` |
+| Sampling | `ws-flip`, `ws-sample!`, `ws-sample-walk` |
+| Weights and aggregation | `ws-collapse`, `ws-expect`, `ws-filter`, `ws-merge-into`, `ws-normalize`, `ws-softmax`, `ws-total` |
 
 ### lib_statistics
 
@@ -513,15 +511,12 @@ Computes sample statistics, finite probability laws and exact independent weight
 
 [Source](lib_statistics/lib_statistics.metta); heads:
 
-```text
-stats-correlation stats-covariance stats-geometric-mean stats-harmonic-mean stats-mean
-stats-median stats-mode stats-quantile stats-quantiles stats-ranks stats-regression
-stats-stdev stats-sum stats-variance weighted-subset-mass-independent
-weighted-subset-posterior-independent ws-add-bernoulli-independent
-ws-average-independent ws-central-moment ws-condition-joint ws-deviation ws-map
-ws-map-independent ws-mass-at-least ws-mass-at-most ws-median ws-prob-gt-independent
-ws-quantile ws-sum-independent ws-support ws-variance
-```
+| Feature | Heads |
+|---|---|
+| Sample statistics | `stats-correlation`, `stats-covariance`, `stats-geometric-mean`, `stats-harmonic-mean`, `stats-mean`, `stats-median`, `stats-mode`, `stats-quantile`, `stats-quantiles`, `stats-ranks`, `stats-regression`, `stats-stdev`, `stats-sum`, `stats-variance` |
+| Weighted subsets | `weighted-subset-mass-independent`, `weighted-subset-posterior-independent` |
+| Independent combinations | `ws-add-bernoulli-independent`, `ws-average-independent`, `ws-map-independent`, `ws-prob-gt-independent`, `ws-sum-independent` |
+| Weighted statistics | `ws-central-moment`, `ws-condition-joint`, `ws-deviation`, `ws-map`, `ws-mass-at-least`, `ws-mass-at-most`, `ws-median`, `ws-quantile`, `ws-support`, `ws-variance` |
 
 Retain small residuals and exact means ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/37-statistics_lib.metta)).
 
@@ -552,11 +547,13 @@ Exposes PyTorch tensor construction, arithmetic, activations and autograd throug
 
 [Source](lib_torch/lib_torch.metta); heads:
 
-```text
-torch-add torch-arange torch-backward torch-div torch-grad torch-item torch-matmul
-torch-mean torch-mul torch-ones torch-randn torch-relu torch-requires-grad torch-shape
-torch-sigmoid torch-sub torch-sum torch-tensor torch-tolist torch-zeros
-```
+| Feature | Heads |
+|---|---|
+| Tensor construction | `torch-arange`, `torch-ones`, `torch-randn`, `torch-tensor`, `torch-zeros` |
+| Arithmetic and reductions | `torch-add`, `torch-div`, `torch-matmul`, `torch-mean`, `torch-mul`, `torch-sub`, `torch-sum` |
+| Activations | `torch-relu`, `torch-sigmoid` |
+| Autograd | `torch-backward`, `torch-grad`, `torch-requires-grad` |
+| Inspection and conversion | `torch-item`, `torch-shape`, `torch-tolist` |
 
 ## IO and system
 
@@ -566,16 +563,16 @@ Provides file and directory operations, paths, byte and text streams, and resour
 
 [Source](lib_file/lib_file.metta); heads:
 
-```text
-append-bytes! append-file! copy-dir! copy-file! delete-dir! delete-file! delete-tree!
-dir-exists dir-glob dir-walk exit! file-close! file-exists file-get-size! file-kind
-file-lines! file-metadata! file-open! file-read-bytes! file-read-exact!
-file-read-to-string! file-seek! file-space! file-write! file-write-bytes! list-dir!
-make-dir! make-link! path-absolute path-extension path-join path-name path-normalize
-path-parent path-parts path-relative path-resolve path-stem read-bytes! read-file!
-read-link rename-file! replace-file! same-file stderr stderr! stdin stdin-to-string!
-stdout temp-dir! temp-path! with-file with-temp-dir write-bytes! write-file!
-```
+| Feature | Heads |
+|---|---|
+| File handles and streams | `file-close!`, `file-exists`, `file-get-size!`, `file-kind`, `file-lines!`, `file-metadata!`, `file-open!`, `file-read-bytes!`, `file-read-exact!`, `file-read-to-string!`, `file-seek!`, `file-space!`, `file-write!`, `file-write-bytes!` |
+| Paths | `path-absolute`, `path-extension`, `path-join`, `path-name`, `path-normalize`, `path-parent`, `path-parts`, `path-relative`, `path-resolve`, `path-stem` |
+| Directories | `copy-dir!`, `delete-dir!`, `delete-tree!`, `dir-exists`, `dir-glob`, `dir-walk`, `list-dir!`, `make-dir!` |
+| File and byte operations | `append-bytes!`, `append-file!`, `copy-file!`, `delete-file!`, `read-bytes!`, `read-file!`, `rename-file!`, `replace-file!`, `same-file`, `write-bytes!`, `write-file!` |
+| Links | `make-link!`, `read-link` |
+| Standard streams | `stderr`, `stderr!`, `stdin`, `stdin-to-string!`, `stdout` |
+| Temporary resources and scopes | `temp-dir!`, `temp-path!`, `with-file`, `with-temp-dir` |
+| Other heads | `exit!` |
 
 ### lib_datetime
 
@@ -583,11 +580,12 @@ Provides clocks, calendar records, parsing, formatting and arithmetic with expli
 
 [Source](lib_datetime/lib_datetime.metta); heads:
 
-```text
-date-add date-field date-fields date-timestamp date-weekday date-year-day day-of-week
-day_of_week format-date format-datetime format_date leap-year month-days now parse-date
-timestamp-date
-```
+| Feature | Heads |
+|---|---|
+| Dates | `date-add`, `date-field`, `date-fields`, `date-timestamp`, `date-weekday`, `date-year-day` |
+| Formatting | `format-date`, `format_date`, `format-datetime` |
+| Calendar properties | `day-of-week`, `day_of_week`, `leap-year`, `month-days` |
+| Other heads | `now`, `parse-date`, `timestamp-date` |
 
 Round-trip timestamps with explicit offsets and inspect calendar fields ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/07-datetime.metta)).
 
@@ -621,10 +619,11 @@ Reads and changes the environment and working directory, and reports host platfo
 
 [Source](lib_system/lib_system.metta); heads:
 
-```text
-change-directory! env-all env-get env-set! env-unset! platform-info platform-keys
-working-directory
-```
+| Feature | Heads |
+|---|---|
+| Environment | `env-all`, `env-get`, `env-set!`, `env-unset!` |
+| Platform | `platform-info`, `platform-keys` |
+| Working directory | `change-directory!`, `working-directory` |
 
 ### lib_process
 
@@ -632,10 +631,9 @@ Starts programs with argument vectors and captures output, signals processes or 
 
 [Source](lib_process/lib_process.metta); heads:
 
-```text
-process-run! process-run-input! process-signal! process-signals process-start!
-process-status process-wait!
-```
+| Feature | Heads |
+|---|---|
+| Processes | `process-run!`, `process-run-input!`, `process-signal!`, `process-signals`, `process-start!`, `process-status`, `process-wait!` |
 
 ### lib_cli
 
@@ -643,9 +641,9 @@ Parses typed command-line options, renders help and reads the process argument v
 
 [Source](lib_cli/lib_cli.metta); heads:
 
-```text
-cli-arguments! cli-help cli-parse cli-types
-```
+| Feature | Heads |
+|---|---|
+| Command line | `cli-arguments!`, `cli-help`, `cli-parse`, `cli-types` |
 
 ### lib_logging
 
@@ -653,9 +651,9 @@ Emits structured log events with topic controls and optional MeTTa handlers.
 
 [Source](lib_logging/lib_logging.metta); heads:
 
-```text
-log! log-enabled log-format log-levels log-to! log-topic! log-topics
-```
+| Feature | Heads |
+|---|---|
+| Logging | `log!`, `log-enabled`, `log-format`, `log-levels`, `log-to!`, `log-topic!`, `log-topics` |
 
 ### lib_compression
 
@@ -663,10 +661,10 @@ Compresses bytes and files with gzip or zlib and inspects, reads or extracts arc
 
 [Source](lib_compression/lib_compression.metta); heads:
 
-```text
-archive-entries! archive-extract! archive-read! compress-bytes compress-file!
-compression-formats decompress-bytes decompress-file!
-```
+| Feature | Heads |
+|---|---|
+| Archives | `archive-entries!`, `archive-extract!`, `archive-read!` |
+| Compression | `compress-bytes`, `compress-file!`, `compression-formats`, `decompress-bytes`, `decompress-file!` |
 
 ### lib_crypto
 
@@ -674,11 +672,12 @@ Provides hashes, HMACs, password records and cryptographic random values.
 
 [Source](lib_crypto/lib_crypto.metta); heads:
 
-```text
-crypto-hash crypto-hash-bytes crypto-hash-file! crypto-hmac crypto-hmac-bytes
-crypto-password-hash crypto-password-verify crypto-random-bytes crypto-random-hex
-crypto-random-integer crypto_hash crypto_random_hex
-```
+| Feature | Heads |
+|---|---|
+| Hashes | `crypto-hash`, `crypto_hash`, `crypto-hash-bytes`, `crypto-hash-file!` |
+| HMACs | `crypto-hmac`, `crypto-hmac-bytes` |
+| Passwords | `crypto-password-hash`, `crypto-password-verify` |
+| Random values | `crypto-random-bytes`, `crypto-random-hex`, `crypto_random_hex`, `crypto-random-integer` |
 
 ### lib_http
 
@@ -686,10 +685,10 @@ Provides streaming HTTP clients and scoped HTTP servers with MeTTa request handl
 
 [Source](lib_http/lib_http.metta); heads:
 
-```text
-http-header http-methods http-open! http-request! http-server-start! http-server-stop!
-http-server-url with-http with-http-server
-```
+| Feature | Heads |
+|---|---|
+| Servers | `http-server-start!`, `http-server-stop!`, `http-server-url`, `with-http-server` |
+| Clients and messages | `http-header`, `http-methods`, `http-open!`, `http-request!`, `with-http` |
 
 ### lib_socket
 
@@ -697,10 +696,11 @@ Provides TCP listeners and connections, UDP datagrams and scoped socket ownershi
 
 [Source](lib_socket/lib_socket.metta); heads:
 
-```text
-socket-endpoint socket-kind socket-shutdown! socket-wait! tcp-accept! tcp-connect!
-tcp-listen! udp-bind! udp-receive! udp-send! with-socket
-```
+| Feature | Heads |
+|---|---|
+| TCP | `tcp-accept!`, `tcp-connect!`, `tcp-listen!` |
+| UDP | `udp-bind!`, `udp-receive!`, `udp-send!` |
+| Socket inspection and lifetime | `socket-endpoint`, `socket-kind`, `socket-shutdown!`, `socket-wait!`, `with-socket` |
 
 ### lib_database
 
@@ -708,10 +708,9 @@ Persists atom syntax in journaled stores with explicit handles, synchronization 
 
 [Source](lib_database/lib_database.metta); heads:
 
-```text
-database-add! database-atoms database-close! database-open! database-remove!
-database-sync! with-database
-```
+| Feature | Heads |
+|---|---|
+| Database stores | `database-add!`, `database-atoms`, `database-close!`, `database-open!`, `database-remove!`, `database-sync!`, `with-database` |
 
 ### lib_redis
 
@@ -719,9 +718,9 @@ Attaches shared Redis-backed spaces with cross-process change notifications.
 
 [Source](lib_redis/lib_redis.metta); heads:
 
-```text
-redis-attach redis-detach
-```
+| Feature | Heads |
+|---|---|
+| Redis spaces | `redis-attach`, `redis-detach` |
 
 ## Reasoning and rewriting
 
@@ -731,9 +730,10 @@ Exposes rational CLP(Q) constraints and Boolean CLP(B) constraints, labeling and
 
 [Source](lib_constraints/lib_constraints.metta); heads:
 
-```text
-clpb clpb-labeling clpb-taut clpq clpq-entailed
-```
+| Feature | Heads |
+|---|---|
+| Boolean constraints | `clpb`, `clpb-labeling`, `clpb-taut` |
+| Rational constraints | `clpq`, `clpq-entailed` |
 
 ### lib_nars
 
@@ -741,17 +741,14 @@ Provides NARS truth functions, inference rules and bounded derivation and query 
 
 [Source](lib_nars/lib_nars.metta); heads:
 
-```text
-BestCandidate ConfidenceRank LimitSize NARS.Config.BeliefQueueSize NARS.Config.MaxSteps
-NARS.Config.TaskQueueSize NARS.Derive NARS.Query PriorityRank PriorityRankNeg
-StampConcat StampDisjoint Truth_Abduction Truth_Analogy Truth_Comparison
-Truth_DecomposeNNN Truth_DecomposeNPP Truth_DecomposePNN Truth_DecomposePNP
-Truth_DecomposePPP Truth_Deduction Truth_Difference Truth_Eternalize
-Truth_Exemplification Truth_Expectation Truth_Induction Truth_Intersection
-Truth_Negation Truth_Resemblance Truth_Revision Truth_StructuralDeduction
-Truth_StructuralDeductionNegated Truth_StructuralIntersection Truth_Union Truth_c2w
-Truth_or Truth_w2c |-
-```
+| Feature | Heads |
+|---|---|
+| Configuration | `NARS.Config.BeliefQueueSize`, `NARS.Config.MaxSteps`, `NARS.Config.TaskQueueSize` |
+| Derivation and queries | `NARS.Derive`, `NARS.Query` |
+| Truth functions | `Truth_Abduction`, `Truth_Analogy`, `Truth_Comparison`, `Truth_DecomposeNNN`, `Truth_DecomposeNPP`, `Truth_DecomposePNN`, `Truth_DecomposePNP`, `Truth_DecomposePPP`, `Truth_Deduction`, `Truth_Difference`, `Truth_Eternalize`, `Truth_Exemplification`, `Truth_Expectation`, `Truth_Induction`, `Truth_Intersection`, `Truth_Negation`, `Truth_Resemblance`, `Truth_Revision`, `Truth_StructuralDeduction`, `Truth_StructuralDeductionNegated`, `Truth_StructuralIntersection`, `Truth_Union`, `Truth_c2w`, `Truth_or`, `Truth_w2c` |
+| Stamps | `StampConcat`, `StampDisjoint` |
+| Ranking | `ConfidenceRank`, `PriorityRank`, `PriorityRankNeg` |
+| Other heads | `BestCandidate`, `LimitSize`, `\|-` |
 
 ### lib_pln
 
@@ -759,18 +756,16 @@ Provides legacy PLN truth formulas, inference rules and bounded derivation and q
 
 [Source](lib_pln/lib_pln.metta); heads:
 
-```text
-/safe BestCandidate ConfidenceRank Consistency_ImplicationImplicantConjunction ElementOf
-InsertSorted InsertionSort LimitSize PLN.Config.BeliefQueueSize PLN.Config.MaxSteps
-PLN.Config.TaskQueueSize PLN.Derive PLN.Query PriorityRank PriorityRankNeg STV
-StampConcat StampDisjoint SyllogisticRuleGuard SymmetricModusPonensRuleGuard Test2
-TransitiveSimilarityStrength Truth_Abduction Truth_Deduction Truth_Induction
-Truth_ModusPonens Truth_Negation Truth_Revision Truth_SymmetricModusPonens Truth_c2w
-Truth_equivalenceToImplication Truth_evaluationImplication Truth_inversion
-Truth_transitiveSimilarity Truth_w2c TupleConcat TupleCount Unique Without and5 clamp
-conditional-probability-consistency invert largest-intersection-probability min5 negate
-simpleDeductionStrength smallest-intersection-probability |-
-```
+| Feature | Heads |
+|---|---|
+| Configuration | `PLN.Config.BeliefQueueSize`, `PLN.Config.MaxSteps`, `PLN.Config.TaskQueueSize` |
+| Derivation and queries | `PLN.Derive`, `PLN.Query` |
+| Truth functions | `Truth_Abduction`, `Truth_Deduction`, `Truth_Induction`, `Truth_ModusPonens`, `Truth_Negation`, `Truth_Revision`, `Truth_SymmetricModusPonens`, `Truth_c2w`, `Truth_equivalenceToImplication`, `Truth_evaluationImplication`, `Truth_inversion`, `Truth_transitiveSimilarity`, `Truth_w2c` |
+| Stamps | `StampConcat`, `StampDisjoint` |
+| Tuples | `TupleConcat`, `TupleCount` |
+| Ranking | `ConfidenceRank`, `PriorityRank`, `PriorityRankNeg` |
+| Sorting | `InsertSorted`, `InsertionSort` |
+| Other heads | `/safe`, `BestCandidate`, `Consistency_ImplicationImplicantConjunction`, `ElementOf`, `LimitSize`, `STV`, `SyllogisticRuleGuard`, `SymmetricModusPonensRuleGuard`, `Test2`, `TransitiveSimilarityStrength`, `Unique`, `Without`, `and5`, `clamp`, `conditional-probability-consistency`, `invert`, `largest-intersection-probability`, `min5`, `negate`, `simpleDeductionStrength`, `smallest-intersection-probability`, `\|-` |
 
 ### lib_pln2
 
@@ -778,11 +773,11 @@ Provides Beta and moment formulas with explicit evidence scales and checked inde
 
 [Source](lib_pln2/lib_pln2.metta); heads:
 
-```text
-pln2-beta-moments pln2-beta-update pln2-confidence-count pln2-count-confidence
-pln2-moments-stv pln2-product-independent pln2-require-independent-supports
-pln2-stv-moments pln2-total-probability-independent
-```
+| Feature | Heads |
+|---|---|
+| Beta distributions | `pln2-beta-moments`, `pln2-beta-update` |
+| Confidence and moments | `pln2-confidence-count`, `pln2-count-confidence`, `pln2-moments-stv`, `pln2-stv-moments` |
+| Independent support | `pln2-product-independent`, `pln2-require-independent-supports`, `pln2-total-probability-independent` |
 
 ### lib_soft
 
@@ -790,10 +785,10 @@ Scores structural similarity between terms and queries spaces for weighted match
 
 [Source](lib_soft/lib_soft.metta); heads:
 
-```text
-soft-aggregation soft-best soft-fold soft-match soft-score soft-score-by soft-symbol?
-soft-walk sym-sim
-```
+| Feature | Heads |
+|---|---|
+| Structural similarity | `soft-aggregation`, `soft-best`, `soft-fold`, `soft-match`, `soft-score`, `soft-score-by`, `soft-symbol?`, `soft-walk` |
+| Symbol similarity | `sym-sim` |
 
 ### lib_strategy
 
@@ -801,12 +796,12 @@ Composes term rewrites through choice, repetition, traversal and typed strategy 
 
 [Source](lib_strategy/lib_strategy.metta); heads:
 
-```text
-TP TU all alltd bottomup choice fail gtry innermost one seq stratego-all stratego-one
-strategy-all strategy-all-tail strategy-apply strategy-choice-tail strategy-eval
-strategy-one strategy-repeat strategy-typed-apply strategy-typed-tp strategy-typed-tu
-topdown try ◁
-```
+| Feature | Heads |
+|---|---|
+| Typed strategies | `TP`, `TU`, `strategy-typed-apply`, `strategy-typed-tp`, `strategy-typed-tu` |
+| Strategy application | `strategy-all`, `strategy-all-tail`, `strategy-apply`, `strategy-choice-tail`, `strategy-eval`, `strategy-one`, `strategy-repeat` |
+| Traversal | `all`, `alltd`, `bottomup`, `innermost`, `one`, `stratego-all`, `stratego-one`, `topdown` |
+| Other heads | `choice`, `fail`, `gtry`, `seq`, `try`, `◁` |
 
 ## Engine services
 
@@ -816,29 +811,26 @@ Declares builtin types for engine reflection and optional typed dispatch on impo
 
 [Source](lib_builtin_types/lib_builtin_types.metta); declared heads:
 
-```text
-!= #* #+ #- #// #< #= #=< #> #>= #\= #div #max #min #mod % * + - / < <= == > >=
-DontEvalType Error Kwargs Predicate abs-math acos-math add-atom add-atoms add-reduct
-add-reducts add-translator-rule! add-typing-rule! alpha-unique-atom and and-then append
-argv asin-math assert assert-answers assert-includes-answers assertaPredicate
-assertzPredicate atan-math atom-subst atom_chars atom_concat bind! call callPredicate
-car-atom case catch cdr-atom ceil-math chain change-state! collapse cons cons-atom
-context-space copy_term cos-math current-time cut decons decons-atom elapsed eval
-eval-one evalc exclude-item exists_file exp exp-math filter-atom first floor-math
-foldall foldl foldl-atom forall format-args format-time get-atoms get-metatype get-state
-get-type git-import! hyperpose id if if-decons-expr implies import!
-import_prolog_function include index-atom intersection-atom is-alpha-member is-expr
-is-ground is-member is-space is-var isinf-math isnan-math last length let library
-list_to_set log-math map-atom maplist match max max-atom member metta min min-atom msort
-new-space new-state noeval nop not on-unwind once or or-else parse parse-command
-pow-math println! prog1 progn py-atom py-call py-dict py-dot py-iter py-list py-tuple
-quote random-float random-int read-form! readln! reduce register-token! remove-atom
-remove-translator-rule! remove-typing-rule! repr repra require-extension!
-retractPredicate reverse round-math sealed second-from-pair sin-math size-atom sleep
-sort sort-atom sort-strings sqrt-math sread subtraction-atom super superpose switch
-tan-math term_hash test test-no-answer timeout transaction translatePredicate trunc-math
-union-atom unique-atom unregister-token! with-seed with_mutex xor |->
-```
+| Feature | Heads |
+|---|---|
+| Arithmetic and comparison operators | `!=`, `#*`, `#+`, `#-`, `#//`, `#<`, `#=`, `#=<`, `#>`, `#>=`, `#\=`, `#div`, `#max`, `#min`, `#mod`, `%`, `*`, `+`, `-`, `/`, `<`, `<=`, `==`, `>`, `>=` |
+| Numeric functions | `abs-math`, `acos-math`, `asin-math`, `atan-math`, `ceil-math`, `cos-math`, `exp`, `exp-math`, `floor-math`, `isinf-math`, `isnan-math`, `log-math`, `max`, `min`, `pow-math`, `round-math`, `sin-math`, `sqrt-math`, `tan-math`, `trunc-math` |
+| Types | `DontEvalType`, `Error`, `Kwargs`, `Predicate` |
+| Atom updates and rules | `add-atom`, `add-atoms`, `add-reduct`, `add-reducts`, `add-translator-rule!`, `add-typing-rule!`, `remove-atom`, `remove-translator-rule!`, `remove-typing-rule!` |
+| Atom inspection and transformation | `alpha-unique-atom`, `atom_chars`, `atom_concat`, `atom-subst`, `car-atom`, `cdr-atom`, `cons-atom`, `decons-atom`, `filter-atom`, `foldl-atom`, `index-atom`, `intersection-atom`, `is-alpha-member`, `is-expr`, `is-ground`, `is-member`, `is-space`, `is-var`, `map-atom`, `max-atom`, `min-atom`, `size-atom`, `sort-atom`, `subtraction-atom`, `union-atom`, `unique-atom` |
+| Reflection and state | `change-state!`, `context-space`, `get-atoms`, `get-metatype`, `get-state`, `get-type`, `new-space`, `new-state` |
+| Evaluation | `collapse`, `eval`, `eval-one`, `evalc`, `noeval`, `quote`, `reduce`, `super`, `superpose` |
+| Assertions and tests | `assert`, `assert-answers`, `assert-includes-answers`, `assertaPredicate`, `assertzPredicate`, `test`, `test-no-answer` |
+| Prolog predicates | `callPredicate`, `retractPredicate`, `translatePredicate` |
+| Python | `py-atom`, `py-call`, `py-dict`, `py-dot`, `py-iter`, `py-list`, `py-tuple` |
+| Imports and registration | `git-import!`, `import!`, `import_prolog_function`, `library`, `register-token!`, `require-extension!`, `unregister-token!` |
+| Text and IO | `format-args`, `format-time`, `parse`, `parse-command`, `println!`, `read-form!`, `readln!`, `repr`, `repra`, `sort-strings`, `sread` |
+| Random values | `random-float`, `random-int`, `with-seed` |
+| Function application | `call`, `id`, `\|->` |
+| Control and logic | `and`, `and-then`, `case`, `catch`, `chain`, `cut`, `if`, `if-decons-expr`, `implies`, `let`, `not`, `on-unwind`, `once`, `or`, `or-else`, `prog1`, `progn`, `switch`, `timeout`, `transaction`, `with_mutex`, `xor` |
+| Time | `current-time`, `elapsed`, `sleep` |
+| Collections | `append`, `cons`, `decons`, `exclude-item`, `first`, `foldall`, `foldl`, `forall`, `include`, `last`, `length`, `list_to_set`, `maplist`, `member`, `msort`, `reverse`, `second-from-pair`, `sort` |
+| Other heads | `argv`, `bind!`, `copy_term`, `exists_file`, `hyperpose`, `match`, `metta`, `nop`, `sealed`, `term_hash` |
 
 ### lib_derived
 
@@ -846,9 +838,9 @@ Installs an equation and translator rule deriving `once` from `take`.
 
 [Source](lib_derived/lib_derived.metta); heads:
 
-```text
-once
-```
+| Feature | Heads |
+|---|---|
+| Evaluation | `once` |
 
 ### lib_doc
 
@@ -856,16 +848,21 @@ Preserves the former documentation import as a no-op because documentation now b
 
 [Source](lib_doc/lib_doc.metta); heads: none.
 
+| Feature | Heads |
+|---|---|
+| Documentation import | None |
+
 ### lib_import
 
 Loads Prolog functions and exposes source import ownership, inspection and withdrawal.
 
 [Source](lib_import/lib_import.metta); heads:
 
-```text
-consult_global import_prolog_functions_from_file import_prolog_functions_from_module
-imports static-import! unimport! use-module! use_module_global
-```
+| Feature | Heads |
+|---|---|
+| Function imports | `import_prolog_functions_from_file`, `import_prolog_functions_from_module` |
+| Module loading | `use-module!`, `use_module_global` |
+| Other heads | `consult_global`, `imports`, `static-import!`, `unimport!` |
 
 ### lib_gitimport
 
@@ -873,9 +870,9 @@ Implements the engine's resident Git import operation and pinned dependency acqu
 
 [Source](lib_gitimport/lib_gitimport.pl); heads:
 
-```text
-git-import!
-```
+| Feature | Heads |
+|---|---|
+| Git imports | `git-import!` |
 
 ### lib_package
 
@@ -883,9 +880,9 @@ Interprets package declarations, prepares dependencies and registers Prolog back
 
 [Source](lib_package/lib_package.metta) / [Prolog](lib_package/lib_package.pl); heads:
 
-```text
-get-property package-prolog setup!
-```
+| Feature | Heads |
+|---|---|
+| Packages | `get-property`, `package-prolog`, `setup!` |
 
 ### lib_memo
 
@@ -893,10 +890,11 @@ Controls explicit and automatic memoization, configuration, invalidation and sta
 
 [Source](lib_memo/lib_memo.metta); heads:
 
-```text
-clear-memoize clear-memoize-stats config-memoize get-memoize-config get-memoize-stats
-invalidate-memoize is-memoized memoize memoize-exact
-```
+| Feature | Heads |
+|---|---|
+| Clearing | `clear-memoize`, `clear-memoize-stats` |
+| Configuration and inspection | `config-memoize`, `get-memoize-config`, `get-memoize-stats`, `is-memoized` |
+| Memoization | `invalidate-memoize`, `memoize`, `memoize-exact` |
 
 ### lib_tabling
 
@@ -904,11 +902,11 @@ Controls Prolog answer tables whose reuse can discard answer order and duplicate
 
 [Source](lib_tabling/lib_tabling.metta); heads:
 
-```text
-injectPrologCode metta_table_clear metta_table_clear_all metta_table_statistics
-metta_tabled_decl metta_untabled_decl table-clear table-clear-all table-stats tabled
-untabled
-```
+| Feature | Heads |
+|---|---|
+| Answer tables | `metta_table_clear`, `metta_table_clear_all`, `metta_table_statistics`, `table-clear`, `table-clear-all`, `table-stats` |
+| Declarations | `metta_tabled_decl`, `metta_untabled_decl`, `tabled`, `untabled` |
+| Other heads | `injectPrologCode` |
 
 ### lib_thread
 
@@ -916,16 +914,16 @@ Provides parallel collection operations, futures, channels, pools, timers, resou
 
 [Source](lib_thread/lib_thread.metta); heads:
 
-```text
-after await await-atom cancel capture channel channel-close channel-size channel_close
-channel_new channel_recv channel_send channel_size channel_try_recv cpu-count cpu_count
-drop-space every par-any par-filter par-forall par-map par-race par_any par_filter
-par_forall par_map par_race peek-atom pool pool-destroy pool-stats pool_create
-pool_destroy pool_stats pool_submit recv scope scope-defer scope_body scope_defer send
-settled? space_await space_await_where space_drop space_take space_take_where spawn
-submit take-atom thread-count thread_await thread_cancel thread_count thread_settled
-thread_spawn timer_after timer_every try-recv with-lock with_lock
-```
+| Feature | Heads |
+|---|---|
+| Channels | `channel`, `channel-close`, `channel_close`, `channel_new`, `channel_recv`, `channel_send`, `channel-size`, `channel_size`, `channel_try_recv`, `recv`, `send`, `try-recv` |
+| Pools | `pool`, `pool_create`, `pool-destroy`, `pool_destroy`, `pool-stats`, `pool_stats`, `pool_submit`, `submit` |
+| Threads and futures | `await`, `cancel`, `settled?`, `spawn`, `thread_await`, `thread_cancel`, `thread-count`, `thread_count`, `thread_settled`, `thread_spawn` |
+| Timers | `after`, `every`, `timer_after`, `timer_every` |
+| Scopes | `scope`, `scope_body`, `scope-defer`, `scope_defer` |
+| Parallel combinators | `par-any`, `par_any`, `par-filter`, `par_filter`, `par-forall`, `par_forall`, `par-map`, `par_map`, `par-race`, `par_race` |
+| Space queries | `await-atom`, `drop-space`, `peek-atom`, `space_await`, `space_await_where`, `space_drop`, `space_take`, `space_take_where`, `take-atom` |
+| Other heads | `capture`, `cpu-count`, `cpu_count`, `with-lock`, `with_lock` |
 
 ### lib_observe
 
@@ -933,9 +931,9 @@ Runs source while returning queryable trace, coverage and diagnostic events.
 
 [Source](lib_observe/lib_observe.metta); heads:
 
-```text
-observe-source trace-source
-```
+| Feature | Heads |
+|---|---|
+| Observation | `observe-source`, `trace-source` |
 
 ### lib_reflect
 
@@ -943,12 +941,12 @@ Enumerates engine operations, arities and origins and inspects or substitutes li
 
 [Source](lib_reflect/lib_reflect.metta); heads:
 
-```text
-arity-of atom-replace atom-variables builtins engine-arity engine-builtin
-engine-extension-point engine-function engine-knows engine-origin engine-special-form
-engine-surface-counts engine-user-function extension-points functions knows? origin-of
-special-forms surface-counts surface-json user-functions
-```
+| Feature | Heads |
+|---|---|
+| Engine operations | `engine-arity`, `engine-builtin`, `engine-extension-point`, `engine-function`, `engine-knows`, `engine-origin`, `engine-special-form`, `engine-surface-counts`, `engine-user-function` |
+| Terms | `atom-replace`, `atom-variables` |
+| Surface exports | `surface-counts`, `surface-json` |
+| Other heads | `arity-of`, `builtins`, `extension-points`, `functions`, `knows?`, `origin-of`, `special-forms`, `user-functions` |
 
 ### lib_conformance
 
@@ -956,9 +954,9 @@ Checks a foreign space provider's declared capabilities, matching and exact push
 
 [Source](lib_conformance/lib_conformance.metta); heads:
 
-```text
-check-space-provider metta_check_space_provider
-```
+| Feature | Heads |
+|---|---|
+| Provider conformance | `check-space-provider`, `metta_check_space_provider` |
 
 ### lib_testing
 
@@ -966,10 +964,13 @@ Reexports `lib_combinatorics` generators for property checks with core assertion
 
 [Source](lib_testing/lib_testing.metta); reexported heads:
 
-```text
-binomial cartesian-power choose2 choose2l chooseK chooseKl factorial permutation-count
-permutations range range-step subsets takeK tuples
-```
+| Feature | Heads |
+|---|---|
+| Choices | `choose2`, `choose2l`, `chooseK`, `chooseKl`, `takeK` |
+| Products and tuples | `cartesian-power`, `tuples` |
+| Permutations | `permutation-count`, `permutations` |
+| Ranges | `range`, `range-step` |
+| Counts and subsets | `binomial`, `factorial`, `subsets` |
 
 Check finite domains and count answer multiplicities ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch08-data/08-03-the-shipped-libraries/43-testing_lib.metta)).
 
@@ -994,11 +995,12 @@ Provides Hyperon-Experimental compatibility equations for equality, errors, eval
 
 [Source](lib_he/lib_he.metta); heads:
 
-```text
-add-reduct assertAlphaEqual assertAlphaEqualToResult assertEqual assertEqualToResult
-evalc for-each-in-atom get-type-space if-equal if-equal2 if-error is-function
-match-type-or match-types noreduce-eq return-on-error unify unquote
-```
+| Feature | Heads |
+|---|---|
+| Assertions | `assertAlphaEqual`, `assertAlphaEqualToResult`, `assertEqual`, `assertEqualToResult` |
+| Conditionals | `if-equal`, `if-equal2`, `if-error` |
+| Type matching | `match-type-or`, `match-types` |
+| Other heads | `add-reduct`, `evalc`, `for-each-in-atom`, `get-type-space`, `is-function`, `noreduce-eq`, `return-on-error`, `unify`, `unquote` |
 
 ### lib_patrick
 
@@ -1006,9 +1008,9 @@ Provides function composition, reverse matching, a translated loop and indexed i
 
 [Source](lib_patrick/lib_patrick.metta); heads:
 
-```text
-@ compose for iterate
-```
+| Feature | Heads |
+|---|---|
+| Function and iteration idioms | `@`, `compose`, `for`, `iterate` |
 
 ### lib_roman
 
@@ -1016,11 +1018,12 @@ Provides tracing, flat and nested maps and folds, predicate-based set operations
 
 [Source](lib_roman/lib_roman.metta); heads:
 
-```text
-&&& &^& . .. .: /==\ /=\ /=a\ /?\ @ \= \=/ \== \==/ \=a \=a/ \? \?/ cns first flip
-fold-flat fold-nested foldr-flat fst head init map-flat map-nested mylast rcons second
-snd tail traceid tracem
-```
+| Feature | Heads |
+|---|---|
+| Folds | `fold-flat`, `fold-nested`, `foldr-flat` |
+| Maps | `map-flat`, `map-nested` |
+| Tracing | `traceid`, `tracem` |
+| Other heads | `&&&`, `&^&`, `.`, `..`, `.:`, `/==\`, `/=\`, `/=a\`, `/?\`, `@`, `\=`, `\=/`, `\==`, `\==/`, `\=a`, `\=a/`, `\?`, `\?/`, `cns`, `first`, `flip`, `fst`, `head`, `init`, `mylast`, `rcons`, `second`, `snd`, `tail` |
 
 ### lib_zar
 
@@ -1028,7 +1031,7 @@ Provides predicate-style Prolog consultation, module loading and named function 
 
 [Source](lib_zar/lib_zar.metta); heads:
 
-```text
-consult_file import_prolog_functions_from_file_pred
-import_prolog_functions_from_module_pred use_module_file
-```
+| Feature | Heads |
+|---|---|
+| Function imports | `import_prolog_functions_from_file_pred`, `import_prolog_functions_from_module_pred` |
+| Consultation and modules | `consult_file`, `use_module_file` |
