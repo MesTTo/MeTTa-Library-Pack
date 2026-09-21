@@ -52,7 +52,14 @@
 'csv-space'(Path, Space) :- 'csv-space'(Path, [], Space).
 'csv-space'(Path, Options, Space) :-
     csv_config(Options, Config), csv_path('csv-space', Path, Absolute),
-    csv_with_input('csv-space', Absolute, _, true),
+    %A probe that only OPENS establishes nothing: POSIX open(2) on a directory
+    %succeeds and it is read(2) that answers EISDIR, so `true` here accepted a
+    %directory and handed back a descriptor for a source that cannot be read,
+    %with the failure surfacing later somewhere else [measured 2026-09-21:
+    %open/4 on a directory returns a stream and read_string/3 then raises
+    %io_error(read, _, 'Is a directory')]. Touching the stream is what makes the
+    %probe a probe; csv_file_error/3 names whatever it raises.
+    csv_with_input('csv-space', Absolute, Stream, peek_byte(Stream, _)),
     csv_descriptor(Absolute, Config, Space).
 
 %! 'csv-snapshot!'(+Path:any, -Space:'SpaceType') is det.
