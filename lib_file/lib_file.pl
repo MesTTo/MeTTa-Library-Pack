@@ -296,7 +296,7 @@ binary_handle(Operation, Handle, Stream) :-
     ),
     file_open_mode(Letters, Mode),
     (   Mode == read, \+ exists_file(PathText)
-    ->  existence_error(source_sink, PathText)
+    ->  metta_file_refusal('file-open!', error(existence_error(source_sink, PathText), _))
     ;   true
     ),
     (   memberchk(b, Letters)
@@ -480,7 +480,7 @@ release_temp_dir(Directory) :-
     metta_text(Path, PathText),
     (   exists_file(PathText)
     ->  true
-    ;   existence_error(source_sink, PathText)
+    ;  metta_file_refusal('read-file!', error(existence_error(source_sink, PathText), _))
     ),
     setup_call_cleanup(open(PathText, read, Stream, [encoding(utf8)]),
                        read_string(Stream, _, Content),
@@ -516,7 +516,7 @@ release_temp_dir(Directory) :-
     metta_text(Path, PathText),
     (   exists_file(PathText)
     ->  true
-    ;   existence_error(source_sink, PathText)
+    ;  metta_file_refusal('read-bytes!', error(existence_error(source_sink, PathText), _))
     ),
     setup_call_cleanup(open(PathText, read, Stream, [type(binary)]),
                        read_stream_to_codes(Stream, Bytes),
@@ -696,7 +696,7 @@ delete_tree(Path) :-
     metta_text(Path, PathText),
     (   exists_directory(PathText)
     ->  true
-    ;   existence_error(directory, PathText)
+    ;  metta_file_refusal('list-dir!', error(existence_error(directory, PathText), _))
     ),
     sorted_entries(PathText, Names),
     maplist(entry_to_string, Names, Entries).
