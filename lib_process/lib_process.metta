@@ -27,19 +27,19 @@
 (= (package backing) (prolog (library "lib_process/lib_process.pl")
   (process-run! process-run-input! process-signal! process-signals process-start! process-status process-wait!)))
 
-(: process-run! (-> String Expression Expression))
+(: process-run! (-> %Undefined% %Undefined% Expression))
 (@doc process-run!
   (@desc "Run the program with those arguments, wait for it, and answer (process-result Code Output Error): the exit code as a Number, and everything it wrote to its two streams as Strings. A nonzero code is a STATUS, because a program that ran and failed is not the same as one that could not run; only a launch that could not happen raises, naming the program. The arguments are a collection and never a command line, so nothing in them can become a second command. Both streams are read to completion before the wait, which is what keeps a program that fills a pipe from deadlocking.")
   (@params ((@param "Program") (@param "Arguments")))
   (@return "Result"))
 
-(: process-run-input! (-> String Expression String Expression))
+(: process-run-input! (-> %Undefined% %Undefined% %Undefined% Expression))
 (@doc process-run-input!
   (@desc "The same, with that text written to the program's standard input and the stream closed, which is how a program that reads its input is fed without a temporary file.")
   (@params ((@param "Program") (@param "Arguments") (@param "Input")))
   (@return "Result"))
 
-(: process-signal! (-> Number Symbol Bool))
+(: process-signal! (-> %Undefined% Symbol Bool))
 (@doc process-signal!
   (@desc "Send one of the signals this library names: `term` asks a program to stop, `kill` takes it away without asking, `int` is what a terminal's interrupt sends and `hup` is what a closed terminal sends. A signal the library does not know is refused with the four listed; the process still has to be waited for afterwards.")
   (@params ((@param "Process") (@param "Signal")))
@@ -51,19 +51,19 @@
   (@params ())
   (@return "Signals"))
 
-(: process-start! (-> String Expression Number))
+(: process-start! (-> %Undefined% %Undefined% Number))
 (@doc process-start!
   (@desc "Start the program and answer its identifier without waiting. Its three streams are this process's own, so what it writes appears where this program's output does; a run whose output matters is process-run!'s job. The caller has to wait for it or signal it: until it does, the host keeps the exit status.")
   (@params ((@param "Program") (@param "Arguments")))
   (@return "Process"))
 
-(: process-status (-> Number %Undefined%))
+(: process-status (-> %Undefined% %Undefined%))
 (@doc process-status
   (@desc "Whether the process is still running, without waiting for it: the Symbol `running` while it is, and its exit code once it is not. This is what a program polls.")
   (@params ((@param "Process")))
   (@return "Status"))
 
-(: process-wait! (-> Number Number))
+(: process-wait! (-> %Undefined% Number))
 (@doc process-wait!
   (@desc "Wait for the process and answer its exit code, or the negative of the signal that ended it. Waiting twice for one process raises, because the host has already forgotten it.")
   (@params ((@param "Process")))

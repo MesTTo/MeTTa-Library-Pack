@@ -14,7 +14,7 @@
   (@params ((@param "Algorithm") (@param "Text")))
   (@return "Hex"))
 
-(: crypto-hash-bytes (-> %Undefined% Expression String))
+(: crypto-hash-bytes (-> %Undefined% %Undefined% String))
 (@doc crypto-hash-bytes
   (@desc "Hash an expression of byte integers 0..255 without text transcoding. Empty bytes are valid. Algorithms and reduced-platform support match crypto-hash.")
   (@params ((@param "Algorithm") (@param "Bytes")))
@@ -32,7 +32,7 @@
   (@params ((@param "Algorithm") (@param "Key") (@param "Text")))
   (@return "Hex"))
 
-(: crypto-hmac-bytes (-> %Undefined% Expression Expression String))
+(: crypto-hmac-bytes (-> %Undefined% %Undefined% %Undefined% String))
 (@doc crypto-hmac-bytes
   (@desc "Authenticate raw bytes with a raw byte key; both expressions contain only integers 0..255. Algorithms and reduced support match crypto-hmac.")
   (@params ((@param "Algorithm") (@param "Key") (@param "Bytes")))

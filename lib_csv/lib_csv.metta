@@ -47,7 +47,7 @@
 (: csv-space (-> %Undefined% Expression SpaceType))
 (: csv-space (-> %Undefined% SpaceType))
 (@doc csv-space
-  (@desc "Return a live read-only space of (row Field...) atoms. Each query reopens the UTF-8 file and preserves order and duplicate rows. Fields are Strings. Options are unique (separator String), (quote String), (newline String), (width infer|any|Number), and (skip Number) expressions. Defaults are comma, double quote, CRLF, inferred width and zero skipped records. An empty quote disables quoting. Skipped records still establish and validate width. Quote literal option data, for example (quote ((quote \"\"))). The parameter evaluates, so a function may also compute and return the complete options.")
+  (@desc "Return a live read-only space of (row Field...) atoms. Each query reopens the UTF-8 file and preserves order and duplicate rows. Fields are Strings. Options are unique (separator String), (quote String), (newline String), (width infer|any|Number), and (skip Number) expressions. Defaults are comma, double quote, CRLF, inferred width and zero skipped records. An empty quote disables quoting. Skipped records still establish and validate width. Quote literal option data, for example (quote ((quote \"\"))). The parameter evaluates, so a function may also compute and return the complete options. The source is checked WHEN THE SPACE IS MADE, not only when it is queried: a path that cannot be read raises there, named for this call, so a bad path is refused where it was written rather than at the first query.")
   (@params ((@param "Path") (@param "Options")))
   (@return "Space"))
 

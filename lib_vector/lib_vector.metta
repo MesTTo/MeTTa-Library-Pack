@@ -55,61 +55,61 @@
 (= (package backing) (prolog (library "lib_vector/lib_vector.pl")
   (cosine dot norm vector-add vector-distance vector-divide vector-multiply vector-normalize vector-scale vector-subtract)))
 
-(: cosine (-> Expression Expression Number))
+(: cosine (-> %Undefined% %Undefined% Number))
 (@doc cosine
   (@desc "Return the cosine similarity of equal-dimensional numeric expressions. Compute the exact finite ratio before rounding, even if a norm would overflow or underflow. Zero or nonfinite vectors produce NaN.")
   (@params ((@param "Left") (@param "Right")))
   (@return "Similarity"))
 
-(: dot (-> Expression Expression Number))
+(: dot (-> %Undefined% %Undefined% Number))
 (@doc dot
   (@desc "Return the dot product as a float. Accumulate exact finite products before one rounding; preserve IEEE infinities and NaNs. Empty inputs return 0.0. Both complete numeric expressions must have the same dimension.")
   (@params ((@param "Left") (@param "Right")))
   (@return "Product"))
 
-(: norm (-> Expression Number))
+(: norm (-> %Undefined% Number))
 (@doc norm
   (@desc "Return the correctly rounded Euclidean length of a numeric expression. Exact squared sums avoid intermediate overflow and underflow. Empty inputs return 0.0; NaN propagates and infinity without NaN returns infinity.")
   (@params ((@param "Vector")))
   (@return "Length"))
 
-(: vector-add (-> Expression Expression Expression))
+(: vector-add (-> %Undefined% %Undefined% Expression))
 (@doc vector-add
   (@desc "Add equal-dimensional numeric expressions component by component. Exact operands stay exact; a floating operand makes that result a float rounded once. Preserve IEEE signed zeros, infinities and NaNs.")
   (@params ((@param "Left") (@param "Right")))
   (@return "Vector"))
 
-(: vector-distance (-> Expression Expression Number))
+(: vector-distance (-> %Undefined% %Undefined% Number))
 (@doc vector-distance
   (@desc "Return the correctly rounded Euclidean distance of equal-dimensional numeric expressions. Subtract and sum squared differences exactly before the final root; preserve IEEE infinity and NaN behavior. Empty returns 0.0.")
   (@params ((@param "Left") (@param "Right")))
   (@return "Distance"))
 
-(: vector-divide (-> Expression Expression Expression))
+(: vector-divide (-> %Undefined% %Undefined% Expression))
 (@doc vector-divide
   (@desc "Divide corresponding components. Exact operands return exact rationals; an exact zero divisor raises for the whole operation. A floating operand selects rounded floating results and IEEE zero division. Dimensions match.")
   (@params ((@param "Left") (@param "Right")))
   (@return "Vector"))
 
-(: vector-multiply (-> Expression Expression Expression))
+(: vector-multiply (-> %Undefined% %Undefined% Expression))
 (@doc vector-multiply
   (@desc "Multiply corresponding components, with vector-add's exact, floating and dimension rules. Use dot to sum the exact products before rounding.")
   (@params ((@param "Left") (@param "Right")))
   (@return "Vector"))
 
-(: vector-normalize (-> Expression Expression))
+(: vector-normalize (-> %Undefined% Expression))
 (@doc vector-normalize
   (@desc "Return floating coordinates in the same direction with unit length, rounding each exact finite ratio once. Keep direction when a rounded norm would overflow or underflow. Empty stays empty; zero vectors yield NaNs. An infinite norm maps finite coordinates to signed zero and infinities to NaN; a NaN norm yields NaNs. Signed zero coordinates keep their signs.")
   (@params ((@param "Vector")))
   (@return "Unit"))
 
-(: vector-scale (-> Expression Number Expression))
+(: vector-scale (-> %Undefined% %Undefined% Expression))
 (@doc vector-scale
   (@desc "Multiply every component by Factor, with vector-multiply's number rules. Validate Factor even when the vector is empty.")
   (@params ((@param "Vector") (@param "Factor")))
   (@return "Scaled"))
 
-(: vector-subtract (-> Expression Expression Expression))
+(: vector-subtract (-> %Undefined% %Undefined% Expression))
 (@doc vector-subtract
   (@desc "Subtract Right from Left component by component, with vector-add's exact, floating and dimension rules.")
   (@params ((@param "Left") (@param "Right")))

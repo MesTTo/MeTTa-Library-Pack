@@ -31,37 +31,37 @@
 (= (package backing) (prolog (library "lib_markup/lib_markup.pl")
   (markup-attribute markup-parse-html markup-parse-xml markup-select markup-text markup-write)))
 
-(: markup-attribute (-> Expression Atom String))
+(: markup-attribute (-> %Undefined% Atom String))
 (@doc markup-attribute
   (@desc "One attribute's value as a String, with no answer when the element does not carry it, which is the shape a lookup has here and in lib_pairs. The name is HELD, which an attribute name has to be: one is often called id, class or type, and each of those is also a name the engine knows. Declared Symbol the call was refused with a BadArgType naming the identity function's arrow, and declared %Undefined% the name was evaluated and matched nothing [measured 2026-09-12: both, over (markup-attribute $doc id)].")
   (@params ((@param "Element") (@param "Name")))
   (@return "Value"))
 
-(: markup-parse-html (-> String Expression))
+(: markup-parse-html (-> %Undefined% Expression))
 (@doc markup-parse-html
   (@desc "One HTML document in the same shape. HTML's own rules are the host's: an omitted end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a stray close tag or unparsable text is still a refusal.")
   (@params ((@param "Text")))
   (@return "Element"))
 
-(: markup-parse-xml (-> String Expression))
+(: markup-parse-xml (-> %Undefined% Expression))
 (@doc markup-parse-xml
   (@desc "One XML document as (element Name Attributes Children): the name a Symbol, each attribute an (attr Name Value) row and the children an expression of elements and Strings. The attribute row is tagged so that a document holding an `id` or a `class` is inert data rather than a call. The parse is STRICT. The host's parser repairs a missing end tag, a stray close tag and character data outside any element, warns on stderr and answers a DOM anyway; every one of those becomes a refusal here, because a document that needed repair is a document the sender got wrong. An external SYSTEM entity is refused for the same reason, which is also what keeps a parse from fetching a file or a URL the document names.")
   (@params ((@param "Text")))
   (@return "Element"))
 
-(: markup-select (-> Expression Atom %Undefined%))
+(: markup-select (-> %Undefined% Atom %Undefined%))
 (@doc markup-select
   (@desc "Every match of the selector, one answer each and in document order. A selector that matches nothing has no answer, which is what makes a selection compose with collapse and with an if over it. The selector is an expression, and a collection of steps is a path: (descendant Name) is every element of that name at any depth, (child Name) every immediate child of that name, and (self Name) the element itself when it carries that name. The other three MODIFY the step they follow: (index N) takes the Nth match counting from one, (attribute Name) answers that attribute's value as a String and (text) answers the element's text content. An unknown form is refused with the five listed.")
   (@params ((@param "Element") (@param "Selector")))
   (@return "Selected"))
 
-(: markup-text (-> Expression String))
+(: markup-text (-> %Undefined% String))
 (@doc markup-text
   (@desc "Every text node under the element, in document order, joined: the content a reader sees with the markup taken out. An element with no text answers the empty String.")
   (@params ((@param "Element")))
   (@return "Text"))
 
-(: markup-write (-> Expression String))
+(: markup-write (-> %Undefined% String))
 (@doc markup-write
   (@desc "The element as XML text, without the declaration the host writes by default and without layout, so the text is exactly the element's own markup and parses back to it.")
   (@params ((@param "Element")))

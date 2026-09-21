@@ -79,13 +79,13 @@
   (@params ((@param "Path") (@param "Options")))
   (@return "Entry"))
 
-(: exit! (-> Number %Undefined%))
+(: exit! (-> %Undefined% %Undefined%))
 (@doc exit!
   (@desc "Terminate the entire process with integer status 0 through 255, including an embedding host; not an application-level return, so MeTTa catch does not turn it into a local value.")
   (@params ((@param "Status")))
   (@return "Never"))
 
-(: file-close! (-> Number Bool))
+(: file-close! (-> %Undefined% Bool))
 (@doc file-close!
   (@desc "Close a handle file-open! gave. Closing twice is silent, because a cleanup path should not have to check first; a failed close raises by name, because a write that never reached the disk is data lost. The three standard streams are refused: the process owns them and a closed one cannot be put back. Not in HE's stdlib. A process that can open files and never close them leaks descriptors until it dies, so this exists.")
   (@params ((@param "Handle")))
@@ -97,7 +97,7 @@
   (@params ((@param "Path")))
   (@return "Answer"))
 
-(: file-get-size! (-> Number Number))
+(: file-get-size! (-> %Undefined% Number))
 (@doc file-get-size!
   (@desc "Answer the size of the whole file in bytes, not of what is left to read, so seeking does not change the answer; a handle without a file name measures the stream position instead.")
   (@params ((@param "Handle")))
@@ -127,26 +127,26 @@
   (@params ((@param "Path") (@param "Options")))
   (@return "Handle"))
 
-(: file-read-bytes! (-> Number Expression))
-(: file-read-bytes! (-> Number Number Expression))
+(: file-read-bytes! (-> %Undefined% %Undefined% Expression))
+(: file-read-bytes! (-> %Undefined% Expression))
 (@doc file-read-bytes!
   (@desc "Read the remaining bytes, or at most Count bytes, from a binary handle's cursor as an expression of integers 0 to 255. A short read at the end of the file is the answer. A text handle refuses.")
   (@params ((@param "Handle") (@param "Count")))
   (@return "Bytes"))
 
-(: file-read-exact! (-> Number Number String))
+(: file-read-exact! (-> %Undefined% %Undefined% String))
 (@doc file-read-exact!
   (@desc "Read at most Count characters from a text handle's cursor, HE's contract: a short read near the end of the file is the answer, not an error.")
   (@params ((@param "Handle") (@param "Count")))
   (@return "Content"))
 
-(: file-read-to-string! (-> Number String))
+(: file-read-to-string! (-> %Undefined% String))
 (@doc file-read-to-string!
   (@desc "Read from the cursor to the end of a text handle as one String.")
   (@params ((@param "Handle")))
   (@return "Content"))
 
-(: file-seek! (-> Number Number Bool))
+(: file-seek! (-> %Undefined% %Undefined% Bool))
 (@doc file-seek!
   (@desc "Move the cursor to a byte offset from the start of the file, so the next read starts there; a negative position moves to the start.")
   (@params ((@param "Handle") (@param "Position")))
@@ -158,13 +158,13 @@
   (@params ((@param "Path")))
   (@return "Space"))
 
-(: file-write! (-> Number %Undefined% Bool))
+(: file-write! (-> %Undefined% %Undefined% Bool))
 (@doc file-write!
   (@desc "Write text to a text handle and flush, adding no newline.")
   (@params ((@param "Handle") (@param "Content")))
   (@return "Done"))
 
-(: file-write-bytes! (-> Number Expression Bool))
+(: file-write-bytes! (-> %Undefined% Expression Bool))
 (@doc file-write-bytes!
   (@desc "Write an expression of integers 0 to 255 to a binary handle and flush. The bytes are validated before anything is written. A text handle refuses.")
   (@params ((@param "Handle") (@param "Bytes")))
