@@ -49,6 +49,9 @@
 % disables quoting. Skipped records still establish and validate width.
 % Quote literal option data, for example (quote ((quote ""))). The parameter
 % evaluates, so a function may also compute and return the complete options.
+% The source is checked WHEN THE SPACE IS MADE, not only when it is queried:
+% a path that cannot be read raises there, named for this call, so a bad
+% path is refused where it was written rather than at the first query.
 'csv-space'(Path, Space) :- 'csv-space'(Path, [], Space).
 'csv-space'(Path, Options, Space) :-
     csv_config(Options, Config), csv_path('csv-space', Path, Absolute),
