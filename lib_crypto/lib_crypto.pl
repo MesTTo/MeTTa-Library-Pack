@@ -39,7 +39,7 @@ crypto_hash(Algorithm, Text, Hex) :- crypto_digest(Algorithm, utf8(Text), none, 
 % Hash UTF-8 text, with the same contract as crypto_hash.
 'crypto-hash'(Algorithm, Text, Hex) :- crypto_hash(Algorithm, Text, Hex).
 
-%! 'crypto-hash-bytes'(+Algorithm:any, +Bytes:list, -Hex:string) is det.
+%! 'crypto-hash-bytes'(+Algorithm:any, +Bytes:any, -Hex:string) is det.
 %
 % Hash an expression of byte integers 0..255 without text transcoding. Empty
 % bytes are valid. Algorithms and reduced-platform support match crypto-hash.
@@ -65,7 +65,7 @@ crypto_hash(Algorithm, Text, Hex) :- crypto_digest(Algorithm, utf8(Text), none, 
     text_bytes(Key, Bytes),
     crypto_digest(Algorithm, utf8(Text), Bytes, Hex).
 
-%! 'crypto-hmac-bytes'(+Algorithm:any, +Key:list, +Bytes:list, -Hex:string) is det.
+%! 'crypto-hmac-bytes'(+Algorithm:any, +Key:any, +Bytes:any, -Hex:string) is det.
 %
 % Authenticate raw bytes with a raw byte key; both expressions contain only
 % integers 0..255. Algorithms and reduced support match crypto-hmac.
@@ -183,7 +183,7 @@ secure_bytes(Count, Operation, Bytes) :-
     bytes_base64(Digest, Digest64),
     format(string(Record), '$pbkdf2-sha512$t=~d$~s$~s', [Iterations, Salt64, Digest64]).
 
-%! 'crypto-password-verify'(+Password:any, +Record:any, -Matches:bool) is det.
+%! 'crypto-password-verify'(+Password:any, +Record:any, -Matches:boolean) is det.
 %
 % Verify a PBKDF2-SHA512 record, returning True or False for a valid record.
 % Malformed records, invalid iteration counts and native failures raise. Legacy

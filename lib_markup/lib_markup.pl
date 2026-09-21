@@ -76,7 +76,7 @@
 :- use_module(library(sgml_write), [xml_write/3]).
 :- use_module(library(xpath), [xpath/3]).
 
-%! 'markup-parse-xml'(+Text:string, -Element:list) is det.
+%! 'markup-parse-xml'(+Text:any, -Element:list) is det.
 %
 % One XML document as (element Name Attributes Children): the name a Symbol, each
 % attribute an (attr Name Value) row and the children an expression of elements
@@ -93,7 +93,7 @@
     text_argument('markup-parse-xml', Text),
     parsed('markup-parse-xml', load_xml, Text, Element).
 
-%! 'markup-parse-html'(+Text:string, -Element:list) is det.
+%! 'markup-parse-html'(+Text:any, -Element:list) is det.
 %
 % One HTML document in the same shape. HTML's own rules are the host's: an omitted
 % end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a
@@ -157,7 +157,7 @@ attribute_pair(Name=Value, [attr, Name, String]) :-
 
 child_form(Child, Form) :- element_form(Child, Form).
 
-%! 'markup-write'(+Element:list, -Text:string) is det.
+%! 'markup-write'(+Element:any, -Text:string) is det.
 %
 % The element as XML text, without the declaration the host writes by default and
 % without layout, so the text is exactly the element's own markup and parses back
@@ -205,7 +205,7 @@ term_attribute(Head, Pair, Name=Value) :-
 
 term_child(Head, Part, Child) :- element_term(Head, Part, Child).
 
-%! 'markup-select'(+Element:list, +Selector:'Atom', -Selected:any) is nondet.
+%! 'markup-select'(+Element:any, +Selector:'Atom', -Selected:any) is nondet.
 %
 % Every match of the selector, one answer each and in document order. A selector
 % that matches nothing has no answer, which is what makes a selection compose with
@@ -331,7 +331,7 @@ path_spec([First|Steps], Spec) :- path_spec(Steps, First, Spec).
 path_spec([], Spec, Spec).
 path_spec([Step|Steps], Acc, Spec) :- path_spec(Steps, Acc/Step, Spec).
 
-%! 'markup-attribute'(+Element:list, +Name:'Atom', -Value:string) is semidet.
+%! 'markup-attribute'(+Element:any, +Name:'Atom', -Value:string) is semidet.
 %
 % One attribute's value as a String, with no answer when the element does not
 % carry it, which is the shape a lookup has here and in lib_pairs.
@@ -350,7 +350,7 @@ path_spec([Step|Steps], Acc, Spec) :- path_spec(Steps, Acc/Step, Spec).
                             'an element is (element Name Attributes Children)')))
     ).
 
-%! 'markup-text'(+Element:list, -Text:string) is det.
+%! 'markup-text'(+Element:any, -Text:string) is det.
 %
 % Every text node under the element, in document order, joined: the content a
 % reader sees with the markup taken out. An element with no text answers the empty

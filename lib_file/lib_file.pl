@@ -209,7 +209,7 @@ next_file_handle(Handle) :-
     flag('$metta_file_handle', Previous, Previous + 1),
     Handle is Previous + 3.
 
-%! known_file(+Handle:integer, -Stream:stream) is det.
+%! known_file(+Handle:any, -Stream:stream) is det.
 %
 % Borrow a registered stream without transferring ownership. The returned
 % stream remains subject to concurrent close; native consumers acquire it
@@ -318,14 +318,14 @@ file_open_mode(Letters, Mode) :-
     ;   Mode = read
     ).
 
-%! 'file-read-to-string!'(+Handle:integer, -Content:string) is det.
+%! 'file-read-to-string!'(+Handle:any, -Content:string) is det.
 %
 % Read from the cursor to the end of a text handle as one String.
 'file-read-to-string!'(Handle, Content) :-
     text_handle('file-read-to-string!', Handle, Stream),
     read_string(Stream, _, Content).
 
-%! 'file-read-exact!'(+Handle:integer, +Count:integer, -Content:string) is det.
+%! 'file-read-exact!'(+Handle:any, +Count:any, -Content:string) is det.
 %
 % Read at most Count characters from a text handle's cursor, HE's contract: a
 % short read near the end of the file is the answer, not an error.
@@ -335,7 +335,7 @@ file_open_mode(Letters, Mode) :-
     Wanted is max(0, Count),
     read_string(Stream, Wanted, Content).
 
-%! 'file-write!'(+Handle:integer, +Content:any, -Done:boolean) is det.
+%! 'file-write!'(+Handle:any, +Content:any, -Done:boolean) is det.
 %
 % Write text to a text handle and flush, adding no newline.
 'file-write!'(Handle, Content, true) :-
@@ -344,8 +344,8 @@ file_open_mode(Letters, Mode) :-
     write(Stream, Text),
     flush_output(Stream).
 
-%! 'file-read-bytes!'(+Handle:integer, -Bytes:list) is det.
-%! 'file-read-bytes!'(+Handle:integer, +Count:integer, -Bytes:list) is det.
+%! 'file-read-bytes!'(+Handle:any, -Bytes:list) is det.
+%! 'file-read-bytes!'(+Handle:any, +Count:any, -Bytes:list) is det.
 %
 % Read the remaining bytes, or at most Count bytes, from a binary handle's
 % cursor as an expression of integers 0 to 255. A short read at the end of the
@@ -369,7 +369,7 @@ read_bytes_up_to(Stream, Count, Bytes) :-
         read_bytes_up_to(Stream, Remaining, Rest)
     ).
 
-%! 'file-write-bytes!'(+Handle:integer, +Bytes:list, -Done:boolean) is det.
+%! 'file-write-bytes!'(+Handle:any, +Bytes:list, -Done:boolean) is det.
 %
 % Write an expression of integers 0 to 255 to a binary handle and flush. The
 % bytes are validated before anything is written. A text handle refuses.
@@ -391,7 +391,7 @@ bytes_list(Operation, Bytes) :-
           throw(error(Formal,
                       context(Operation, 'Bytes are an expression of integers 0 to 255')))).
 
-%! 'file-seek!'(+Handle:integer, +Position:integer, -Done:boolean) is det.
+%! 'file-seek!'(+Handle:any, +Position:any, -Done:boolean) is det.
 %
 % Move the cursor to a byte offset from the start of the file, so the next
 % read starts there; a negative position moves to the start.
@@ -401,7 +401,7 @@ bytes_list(Operation, Bytes) :-
     Target is max(0, Position),
     seek(Stream, Target, bof, _).
 
-%! 'file-get-size!'(+Handle:integer, -Size:integer) is det.
+%! 'file-get-size!'(+Handle:any, -Size:integer) is det.
 %
 % Answer the size of the whole file in bytes, not of what is left to read,
 % so seeking does not change the answer; a handle without a file name measures
@@ -415,7 +415,7 @@ bytes_list(Operation, Bytes) :-
         stream_position_data(char_count, Position, Size)
     ).
 
-%! 'file-close!'(+Handle:integer, -Done:boolean) is det.
+%! 'file-close!'(+Handle:any, -Done:boolean) is det.
 %
 % Close a handle file-open! gave. Closing twice is silent, because a cleanup
 % path should not have to check first; a failed close raises by name, because
@@ -1496,7 +1496,7 @@ metta_file_metadata(Path, Rows) :-
     catch(read_string(user_input, _, Content), Error,
           metta_file_refusal('stdin-to-string!', Error)).
 
-%! 'exit!'(+Status:integer, -Never:any) is det.
+%! 'exit!'(+Status:any, -Never:any) is det.
 %
 % Terminate the entire process with integer status 0 through 255, including
 % an embedding host; not an application-level return, so MeTTa catch does not

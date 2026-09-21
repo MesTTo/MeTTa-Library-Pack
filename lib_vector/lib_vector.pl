@@ -40,14 +40,14 @@ require_exact_runtime :-
     ; throw(error(vector_exact_arithmetic_unavailable,
                   context(lib_vector, 'install SWI-Prolog built with GMP rational arithmetic'))) ).
 
-%! dot(+Left:list(number), +Right:list(number), -Product:number) is det.
+%! dot(+Left:any, +Right:any, -Product:number) is det.
 %
 % Return the dot product as a float. Accumulate exact finite products before
 % one rounding; preserve IEEE infinities and NaNs. Empty inputs return 0.0.
 % Both complete numeric expressions must have the same dimension.
 dot(Left, Right, Product) :- operation(dot, dot_value(Left, Right, Product)).
 
-%! norm(+Vector:list(number), -Length:number) is det.
+%! norm(+Vector:any, -Length:number) is det.
 %
 % Return the correctly rounded Euclidean length of a numeric expression.
 % Exact squared sums avoid intermediate overflow and underflow. Empty inputs
@@ -55,7 +55,7 @@ dot(Left, Right, Product) :- operation(dot, dot_value(Left, Right, Product)).
 norm(Vector, Length) :-
     operation(norm, (vector_input(Vector), squared_sum(Vector, Sum), root(Sum, Length))).
 
-%! cosine(+Left:list(number), +Right:list(number), -Similarity:number) is det.
+%! cosine(+Left:any, +Right:any, -Similarity:number) is det.
 %
 % Return the cosine similarity of equal-dimensional numeric expressions.
 % Compute the exact finite ratio before rounding, even if a norm would
@@ -66,7 +66,7 @@ cosine(Left, Right, Similarity) :-
           foldl(moments, Left, Right, moments(0,0,0), moments(Dot,A2,B2)),
           cosine_value(Dot, A2, B2, Similarity) )).
 
-%! 'vector-add'(+Left:list(number), +Right:list(number), -Vector:list(number)) is det.
+%! 'vector-add'(+Left:any, +Right:any, -Vector:list(number)) is det.
 %
 % Add equal-dimensional numeric expressions component by component. Exact
 % operands stay exact; a floating operand makes that result a float rounded
@@ -74,21 +74,21 @@ cosine(Left, Right, Similarity) :-
 'vector-add'(Left, Right, Vector) :-
     operation('vector-add', elementwise(+, Left, Right, Vector)).
 
-%! 'vector-subtract'(+Left:list(number), +Right:list(number), -Vector:list(number)) is det.
+%! 'vector-subtract'(+Left:any, +Right:any, -Vector:list(number)) is det.
 %
 % Subtract Right from Left component by component, with vector-add's exact,
 % floating and dimension rules.
 'vector-subtract'(Left, Right, Vector) :-
     operation('vector-subtract', elementwise(-, Left, Right, Vector)).
 
-%! 'vector-multiply'(+Left:list(number), +Right:list(number), -Vector:list(number)) is det.
+%! 'vector-multiply'(+Left:any, +Right:any, -Vector:list(number)) is det.
 %
 % Multiply corresponding components, with vector-add's exact, floating and
 % dimension rules. Use dot to sum the exact products before rounding.
 'vector-multiply'(Left, Right, Vector) :-
     operation('vector-multiply', elementwise(*, Left, Right, Vector)).
 
-%! 'vector-divide'(+Left:list(number), +Right:list(number), -Vector:list(number)) is det.
+%! 'vector-divide'(+Left:any, +Right:any, -Vector:list(number)) is det.
 %
 % Divide corresponding components. Exact operands return exact rationals;
 % an exact zero divisor raises for the whole operation. A floating operand
@@ -96,7 +96,7 @@ cosine(Left, Right, Similarity) :-
 'vector-divide'(Left, Right, Vector) :-
     operation('vector-divide', elementwise(/, Left, Right, Vector)).
 
-%! 'vector-scale'(+Vector:list(number), +Factor:number, -Scaled:list(number)) is det.
+%! 'vector-scale'(+Vector:any, +Factor:any, -Scaled:list(number)) is det.
 %
 % Multiply every component by Factor, with vector-multiply's number rules.
 % Validate Factor even when the vector is empty.
@@ -105,7 +105,7 @@ cosine(Left, Right, Similarity) :-
         ( vector_input(Vector), must_be(number, Factor),
           maplist(scalar(*, Factor), Vector, Scaled) )).
 
-%! 'vector-normalize'(+Vector:list(number), -Unit:list(number)) is det.
+%! 'vector-normalize'(+Vector:any, -Unit:list(number)) is det.
 %
 % Return floating coordinates in the same direction with unit length,
 % rounding each exact finite ratio once. Keep direction when a rounded norm
@@ -115,7 +115,7 @@ cosine(Left, Right, Similarity) :-
 'vector-normalize'(Vector, Unit) :-
     operation('vector-normalize', (vector_input(Vector), normalize(Vector, Unit))).
 
-%! 'vector-distance'(+Left:list(number), +Right:list(number), -Distance:number) is det.
+%! 'vector-distance'(+Left:any, +Right:any, -Distance:number) is det.
 %
 % Return the correctly rounded Euclidean distance of equal-dimensional
 % numeric expressions. Subtract and sum squared differences exactly before

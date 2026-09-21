@@ -67,7 +67,7 @@
 % so importing it warns `not exported (still imported into lib_process)` and nothing
 % is gained; the builtin resolves here as it does everywhere.
 
-%! 'process-run!'(+Program:string, +Arguments:list, -Result:list) is det.
+%! 'process-run!'(+Program:any, +Arguments:any, -Result:list) is det.
 %
 % Run the program with those arguments, wait for it, and answer
 % (process-result Code Output Error): the exit code as a Number, and everything it
@@ -81,7 +81,7 @@
 'process-run!'(Program, Arguments, Result) :-
     captured_run('process-run!', Program, Arguments, no_input, Result).
 
-%! 'process-run-input!'(+Program:string, +Arguments:list, +Input:string, -Result:list) is det.
+%! 'process-run-input!'(+Program:any, +Arguments:any, +Input:any, -Result:list) is det.
 %
 % The same, with that text written to the program's standard input and the stream
 % closed, which is how a program that reads its input is fed without a temporary
@@ -121,7 +121,7 @@ write_and_close(Stream, Text) :-
 exit_code(exit(Code), Code).
 exit_code(killed(Signal), Code) :- Code is -Signal.
 
-%! 'process-start!'(+Program:string, +Arguments:list, -Process:number) is det.
+%! 'process-start!'(+Program:any, +Arguments:any, -Process:number) is det.
 %
 % Start the program and answer its identifier without waiting. Its three streams are
 % this process's own, so what it writes appears where this program's output does; a
@@ -132,7 +132,7 @@ exit_code(killed(Signal), Code) :- Code is -Signal.
     argument_vector('process-start!', Arguments, Vector),
     launched('process-start!', Program, Executable, Vector, [process(Process)]).
 
-%! 'process-wait!'(+Process:number, -Code:number) is det.
+%! 'process-wait!'(+Process:any, -Code:number) is det.
 %
 % Wait for the process and answer its exit code, or the negative of the signal that
 % ended it. Waiting twice for one process raises, because the host has already
@@ -148,7 +148,7 @@ exit_code(killed(Signal), Code) :- Code is -Signal.
                             'this process has already been waited for, or was never started here')))
     ).
 
-%! 'process-status'(+Process:number, -Status:any) is det.
+%! 'process-status'(+Process:any, -Status:any) is det.
 %
 % Whether the process is still running, without waiting for it: the Symbol `running`
 % while it is, and its exit code once it is not. This is what a program polls.
@@ -164,7 +164,7 @@ exit_code(killed(Signal), Code) :- Code is -Signal.
                             'this process has already been waited for, or was never started here')))
     ).
 
-%! 'process-signal!'(+Process:number, +Signal:'Symbol', -Done:boolean) is det.
+%! 'process-signal!'(+Process:any, +Signal:'Symbol', -Done:boolean) is det.
 %
 % Send one of the signals this library names: `term` asks a program to stop, `kill`
 % takes it away without asking, `int` is what a terminal's interrupt sends and `hup`
