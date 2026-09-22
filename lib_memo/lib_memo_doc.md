@@ -170,9 +170,10 @@ aggregation, and never truncates at `answer-limit`. When a probe finds more
 answers than the configured limit, that call runs directly and increments
 `automatic_answer_limit_bypass`; duplicate answers remain duplicate.
 
-Python `@space.cache` takes a separate exact path. The compiler emits a direct
-call to a generated table for each function arity. A raw answer contributes
-the coefficient `1`; SWI's mode-directed `sum` combines coefficients for equal
+`!(memoize-exact f)` and Python `@space.cache` take the same exact path. The
+compiler emits a direct call to a generated table for each function arity.
+A raw answer contributes the coefficient `1`; SWI's mode-directed `sum`
+combines coefficients for equal
 solved answers in its C trie, and replay emits that answer the recorded number
 of times. Exact decorator keys do not use manual float quantization,
 aggregation, or `answer-limit`. `cache_info()` counts tabled call variants as
@@ -186,6 +187,16 @@ same function selects a fresh variant instead of replaying its private stale
 table. Generations stay monotonic across `clear-memoize` and disable/re-enable
 cycles for the same reason; only live-generation tries contribute to
 `cache_info()`.
+
+The recursive coefficient regression uses `memoize-exact` explicitly:
+`(cache f force)` selects the ordinary cache and does not exercise the `sum`
+table. For a leaf bag `(1 1 2)` and a recursive step adding two calls at depth
+`n - 1`, depths 0 through 3 return 3, 9, 81 and 6,561 occurrences. The Prolog
+suite `memo_coefficients.plt` compares the whole uncached bag against cold and
+replayed exact calls and checks that an exact table was populated. These
+descending call variants do not form the same-variant cycle in which an
+updated aggregate can be delivered again; the check does not license `sum`
+aggregation over arbitrary cyclic table dependencies.
 
 Bounded search is not admitted automatically. `lib_memo` eagerly collects a
 miss's complete bag; probing recursion beneath `once`, `take`, or `top` could
