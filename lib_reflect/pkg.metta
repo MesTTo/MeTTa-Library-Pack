@@ -1,9 +1,16 @@
-; The manifest for lib_reflect: what it depends on, and where its
-; source is. The library itself is lib.metta beside this file.
+; The manifest for lib_reflect. Every row is an equation on the reserved head
+; `package`, so any implementation that can read atoms reads this file
+; without evaluating it: the requirements are data, not an instruction that
+; only one engine understands.
+;
+; A requirement naming a library resolves through the catalogs in force; one
+; shaped like a path resolves beside this file. `lib.metta` is this library's
+; own MeTTa source, and its `(= (package backing) ...)` rows name the host
+; artifacts that supply the heads MeTTa does not define.
 
-!(import! &self (library lib_import))
-!(import! &self (library lib_json))
-!(import! &self (library lib_pairs))
-!(import! &self (library lib_strategy))
+(= (package requires) lib_import)
+(= (package requires) lib_json)
+(= (package requires) lib_pairs)
+(= (package requires) lib_strategy)
 
-!(import! &self (library "lib_reflect/lib.metta"))
+(= (package requires) "lib.metta")

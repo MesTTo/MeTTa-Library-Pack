@@ -1,7 +1,14 @@
-; The manifest for lib_random: what it depends on, and where its
-; source is. The library itself is lib.metta beside this file.
+; The manifest for lib_random. Every row is an equation on the reserved head
+; `package`, so any implementation that can read atoms reads this file
+; without evaluating it: the requirements are data, not an instruction that
+; only one engine understands.
+;
+; A requirement naming a library resolves through the catalogs in force; one
+; shaped like a path resolves beside this file. `lib.metta` is this library's
+; own MeTTa source, and its `(= (package backing) ...)` rows name the host
+; artifacts that supply the heads MeTTa does not define.
 
-!(import! &self (library lib_math))
-!(import! &self (library lib_functional))
+(= (package requires) lib_math)
+(= (package requires) lib_functional)
 
-!(import! &self (library "lib_random/lib.metta"))
+(= (package requires) "lib.metta")
