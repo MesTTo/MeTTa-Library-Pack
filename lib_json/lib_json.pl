@@ -28,7 +28,7 @@
 :- use_module('../../engine/json_codec',
               [json_codec_read/3, json_codec_write/3, json_codec_write/4]).
 :- use_module('../lib_string/lib_string', [metta_text/2]).
-:- use_module('../_support/owned_resources', [with_outcome_cleanup/3]).
+:- use_module('../../engine/owned_resources', [with_outcome_cleanup/3]).
 :- use_module(library(apply), [maplist/2]).
 :- use_module(library(assoc), [empty_assoc/1, get_assoc/3, put_assoc/4]).
 :- use_module(library(error), [must_be/2, type_error/2, instantiation_error/1]).

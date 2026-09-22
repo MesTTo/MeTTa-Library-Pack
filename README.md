@@ -5,7 +5,12 @@ Guarantees: every library directory has an entry, every listed head occurs in it
 
 # MeTTa Library Pack
 
-The MeTTa Library Pack supplies 61 libraries for MeTTa programs.
+The MeTTa Library Pack supplies 60 libraries for MeTTa programs.
+
+Package handling is not among them. `setup!`, `get-property` and the claim that
+backs a `(= (package backing) (prolog ...))` row are the engine's, because a
+manifest has to mean the same thing to every MeTTa implementation and a library
+only this engine can load cannot carry that.
 
 ```metta
 !(import! &self (library lib_memo))
@@ -873,16 +878,6 @@ Implements the engine's resident Git import operation and pinned dependency acqu
 | Feature | Heads |
 |---|---|
 | Git imports | `git-import!` |
-
-### lib_package
-
-Interprets package declarations, prepares dependencies and registers Prolog backings through the resident package service.
-
-[Source](lib_package/pkg.metta) / [Prolog](lib_package/lib_package.pl); heads:
-
-| Feature | Heads |
-|---|---|
-| Packages | `get-property`, `package-prolog`, `setup!` |
 
 ### lib_memo
 

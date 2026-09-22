@@ -26,7 +26,7 @@
            'csv-append!'/3, 'csv-append!'/4]).
 :- set_module(base(metta_engine)).
 :- use_module('support/csv_codec', []).
-:- use_module('../_support/owned_resources', [with_outcome_cleanup/3]).
+:- use_module('../../engine/owned_resources', [with_outcome_cleanup/3]).
 :- use_module('../lib_string/lib_string', [metta_text/2]).
 :- use_module(library(error), [must_be/2, domain_error/2]).
 :- use_module(library(apply), [maplist/3]).

@@ -30,7 +30,7 @@
 :- use_module(library(varnumbers), [varnumbers_names/3]).
 :- use_module('../lib_string/lib_string', [metta_text/2]).
 :- use_module('../lib_csv/support/csv_codec', [utf8_text/2]).
-:- use_module('../_support/owned_resources', [with_outcome_cleanup/3]).
+:- use_module('../../engine/owned_resources', [with_outcome_cleanup/3]).
 :- use_module('support/native', [claim_stream/2]).
 
 %! 'database-open!'(+Directory:any, +Sync:atom, -Handle:any) is det.
