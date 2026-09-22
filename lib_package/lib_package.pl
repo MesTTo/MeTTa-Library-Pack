@@ -555,15 +555,26 @@ package_git_requirement(Source, Url, Rev, Name, Path) :-
        directory_file_path(Directory, repos, Base),
        lib_gitimport:'git-import!'(Url, '', Base, Rev, _),
        lib_gitimport:git_library_path(Name, Checkout),
-       directory_file_path(Checkout, Name, Stem),
-       package_existing_source([git, Url, Rev], Stem, Path)
+       package_checkout_entry([git, Url, Rev], Checkout, Name, Path)
     ; package_locked_requirement(Source, [git, Url, Rev], Locked)
     -> package_existing_source([git, Url, Rev], Locked, Path)
     ; lib_gitimport:git_pinned_dependency(Url, Rev),
       lib_gitimport:git_library_path(Name, Checkout)
-    -> directory_file_path(Checkout, Name, Stem),
-       package_existing_source([git, Url, Rev], Stem, Path)
+    -> package_checkout_entry([git, Url, Rev], Checkout, Name, Path)
     ; package_missing_requirement([git, Url, Rev]) ).
+
+%The file a checkout is entered through: its `pkg.metta` manifest, and only
+%where there is none the file named after the repository.
+%
+%Written once rather than at each of the two branches above, which is where
+%the repository-named form used to sit twice. The manifest is the standard,
+%and the second candidate is what every package written before it has.
+package_checkout_entry(Required, Checkout, Name, Path) :-
+    directory_file_path(Checkout, 'pkg.metta', Manifest),
+    (   exists_file(Manifest)
+    ->  package_existing_source(Required, Manifest, Path)
+    ;   directory_file_path(Checkout, Name, Stem),
+        package_existing_source(Required, Stem, Path) ).
 
 package_setup_root(Default, Root) :-
     ( package_stack(Stack), Stack \== [] -> last(Stack, Root) ; Root = Default ).
