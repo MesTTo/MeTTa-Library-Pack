@@ -56,6 +56,9 @@ seam:builtin_type_declaration('package-prolog', [->, 'Atom', 'Atom', 'Bool']).
 :- '$notransact'(package_acquired/5).
 :- '$notransact'(package_pending_requirement/2).
 :- meta_predicate package_context(+, +, 0), package_loading(+, +, 0).
+:- meta_predicate package_manifest(+, +, +, +, -, 0).
+:- meta_predicate package_unimport(+, +, 0).
+:- meta_predicate package_with_directory_lock(+, 0).
 :- seam:context_reader(package_mode(Mode), '$metta_package_mode', value(Mode)).
 :- seam:context_reader(package_setup_state(State), '$metta_package_setup', value(State)).
 :- seam:context_reader(package_stack(Stack), '$metta_package_stack', value(Stack)).
@@ -361,7 +364,6 @@ package_install_hooks :-
           at_halt(lib_package:package_close_all),
           assertz(package_hooks_ready) )) ).
 
-:- meta_predicate package_manifest(+, +, +, +, -, 0).
 package_manifest(_, Path, Forms, _, _, Goal) :-
     ( member(Parsed, Forms), parsed_form_parts(Parsed, _, _, Row),
       filereader:package_row(Row, boot, _)
@@ -369,7 +371,6 @@ package_manifest(_, Path, Forms, _, _, Goal) :-
                    context(package, 'boot rows require eager loading')))
     ; call(Goal) ).
 
-:- meta_predicate package_unimport(+, +, 0).
 package_unimport(Space, Path, Goal) :-
     metta_engine:resolve_space_form(Space, Home),
     metta_engine:resolve_module_form(Path, File),
@@ -869,7 +870,6 @@ package_prepare(Path, Space, Rows) :-
     package_with_directory_lock(Directory,
         package_prepare_locked(Path, Space, Rows, Directory, Setup)).
 
-:- meta_predicate package_with_directory_lock(+, 0).
 package_with_directory_lock(Directory, Goal) :-
     directory_file_path(Directory, '.package.lock', Lock),
     % SWI open/4 uses blocking fcntl locks. The mutex covers sibling threads,

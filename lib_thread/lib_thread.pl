@@ -332,6 +332,7 @@ next_metta_handle(Id) :-
 % [tested: lib_thread_scope; commit=c6e1198c490a824b96f6fc6e1c0622a542917024]
 :- meta_predicate scope_call(+, 0).
 :- meta_predicate scope_publish(+, 0).
+:- meta_predicate first_wins_(+, 3, -).
 :- dynamic scope_deferred_/6.
 :- multifile seam:engine_context/1, seam:space_created/1,
              seam:space_access/1, seam:space_releasing/1,
@@ -1018,7 +1019,6 @@ check_fails_(F, Module, Element, Decision) :-
 %into the charged count, and which elements it took is the schedule's.
 %Time: one thread and one Python context per branch, and the collector reads
 %at most one message per branch.
-:- meta_predicate first_wins_(+, 3, -).
 first_wins_(Items, Branch, Outcome) :-
     current_metta_module(Module),
     length(Items, Count),
