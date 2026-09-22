@@ -29,7 +29,7 @@ Head lists include each library's own declarations, equations and registered nat
 
 Enumerates finite choices, products, permutations and subsets, with exact combinatorial counts.
 
-[Source](lib_combinatorics/lib_combinatorics.metta); heads:
+[Source](lib_combinatorics/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -64,7 +64,7 @@ Choose pairs and distinguish an empty choice from no choices ([source](https://g
 
 Composes collection transformations, folds, grouping, function application and held loops.
 
-[Source](lib_functional/lib_functional.metta); heads:
+[Source](lib_functional/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -97,7 +97,7 @@ Zip collections and reject malformed pairs ([source](https://github.com/MesTTo/M
 
 Provides immutable sorted maps, priority queues, functional queues and finger trees.
 
-[Source](lib_datastructures/lib_datastructures.metta); heads:
+[Source](lib_datastructures/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -111,7 +111,7 @@ Provides immutable sorted maps, priority queues, functional queues and finger tr
 
 Provides mutable dictionaries as spaces of key/value pairs.
 
-[Source](lib_dict/lib_dict.metta); heads:
+[Source](lib_dict/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -143,7 +143,7 @@ Update a dictionary and query it as a space ([source](https://github.com/MesTTo/
 
 Projects, sorts, groups and queries expressions of key/value pairs.
 
-[Source](lib_pairs/lib_pairs.metta); heads:
+[Source](lib_pairs/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -153,7 +153,7 @@ Projects, sorts, groups and queries expressions of key/value pairs.
 
 Provides ordered, duplicate-free sets with identity-based membership and set operations.
 
-[Source](lib_sets/lib_sets.metta); heads:
+[Source](lib_sets/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -185,7 +185,7 @@ Canonicalize sets and distinguish identity from variable binding ([source](https
 
 Builds directed graphs and computes reachability, closure, transposition and topological order.
 
-[Source](lib_graph/lib_graph.metta); heads:
+[Source](lib_graph/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -216,7 +216,7 @@ Build a graph with an isolated vertex and inspect its edges ([source](https://gi
 
 Copies, moves, drains, snapshots and counts atoms through space queries.
 
-[Source](lib_spaces/lib_spaces.metta); heads:
+[Source](lib_spaces/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -227,7 +227,7 @@ Copies, moves, drains, snapshots and counts atoms through space queries.
 
 Provides add, remove, query and transformation notation over the MORK extension's space.
 
-[Source](lib_mm2/lib_mm2.metta); heads:
+[Source](lib_mm2/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -239,7 +239,7 @@ Provides add, remove, query and transformation notation over the MORK extension'
 
 Provides text search, splitting, formatting, codepoint conversion and string similarity.
 
-[Source](lib_string/lib_string.metta); heads:
+[Source](lib_string/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -253,7 +253,7 @@ Provides text search, splitting, formatting, codepoint conversion and string sim
 
 Provides Unicode normalization, case folding, grapheme segmentation and character properties.
 
-[Source](lib_unicode/lib_unicode.metta); heads:
+[Source](lib_unicode/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -263,7 +263,7 @@ Provides Unicode normalization, case folding, grapheme segmentation and characte
 
 Provides compiled PCRE2 patterns, matching, typed captures, scans and substitutions.
 
-[Source](lib_regex/lib_regex.metta); heads:
+[Source](lib_regex/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -290,7 +290,7 @@ Match text, decode named captures and replace matches ([source](https://github.c
 
 Builds ordinary parser functions from grammar expressions, preserving ambiguous answers.
 
-[Source](lib_parsing/lib_parsing.metta); heads:
+[Source](lib_parsing/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -312,7 +312,7 @@ Compose recursive grammars as ordinary equations ([source](https://github.com/Me
 
 Decodes JSON objects into spaces and provides paths, serialization and JSON Lines.
 
-[Source](lib_json/lib_json.metta); heads:
+[Source](lib_json/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -360,7 +360,7 @@ Query decoded objects and retain duplicate fields ([source](https://github.com/M
 
 Provides CSV parsing, encoding, streamed rows, live file views and mutable snapshots.
 
-[Source](lib_csv/lib_csv.metta); heads:
+[Source](lib_csv/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -370,7 +370,7 @@ Provides CSV parsing, encoding, streamed rows, live file views and mutable snaps
 
 Reads and writes single YAML documents using spaces for mappings and expressions for sequences.
 
-[Source](lib_yaml/lib_yaml.metta); heads:
+[Source](lib_yaml/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -380,7 +380,7 @@ Reads and writes single YAML documents using spaces for mappings and expressions
 
 Parses HTML and XML into element expressions and selects attributes, descendants and text.
 
-[Source](lib_markup/lib_markup.metta); heads:
+[Source](lib_markup/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -390,7 +390,7 @@ Parses HTML and XML into element expressions and selects attributes, descendants
 
 Converts text and byte expressions through UTF-8, hexadecimal and Base64.
 
-[Source](lib_encoding/lib_encoding.metta); heads:
+[Source](lib_encoding/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -421,7 +421,7 @@ Count UTF-8 bytes separately from characters ([source](https://github.com/MesTTo
 
 Parses, builds, resolves and normalizes URIs, with component encoding and query pairs.
 
-[Source](lib_uri/lib_uri.metta); heads:
+[Source](lib_uri/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -432,7 +432,7 @@ Parses, builds, resolves and normalizes URIs, with component encoding and query 
 
 Constructs, validates and inspects UUIDs, including byte conversion and namespace-derived identifiers.
 
-[Source](lib_uuid/lib_uuid.metta); heads:
+[Source](lib_uuid/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -444,7 +444,7 @@ Constructs, validates and inspects UUIDs, including byte conversion and namespac
 
 Provides exact rational arithmetic, integer roots, modular powers, factors and native real functions.
 
-[Source](lib_math/lib_math.metta); heads:
+[Source](lib_math/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -456,7 +456,7 @@ Provides exact rational arithmetic, integer roots, modular powers, factors and n
 
 Provides numeric vector arithmetic, exact intermediate reductions, norms, distances and cosine similarity.
 
-[Source](lib_vector/lib_vector.metta); heads:
+[Source](lib_vector/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -486,7 +486,7 @@ Compute dot products, lengths and directional similarity ([source](https://githu
 
 Constructs inspectable sampling programs and provides sampling without replacement and shuffling.
 
-[Source](lib_random/lib_random.metta); heads:
+[Source](lib_random/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -497,7 +497,7 @@ Constructs inspectable sampling programs and provides sampling without replaceme
 
 Normalizes, ranks, samples and combines weighted alternatives.
 
-[Source](lib_measure/lib_measure.metta); heads:
+[Source](lib_measure/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -509,7 +509,7 @@ Normalizes, ranks, samples and combines weighted alternatives.
 
 Computes sample statistics, finite probability laws and exact independent weighted-subset posteriors.
 
-[Source](lib_statistics/lib_statistics.metta); heads:
+[Source](lib_statistics/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -545,7 +545,7 @@ Retain small residuals and exact means ([source](https://github.com/MesTTo/MeTTa
 
 Exposes PyTorch tensor construction, arithmetic, activations and autograd through Python calls.
 
-[Source](lib_torch/lib_torch.metta); heads:
+[Source](lib_torch/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -561,7 +561,7 @@ Exposes PyTorch tensor construction, arithmetic, activations and autograd throug
 
 Provides file and directory operations, paths, byte and text streams, and resource scopes.
 
-[Source](lib_file/lib_file.metta); heads:
+[Source](lib_file/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -578,7 +578,7 @@ Provides file and directory operations, paths, byte and text streams, and resour
 
 Provides clocks, calendar records, parsing, formatting and arithmetic with explicit time zones.
 
-[Source](lib_datetime/lib_datetime.metta); heads:
+[Source](lib_datetime/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -617,7 +617,7 @@ Round-trip timestamps with explicit offsets and inspect calendar fields ([source
 
 Reads and changes the environment and working directory, and reports host platform properties.
 
-[Source](lib_system/lib_system.metta); heads:
+[Source](lib_system/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -629,7 +629,7 @@ Reads and changes the environment and working directory, and reports host platfo
 
 Starts programs with argument vectors and captures output, signals processes or waits for completion.
 
-[Source](lib_process/lib_process.metta); heads:
+[Source](lib_process/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -639,7 +639,7 @@ Starts programs with argument vectors and captures output, signals processes or 
 
 Parses typed command-line options, renders help and reads the process argument vector.
 
-[Source](lib_cli/lib_cli.metta); heads:
+[Source](lib_cli/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -649,7 +649,7 @@ Parses typed command-line options, renders help and reads the process argument v
 
 Emits structured log events with topic controls and optional MeTTa handlers.
 
-[Source](lib_logging/lib_logging.metta); heads:
+[Source](lib_logging/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -659,7 +659,7 @@ Emits structured log events with topic controls and optional MeTTa handlers.
 
 Compresses bytes and files with gzip or zlib and inspects, reads or extracts archives.
 
-[Source](lib_compression/lib_compression.metta); heads:
+[Source](lib_compression/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -670,7 +670,7 @@ Compresses bytes and files with gzip or zlib and inspects, reads or extracts arc
 
 Provides hashes, HMACs, password records and cryptographic random values.
 
-[Source](lib_crypto/lib_crypto.metta); heads:
+[Source](lib_crypto/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -683,7 +683,7 @@ Provides hashes, HMACs, password records and cryptographic random values.
 
 Provides streaming HTTP clients and scoped HTTP servers with MeTTa request handlers.
 
-[Source](lib_http/lib_http.metta); heads:
+[Source](lib_http/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -694,7 +694,7 @@ Provides streaming HTTP clients and scoped HTTP servers with MeTTa request handl
 
 Provides TCP listeners and connections, UDP datagrams and scoped socket ownership.
 
-[Source](lib_socket/lib_socket.metta); heads:
+[Source](lib_socket/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -706,7 +706,7 @@ Provides TCP listeners and connections, UDP datagrams and scoped socket ownershi
 
 Persists atom syntax in journaled stores with explicit handles, synchronization and scoped cleanup.
 
-[Source](lib_database/lib_database.metta); heads:
+[Source](lib_database/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -716,7 +716,7 @@ Persists atom syntax in journaled stores with explicit handles, synchronization 
 
 Attaches shared Redis-backed spaces with cross-process change notifications.
 
-[Source](lib_redis/lib_redis.metta); heads:
+[Source](lib_redis/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -728,7 +728,7 @@ Attaches shared Redis-backed spaces with cross-process change notifications.
 
 Exposes rational CLP(Q) constraints and Boolean CLP(B) constraints, labeling and tautology checks.
 
-[Source](lib_constraints/lib_constraints.metta); heads:
+[Source](lib_constraints/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -739,7 +739,7 @@ Exposes rational CLP(Q) constraints and Boolean CLP(B) constraints, labeling and
 
 Provides NARS truth functions, inference rules and bounded derivation and query operations.
 
-[Source](lib_nars/lib_nars.metta); heads:
+[Source](lib_nars/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -754,7 +754,7 @@ Provides NARS truth functions, inference rules and bounded derivation and query 
 
 Provides legacy PLN truth formulas, inference rules and bounded derivation and query operations.
 
-[Source](lib_pln/lib_pln.metta); heads:
+[Source](lib_pln/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -771,7 +771,7 @@ Provides legacy PLN truth formulas, inference rules and bounded derivation and q
 
 Provides Beta and moment formulas with explicit evidence scales and checked independent support sets.
 
-[Source](lib_pln2/lib_pln2.metta); heads:
+[Source](lib_pln2/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -783,7 +783,7 @@ Provides Beta and moment formulas with explicit evidence scales and checked inde
 
 Scores structural similarity between terms and queries spaces for weighted matches.
 
-[Source](lib_soft/lib_soft.metta); heads:
+[Source](lib_soft/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -794,7 +794,7 @@ Scores structural similarity between terms and queries spaces for weighted match
 
 Composes term rewrites through choice, repetition, traversal and typed strategy application.
 
-[Source](lib_strategy/lib_strategy.metta); heads:
+[Source](lib_strategy/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -809,7 +809,7 @@ Composes term rewrites through choice, repetition, traversal and typed strategy 
 
 Declares builtin types for engine reflection and optional typed dispatch on import.
 
-[Source](lib_builtin_types/lib_builtin_types.metta); declared heads:
+[Source](lib_builtin_types/pkg.metta); declared heads:
 
 | Feature | Heads |
 |---|---|
@@ -836,7 +836,7 @@ Declares builtin types for engine reflection and optional typed dispatch on impo
 
 Installs an equation and translator rule deriving `once` from `take`.
 
-[Source](lib_derived/lib_derived.metta); heads:
+[Source](lib_derived/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -846,7 +846,7 @@ Installs an equation and translator rule deriving `once` from `take`.
 
 Preserves the former documentation import as a no-op because documentation now belongs to the engine.
 
-[Source](lib_doc/lib_doc.metta); heads: none.
+[Source](lib_doc/pkg.metta); heads: none.
 
 | Feature | Heads |
 |---|---|
@@ -856,7 +856,7 @@ Preserves the former documentation import as a no-op because documentation now b
 
 Loads Prolog functions and exposes source import ownership, inspection and withdrawal.
 
-[Source](lib_import/lib_import.metta); heads:
+[Source](lib_import/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -878,7 +878,7 @@ Implements the engine's resident Git import operation and pinned dependency acqu
 
 Interprets package declarations, prepares dependencies and registers Prolog backings through the resident package service.
 
-[Source](lib_package/lib_package.metta) / [Prolog](lib_package/lib_package.pl); heads:
+[Source](lib_package/pkg.metta) / [Prolog](lib_package/lib_package.pl); heads:
 
 | Feature | Heads |
 |---|---|
@@ -888,7 +888,7 @@ Interprets package declarations, prepares dependencies and registers Prolog back
 
 Controls explicit and automatic memoization, configuration, invalidation and statistics.
 
-[Source](lib_memo/lib_memo.metta); heads:
+[Source](lib_memo/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -900,7 +900,7 @@ Controls explicit and automatic memoization, configuration, invalidation and sta
 
 Controls Prolog answer tables whose reuse can discard answer order and duplicates.
 
-[Source](lib_tabling/lib_tabling.metta); heads:
+[Source](lib_tabling/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -912,7 +912,7 @@ Controls Prolog answer tables whose reuse can discard answer order and duplicate
 
 Provides parallel collection operations, futures, channels, pools, timers, resource scopes and blocking space queries.
 
-[Source](lib_thread/lib_thread.metta); heads:
+[Source](lib_thread/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -929,7 +929,7 @@ Provides parallel collection operations, futures, channels, pools, timers, resou
 
 Runs source while returning queryable trace, coverage and diagnostic events.
 
-[Source](lib_observe/lib_observe.metta); heads:
+[Source](lib_observe/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -939,7 +939,7 @@ Runs source while returning queryable trace, coverage and diagnostic events.
 
 Enumerates engine operations, arities and origins and inspects or substitutes literal terms.
 
-[Source](lib_reflect/lib_reflect.metta); heads:
+[Source](lib_reflect/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -952,7 +952,7 @@ Enumerates engine operations, arities and origins and inspects or substitutes li
 
 Checks a foreign space provider's declared capabilities, matching and exact pushdown claims.
 
-[Source](lib_conformance/lib_conformance.metta); heads:
+[Source](lib_conformance/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -962,7 +962,7 @@ Checks a foreign space provider's declared capabilities, matching and exact push
 
 Reexports `lib_combinatorics` generators for property checks with core assertions, adding no new callable heads.
 
-[Source](lib_testing/lib_testing.metta); reexported heads:
+[Source](lib_testing/pkg.metta); reexported heads:
 
 | Feature | Heads |
 |---|---|
@@ -993,7 +993,7 @@ Check finite domains and count answer multiplicities ([source](https://github.co
 
 Provides Hyperon-Experimental compatibility equations for equality, errors, evaluation and types that can shadow engine operations.
 
-[Source](lib_he/lib_he.metta); heads:
+[Source](lib_he/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -1006,7 +1006,7 @@ Provides Hyperon-Experimental compatibility equations for equality, errors, eval
 
 Provides function composition, reverse matching, a translated loop and indexed iteration.
 
-[Source](lib_patrick/lib_patrick.metta); heads:
+[Source](lib_patrick/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -1016,7 +1016,7 @@ Provides function composition, reverse matching, a translated loop and indexed i
 
 Provides tracing, flat and nested maps and folds, predicate-based set operations and function combinators.
 
-[Source](lib_roman/lib_roman.metta); heads:
+[Source](lib_roman/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|
@@ -1029,7 +1029,7 @@ Provides tracing, flat and nested maps and folds, predicate-based set operations
 
 Provides predicate-style Prolog consultation, module loading and named function imports.
 
-[Source](lib_zar/lib_zar.metta); heads:
+[Source](lib_zar/pkg.metta); heads:
 
 | Feature | Heads |
 |---|---|

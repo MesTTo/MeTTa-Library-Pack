@@ -443,8 +443,14 @@ package_catalog_row([package, Name, Where]) :-
     % policy-inventory-exempt: mechanism-internal; reason=POSIX's own two directory entries, which directory_files/2 always returns and no operator chooses; evidence=lib/lib_package/lib_package.pl:package_catalog_row/1
     \+ memberchk(Name, ['.', '..']),
     directory_file_path(Base, Name, Directory), exists_directory(Directory),
-    file_name_extension(Name, metta, File),
-    directory_file_path(Directory, File, Source), exists_file(Source),
+    % The manifest, not a filename built from the directory's. This clause
+    % held its own copy of the entry-point rule, `file_name_extension(Name,
+    % metta, File)`, which is the fifth place that rule lived: here, in
+    % library_within/2, in package_checkout_entry/4, in
+    % resolve_package_manifest/3 and in the Python seat's _candidates. They all
+    % answer pkg.metta now, and a library whose directory holds none is not a
+    % package and does not appear in the catalog.
+    directory_file_path(Directory, 'pkg.metta', Source), exists_file(Source),
     absolute_file_name(Source, Where).
 
 package_require(Source, Space, Required) :-
@@ -564,17 +570,23 @@ package_git_requirement(Source, Url, Rev, Name, Path) :-
     ; package_missing_requirement([git, Url, Rev]) ).
 
 %The file a checkout is entered through: its `pkg.metta` manifest, and only
-%where there is none the file named after the repository.
+%that.
 %
-%Written once rather than at each of the two branches above, which is where
-%the repository-named form used to sit twice. The manifest is the standard,
-%and the second candidate is what every package written before it has.
+%The repository-named file was the second candidate for one commit and is
+%gone. A checkout had to carry a file named after its REPOSITORY, so renaming
+%the repository broke every importer and a directory not matching the remote's
+%name resolved to nothing; nothing infers a filename from a directory's name
+%anywhere now. The repository's name survives only in the refusal, which is
+%where a reader needs it.
 package_checkout_entry(Required, Checkout, Name, Path) :-
     directory_file_path(Checkout, 'pkg.metta', Manifest),
     (   exists_file(Manifest)
     ->  package_existing_source(Required, Manifest, Path)
-    ;   directory_file_path(Checkout, Name, Stem),
-        package_existing_source(Required, Stem, Path) ).
+    ;   throw(error(existence_error(package_manifest, Manifest),
+                    context('package requires',
+                            Name-'a git requirement is entered through a \c
+                             pkg.metta at its checkout root, and this \c
+                             repository has none'))) ).
 
 package_setup_root(Default, Root) :-
     ( package_stack(Stack), Stack \== [] -> last(Stack, Root) ; Root = Default ).
@@ -932,12 +944,12 @@ package_record_form(File, Parsed, Row) :-
 % Reuse lib_file's same-filesystem staged publication. It owns and removes the
 % stage even when the writer or rename fails; the receipt remains unchanged.
 package_publish_rows(Directory, Name, Rows) :-
-    metta_engine:library('lib_file.pl', Library), use_module(Library, []),
+    metta_engine:library('lib_file/lib_file.pl', Library), use_module(Library, []),
     directory_file_path(Directory, Name, File),
     lib_file:metta_staged_publish(File, lib_package:package_write_rows(Rows)).
 
 package_publish_receipt(Directory, Setup, Rows) :-
-    metta_engine:library('lib_file.pl', Library), use_module(Library, []),
+    metta_engine:library('lib_file/lib_file.pl', Library), use_module(Library, []),
     directory_file_path(Directory, 'performed.metta', File), variant_sha1(Setup, Digest),
     lib_file:metta_staged_publish(File, lib_package:package_write_receipt(Digest, Rows)).
 

@@ -1,5 +1,5 @@
 """Purpose: load minimal MeTTa's instruction set. It lives in
-`minimal_metta_lib.metta` and `minimal_metta_lib.pl`; this module is the
+`pkg.metta` and `minimal_metta_lib.pl`; this module is the
 Python entry point for callers that already import it.
 
 The four operations that cannot be written in MeTTa, `function`,
@@ -19,7 +19,7 @@ Measured 2026-08-15, one harness, min-of-5, on the trivial case
 3.2x fewer inferences and 18.8x faster in wall clock, and the wall-clock cost
 against a plain MeTTa function falls from 24.65x to 1.30x.
 
-Assumes: the engine can reach `lib/lib_import/lib_import.metta`, which is how the MeTTa
+Assumes: the engine can reach `lib/lib_import/pkg.metta`, which is how the MeTTa
   half registers the Prolog half [tested: tests/prolog/suites/host/prolog_interface.plt].
 Guarantees:
   - install(m) is idempotent and returns the names it registered
@@ -70,7 +70,7 @@ def install(m, *, load_metta: bool = True) -> tuple[str, ...]:
     """
     here = os.path.dirname(os.path.abspath(__file__))
     if load_metta:
-        m.load(os.path.join(here, "minimal_metta_lib.metta"))
+        m.load(os.path.join(here, "pkg.metta"))
     else:
         # The engine prelude owns function and the two binding carriers.  Only
         # unify-mod remains library-local, so a registration-only install must
