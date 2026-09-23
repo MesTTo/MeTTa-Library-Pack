@@ -7,11 +7,13 @@
  * successful ... Emscripten programs are a single process"
  * [source: emsdk 6.0.9 system/lib/libc/emscripten_libc_stubs.c:flock], which
  * would let a second handle open a store the first still owns. The table
- * gives the same answers Linux gives: the stream that holds a claim may claim
- * again, any other stream on the same file is refused with EWOULDBLOCK, and
- * the claim goes when its stream closes
- * [tested: examples/ch08-data/08-03-the-shipped-libraries/42-database_lib.metta
- * under tsmetta on the host tools/wasm-host/build.sh builds; commit=2126ab64eacfd1713bc10b8c50fe6b564f978a74].
+ * gives the same answers Linux gives. The stream that holds a claim may claim
+ * again [source: claim_file below, which answers 0 to the claim's owner]; any
+ * other stream on the same file is refused with EWOULDBLOCK, and the claim
+ * goes when its stream closes [measured 2026-09-24: 42-database_lib.metta ran
+ * 84 of 84 forms under tsmetta on the host tools/wasm-host/build.sh built,
+ * its second open of a held store refused and its reopen after close
+ * accepted; commit=5930ea15c2380f898219c3c89ab7b8a1192e13e6].
  * Assumes: under emscripten the files a claim names belong to this process,
  * which holds for a filesystem the program alone mounts; a directory shared
  * with another process through NODEFS is not claimed against it.

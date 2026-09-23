@@ -5,8 +5,11 @@
 # Guarantees: without NATIVE_STAGE, `install` puts libarchive.a, archive.h and
 #   archive_entry.h under CMAKE_INSTALL_PREFIX, built from the snapshot and ZIP
 #   correction below, which is what tools/wasm-host/Dockerfile runs and what
-#   support/static.cmake links the binding against
-#   [tested: tools/wasm-host/build.sh; commit=2126ab64eacfd1713bc10b8c50fe6b564f978a74].
+#   support/static.cmake links the binding against [measured 2026-09-24:
+#   JOBS=8 sh tools/wasm-host/build.sh exited 0 with ctest 58 of 58 after
+#   building libarchive through this file without NATIVE_STAGE, and
+#   41-compression_lib.metta ran 70 of 70 forms under tsmetta on that host;
+#   commit=5930ea15c2380f898219c3c89ab7b8a1192e13e6].
 # Decides: archive symbols stay local to the resulting SWI object.
 # [tested: test_archive_legacy_zip_names; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 cmake_minimum_required(VERSION 3.18)

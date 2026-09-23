@@ -9,9 +9,10 @@
 % extension named by what follows install_, needs no build tool and no
 % library(shlib), and a host built without that extension raises
 % native_extension_missing(Name) naming the rebuild rather than leaving the
-% library's foreign predicates undefined
-% [tested: examples/ch08-data/08-03-the-shipped-libraries/18-string_lib.metta
-% under tsmetta on the host tools/wasm-host/build.sh builds; commit=2126ab64eacfd1713bc10b8c50fe6b564f978a74].
+% library's foreign predicates undefined [measured 2026-09-24: on the host
+% tools/wasm-host/build.sh built, 18-string_lib.metta ran 51 of 51 forms under
+% tsmetta, and native_install/2 asked for install_no_such_half raised
+% native_extension_missing(no_such_half); commit=5930ea15c2380f898219c3c89ab7b8a1192e13e6].
 % Decides: a separate module from native_build.pl because that file is an
 % input of every native object's build, so an edit to how a half is loaded
 % would otherwise rebuild all of them [source: lib/_support/native_build.pl:native_object/6].

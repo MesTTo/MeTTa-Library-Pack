@@ -3,8 +3,7 @@
 # Assumes: included from the package tools/wasm-host/build.sh stages into
 #   swipl-devel's packages/, after PrologPackage.cmake.
 # Guarantees: plugin_lib_database compiles lock.c as native_build.pl hands it
-#   to swipl-ld, with no flags; under emscripten lock.c keeps its own claim
-#   table, because that libc's flock always succeeds [source: lock.c].
+#   to swipl-ld, with no flags.
 swipl_plugin(
     lib_database
     MODULE lib_database
