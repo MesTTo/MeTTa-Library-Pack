@@ -11,7 +11,7 @@
 ; 0 for 0, in about 2 log2 B shifts for a B-bit N, so the geometric mean of
 ; binary64 extremes costs what an ordinary sample costs
 ; [tested: lib_statistics:bit_length_is_msb_and_extremes_cost_an_ordinary_sample,
-; test_statistics_geometric_mean_precision_and_bounds; commit=WORKTREE].
+; test_statistics_geometric_mean_precision_and_bounds; commit=62ca61ce274dbcdf7efadde682f1c55f6e89fe2d].
 (: statistics-data (-> Expression Expression))
 (= (statistics-data $data)
    (let* (($checked (collections-expression $data))
