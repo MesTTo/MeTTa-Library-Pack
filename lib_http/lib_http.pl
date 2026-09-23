@@ -223,8 +223,16 @@ header_name(Native,Name) :-
     atomic_list_concat(Parts,'_',Native),atomic_list_concat(Parts,'-',Atom),
     atom_string(Atom,Name).
 
+% SWI's header grammar reads a `*` media type or subtype as an unbound
+% variable (type//1 in packages/http/http_header.pl, the only rule that leaves
+% one, and its own var_or_given/2 reads it back as the wildcard), and `*` is
+% how HTTP spells it, so that is how it reaches MeTTa. Converted as a
+% compound it raised, and the server answered 500 to every request carrying
+% Accept: */*, which curl, browsers and Python's requests all send
+% [tested: lib_http:wildcard_media_ranges_reach_the_handler; commit=WORKTREE].
 native_data(Data,Value) :-
-    ( string(Data) -> Value=Data
+    ( var(Data) -> Value="*"
+    ; string(Data) -> Value=Data
     ; number(Data) -> Value=Data
     ; atom(Data) -> atom_string(Data,Value)
     ; is_list(Data) -> maplist(native_data,Data,Value)
