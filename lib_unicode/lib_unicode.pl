@@ -94,15 +94,22 @@
                     context('unicode-normalize', Forms)))
     ).
 
-% The five forms as the flag sets the host's own convenience predicates use, so
-% the library states each derivation rather than calling a second predicate for
-% it [source: /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl:unicode_nfc/2
-% and its four siblings; commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b].
+% The five forms as flag sets, so the library states each derivation rather
+% than calling a second predicate for it. The first four are the sets the host's
+% own convenience predicates use [source:
+% /usr/lib/swi-prolog/library/ext/utf8proc/unicode.pl:unicode_nfc/2 and its
+% three siblings; commit=a30e0a59e8e16d15705dc0258d7e0a004ae63e4b].
+% nfkc-casefold is utf8proc's own utf8proc_NFKC_Casefold, whose ignore removes
+% the default-ignorable code points Unicode's NFKC_Casefold removes and the
+% stock host's unicode_nfkc_casefold/2 keeps [source:
+% https://github.com/JuliaStrings/utf8proc/blob/v2.10.0/utf8proc.h#L778-L782;
+% https://www.unicode.org/Public/16.0.0/ucd/DerivedNormalizationProps.txt,
+% line 2986].
 normalization(nfc, [stable, compose]).
 normalization(nfd, [stable, decompose]).
 normalization(nfkc, [stable, compose, compat]).
 normalization(nfkd, [stable, decompose, compat]).
-normalization('nfkc-casefold', [stable, compose, compat, casefold]).
+normalization('nfkc-casefold', [stable, compose, compat, casefold, ignore]).
 
 %! 'unicode-casefold'(+Text:string, -Folded:string) is det.
 %
