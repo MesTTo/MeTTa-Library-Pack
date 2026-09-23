@@ -11,10 +11,14 @@
 %     it is a path. That is the host's own rule, and the refusal for a program that
 %     is not there names it [tested: lib_process:a_program_that_is_not_there_is_named;
 %     commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
-%   - the build has library(process). The `subprocess` capability already in the
-%     engine's census is what says so, and the declaration below refuses this library
-%     before it loads where it is absent
-%     [source: engine/metta.pl:metta_platform_capability/3; commit=623a2848ef49a936cd82b07adfbed2999d8548a4]
+%   - nothing about the platform at import: the census load below imports
+%     library(process) where the build has it and records the `subprocess` capability
+%     absent where it does not, and each door that starts, waits for or signals a
+%     program refuses by its own name there, after checking its arguments, the way
+%     lib_crypto's randomness refuses while its SHA digests keep working. So
+%     (process-signals) answers on a build without processes, the WebAssembly one
+%     among them [tested: platform_capabilities_reduced:process_library_imports_and_a_launch_refuses_by_name;
+%     commit=WORKTREE]
 % Guarantees:
 %   - a nonzero exit is a STATUS and not an error: process-run! answers
 %     (process-result Code Output Error) whatever the program exited with, and only a
@@ -58,11 +62,10 @@
 % Assumes: engine operations resolve through metta_engine's published exports.
 % [source: engine/metta.pl:metta_engine_reexport/2; commit=ede2ac57e213a0d4502c6bbbca6227f97015b720]
 :- set_module(base(metta_engine)).
-:- metta_requires(subprocess).
 
 :- use_module(library(lists), [append/3, member/2, memberchk/2]).
-:- use_module(library(process), [process_create/3, process_kill/2, process_wait/2,
-                                process_wait/3]).
+:- metta_platform_load(subprocess, [process_create/3, process_kill/2, process_wait/2,
+                                     process_wait/3]).
 % read_string/3 is a system builtin rather than one of library(readutil)'s exports,
 % so importing it warns `not exported (still imported into lib_process)` and nothing
 % is gained; the builtin resolves here as it does everywhere.
@@ -139,6 +142,7 @@ exit_code(killed(Signal), Code) :- Code is -Signal.
 % forgotten it.
 'process-wait!'(Process, Code) :-
     process_argument('process-wait!', Process),
+    metta_require_platform('process-wait!', subprocess),
     (   catch(process_wait(Process, Status), error(Formal, _),
               throw(error(existence_error(process, Process),
                           context('process-wait!', Formal))))
@@ -154,6 +158,7 @@ exit_code(killed(Signal), Code) :- Code is -Signal.
 % while it is, and its exit code once it is not. This is what a program polls.
 'process-status'(Process, Status) :-
     process_argument('process-status', Process),
+    metta_require_platform('process-status', subprocess),
     (   catch(process_wait(Process, Raw, [timeout(0)]), _, fail)
     ->  (   Raw == timeout
         ->  Status = running
@@ -178,6 +183,7 @@ exit_code(killed(Signal), Code) :- Code is -Signal.
         throw(error(domain_error(process_signal, Signal),
                     context('process-signal!', Signals)))
     ),
+    metta_require_platform('process-signal!', subprocess),
     catch(process_kill(Process, Signal), error(Formal, _),
           throw(error(existence_error(process, Process),
                       context('process-signal!', Formal)))).
@@ -230,6 +236,7 @@ argument_text(Head, Argument, Text) :-
 % existence error over its own path term: a caller reads the program's name, not the
 % search form it was wrapped in.
 launched(Head, Program, Executable, Vector, Options) :-
+    metta_require_platform(Head, subprocess),
     catch(process_create(Executable, Vector, Options),
           error(existence_error(source_sink, _), _),
           throw(error(existence_error(program, Program),

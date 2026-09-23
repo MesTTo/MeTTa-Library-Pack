@@ -4,6 +4,11 @@
 % Guarantees: TCP bytes use File; datagrams retain packet boundaries, bytes and
 % complete IPv4/IPv6 endpoints; scoped handles close on every exit.
 % [tested: lib_socket; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
+% On a build without the socket capability the import succeeds, an empty
+% socket-wait! answers, and every door refuses naming socket at its first socket
+% operation, after the argument and handle checks that need none
+% [tested: platform_capabilities_reduced:http_and_socket_libraries_import_and_refuse_per_call;
+% commit=WORKTREE].
 % Owns resources: openers transfer streams to File; file-close! releases them.
 % with-socket owns its handle until exhaustion, cut or exception. The native
 % adapter owns accepted descriptors until their two stream halves close.
@@ -20,10 +25,15 @@
            'socket-kind'/2,'socket-endpoint'/3,'socket-wait!'/3,
            'socket-shutdown!'/3,'with-socket'/3]).
 :- set_module(base(metta_engine)).
-:- metta_requires(socket).
-:- use_module(library(socket),
-              [socket_create/2,tcp_bind/2,tcp_listen/2,tcp_connect/2,
-               tcp_open_socket/2,tcp_close_socket/1,tcp_setopt/2,udp_send/4]).
+% The census load imports library(socket) where the build has it and records
+% the socket capability absent where it does not; the import itself never
+% refuses, and each door refuses by name at its first socket operation
+% (socket_handle/4, open_socket/6, socket-kind, select_acquired/2), after the
+% checks that need no socket. A directive, not :- if, since this file is
+% compiled to a .qlf [source: engine/metta.pl:metta_platform_load/2].
+:- metta_platform_load(socket,
+                       [socket_create/2,tcp_bind/2,tcp_listen/2,tcp_connect/2,
+                        tcp_open_socket/2,tcp_close_socket/1,tcp_setopt/2,udp_send/4]).
 :- use_module(library(error), [must_be/2,domain_error/2,permission_error/3]).
 :- use_module(library(lists), [member/2,memberchk/2]).
 :- use_module(library(apply), [maplist/3,maplist/4,include/3]).
@@ -32,8 +42,13 @@
               [known_file/2,adopt_file_stream/2,release_file_stream/1,'file-close!'/2]).
 % Workaround: swi-relative-compound-source - resolve this atom relative to the
 % importing file instead of reusing another directory's compound-path cache.
-:- use_module('support/native', []).
-:- meta_predicate open_socket(+,+,0,+,-).
+% The native half is socket code too, so a build without the capability does
+% not install it: no door reaches it past its refusal.
+:- (   metta_platform(socket, present, _, _)
+   ->  use_module('support/native', [])
+   ;   true
+   ).
+:- meta_predicate open_socket(+,+,+,0,+,-).
 
 %! 'tcp-connect!'(+Endpoint:list, -Handle:integer) is det.
 %
@@ -44,7 +59,7 @@
 % whose rollback would lose File's ownership record without closing the socket.
 'tcp-connect!'(Endpoint,Handle) :-
     outside_transaction('tcp-connect!'), endpoint_argument(Endpoint,1,Domain,Address),
-    open_socket(Domain,stream,tcp_connect(Stream,Address),Stream,Handle).
+    open_socket('tcp-connect!',Domain,stream,tcp_connect(Stream,Address),Stream,Handle).
 
 %! 'tcp-listen!'(+Endpoint:list, +Backlog:integer, -Handle:integer) is det.
 %
@@ -55,7 +70,7 @@
 'tcp-listen!'(Endpoint,Backlog,Handle) :-
     outside_transaction('tcp-listen!'), endpoint_argument(Endpoint,0,Domain,Address),
     must_be(nonneg,Backlog),
-    open_socket(Domain,stream,
+    open_socket('tcp-listen!',Domain,stream,
                 (tcp_bind(Stream,Address),tcp_listen(Stream,Backlog),tcp_setopt(Stream,nonblock)),
                 Stream,Handle).
 
@@ -67,7 +82,7 @@
 % accepted stream if its transfer to File has not completed. Keep the listener
 % open until its acceptors have completed or have been cancelled and joined.
 'tcp-accept!'(Listener,Handle) :-
-    outside_transaction('tcp-accept!'), socket_handle(Listener,listener,Accept),
+    outside_transaction('tcp-accept!'), socket_handle('tcp-accept!',Listener,listener,Accept),
     must_be(var,Handle),accept_handle(Accept,Handle).
 
 %! 'udp-bind!'(+Endpoint:list, -Handle:integer) is det.
@@ -77,7 +92,7 @@
 % File's byte stream operations are intended for TCP connections.
 'udp-bind!'(Endpoint,Handle) :-
     outside_transaction('udp-bind!'), endpoint_argument(Endpoint,0,Domain,Address),
-    open_socket(Domain,dgram,(tcp_bind(Stream,Address),tcp_setopt(Stream,nonblock)),Stream,Handle).
+    open_socket('udp-bind!',Domain,dgram,(tcp_bind(Stream,Address),tcp_setopt(Stream,nonblock)),Stream,Handle).
 
 %! 'udp-send!'(+Handle:integer, +Endpoint:list, +Bytes:list, -Done:boolean) is det.
 %
@@ -85,7 +100,7 @@
 % sending. The destination family must match the socket; its port is positive.
 % Oversized packets and network failures raise the native error.
 'udp-send!'(Handle,Endpoint,Bytes,true) :-
-    socket_handle(Handle,udp,Stream), endpoint_argument(Endpoint,1,Domain,Address),
+    socket_handle('udp-send!',Handle,udp,Stream), endpoint_argument(Endpoint,1,Domain,Address),
     lib_socket_native:endpoint(Stream,local,Family,_,_), family_domain(Family,Actual),
     ( Domain==Actual -> true ; domain_error(socket_destination_family(Family),Endpoint) ),
     must_be(list(between(0,255)),Bytes),
@@ -99,14 +114,15 @@
 % Use socket-wait! for a finite readiness wait. Native input is nonblocking;
 % concurrent readers retry through readiness and cancellation remains observable.
 'udp-receive!'(Handle,[datagram,[endpoint,Family,Host,Port],Bytes]) :-
-    socket_handle(Handle,udp,Stream), receive_packet(Stream,Bytes,Family,Host,Port).
+    socket_handle('udp-receive!',Handle,udp,Stream), receive_packet(Stream,Bytes,Family,Host,Port).
 
 %! 'socket-kind'(+Handle:integer, -Kind:'Symbol') is det.
 %
 % Return listener, tcp or udp from the live descriptor. A closed handle or an
 % ordinary File stream raises. File's single table owns all three kinds.
 'socket-kind'(Handle,Kind) :-
-    must_be(integer,Handle), known_file(Handle,Stream), lib_socket_native:kind(Stream,Kind).
+    must_be(integer,Handle), known_file(Handle,Stream),
+    metta_require_platform('socket-kind',socket), lib_socket_native:kind(Stream,Kind).
 
 %! 'socket-endpoint'(+Handle:integer, +Side:'Symbol', -Endpoint:list) is det.
 %
@@ -114,7 +130,7 @@
 % scoped addresses retain their zone suffix. An unconnected socket has no peer
 % and raises instead of inventing an address. Ephemeral ports are actual OS values.
 'socket-endpoint'(Handle,Side,[endpoint,Family,Host,Port]) :-
-    socket_handle(Handle,_,Stream), lib_socket_native:endpoint(Stream,Side,Family,Host,Port).
+    socket_handle('socket-endpoint',Handle,_,Stream), lib_socket_native:endpoint(Stream,Side,Family,Host,Port).
 
 %! 'socket-wait!'(+Handles:list, +Timeout:any, -Ready:list) is det.
 %
@@ -124,7 +140,8 @@
 % readable. Readiness alone does not promise a full application message. Waits
 % check cancellation between native intervals of at most a quarter second.
 'socket-wait!'(Handles,Timeout,Ready) :-
-    must_be(list,Handles), wait_seconds(Timeout,Seconds), maplist(handle_stream,Handles,Streams),
+    must_be(list,Handles), wait_seconds(Timeout,Seconds),
+    maplist(socket_handle('socket-wait!'),Handles,_,Streams),
     ( Streams==[] -> Ready=[]
     ; wait_readable(Streams,Seconds,Available),
       sort(Available,Unique),maplist(ready_pair,Unique,Marks),ord_list_to_assoc(Marks,Index),
@@ -137,7 +154,7 @@
 % write shutdown so the peer receives pending bytes followed by EOF. The handle
 % and descriptor remain owned until file-close!; a write shutdown retains input.
 'socket-shutdown!'(Handle,Direction,true) :-
-    socket_handle(Handle,tcp,Stream),must_be(atom,Direction),
+    socket_handle('socket-shutdown!',Handle,tcp,Stream),must_be(atom,Direction),
     ( shutdown_direction(Direction,Native) -> true ; domain_error(socket_shutdown_direction,Direction) ),
     ( Direction==read -> true ; flush_output(Stream) ),
     lib_socket_native:shutdown(Stream,Native).
@@ -189,8 +206,9 @@ outside_transaction(Operation) :-
     ( current_transaction(_) -> permission_error(open,transaction_socket,Operation)
     ; true ).
 
-open_socket(Domain,Type,Initialise,Stream,Handle) :-
+open_socket(Door,Domain,Type,Initialise,Stream,Handle) :-
     must_be(var,Handle),
+    metta_require_platform(Door,socket),
     setup_call_catcher_cleanup(new_stream(Domain,Type,Stream),
         ( set_stream(Stream,type(binary)),call(Initialise),
           sig_atomic(publish_handle(Stream,Handle)) ),
@@ -231,8 +249,9 @@ finish_accept(_,Owner,Publication) :-
           ( Stream==none -> true ; release_file_stream(Stream) ) ),
         lib_socket_native:finish_accept(Owner,false)).
 
-socket_handle(Handle,Expected,Stream) :-
-    must_be(integer,Handle), known_file(Handle,Stream),lib_socket_native:kind(Stream,Actual),
+socket_handle(Door,Handle,Expected,Stream) :-
+    must_be(integer,Handle), known_file(Handle,Stream),
+    metta_require_platform(Door,socket), lib_socket_native:kind(Stream,Actual),
     ( var(Expected) -> Expected=Actual
     ; Expected==Actual -> true ; domain_error(socket_kind(Expected),Handle) ).
 
@@ -247,7 +266,6 @@ wait_seconds(Value,Seconds) :-
       % policy-inventory-exempt: mechanism-internal; reason=nonnegative finite IEEE waits include immediate zero but exclude infinities and NaN; evidence=lib/lib_socket/lib_socket.pl:wait_seconds/2
       ( Seconds>=0, float_class(Seconds,Class),memberchk(Class,[zero,normal,subnormal])
       -> true ; domain_error(nonnegative_finite_socket_timeout,Value) ) ).
-handle_stream(Handle,Stream) :- socket_handle(Handle,_,Stream).
 handle_pair(Handle,Stream,Handle-Stream).
 ready_pair(Stream,Stream-true).
 pair_ready(Ready,_-Stream) :- get_assoc(Stream,Ready,_).
@@ -272,6 +290,7 @@ acquisition_context(Current) :-
 select_acquired(Owned,Handle) :-
     must_be(integer,Handle),known_file(Handle,Stream),
     ( Handle>=3 -> arg(1,Owned,Handles),nb_linkarg(1,Owned,[Handle-Stream|Handles]) ; true ),
+    metta_require_platform('with-socket',socket),
     lib_socket_native:kind(Stream,_),nb_linkarg(1,Owned,[Handle-Stream]).
 close_owned(Outcome,Handles) :-
     findall(Handle-Error,

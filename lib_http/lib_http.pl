@@ -4,6 +4,11 @@
 % Guarantees: non-2xx statuses remain data, framing is owned by the transport,
 % repeated fields survive, and scopes release on exhaustion, cut and exception.
 % [tested: lib_http; commit=781ee98e188c23ea7ef9298636d6e5e6c7fdc727].
+% On a build without the http capability the import succeeds, http-server-url
+% answers, and every other door refuses naming http once its arguments are
+% checked; http-header too, since it reads names with http_header's grammar
+% [tested: platform_capabilities_reduced:http_and_socket_libraries_import_and_refuse_per_call;
+% commit=WORKTREE].
 % Owns resources: http-open! transfers its response stream to File's handle table.
 % A started server belongs to its caller until http-server-stop!; with-http and
 % with-http-server retain ownership for the lifetime of their answer streams.
@@ -20,31 +25,47 @@
            'http-server-start!'/5, 'http-server-stop!'/2, 'with-http-server'/6,
            'http-server-url'/2, 'http-header'/3, 'http-methods'/1]).
 :- set_module(base(metta_engine)).
-:- metta_requires(http).
 :- use_module('../lib_file/lib_file',
               [adopt_file_stream/2,release_file_stream/1,'file-close!'/2,'file-read-bytes!'/2]).
-:- use_module(library(http/http_open), [http_open/3]).
-:- use_module(library(http/thread_httpd),
-              [http_server/2,http_stop_server/2,http_current_server/2,http_current_worker/2]).
-:- use_module(library(http/http_client), [http_read_data/3]).
-:- use_module(library(http/http_stream), [stream_range_open/3]).
-:- use_module(library(http/http_header), [http_parse_header_value/3]).
-:- use_module(library(socket),
-              [socket_create/2,tcp_setopt/2,tcp_bind/2,tcp_listen/2,tcp_close_socket/1]).
-:- use_module(library(uri), [uri_components/2,uri_data/3]).
 :- use_module(library(error), [must_be/2,domain_error/2,permission_error/3]).
 :- use_module(library(lists), [member/2,memberchk/2,append/3,select/3]).
 :- use_module(library(apply), [maplist/2,maplist/3,maplist/4]).
-:- if(exists_source(library(http/http_ssl_plugin))).
-:- use_module(library(http/http_ssl_plugin), []).
-:- endif.
+% The census decides the http capability from every library its row names and
+% the imports follow only where it holds, the shape lib_crypto has, so the
+% import never refuses: a build without sockets or threads, the WebAssembly
+% one among them, keeps http-server-url, and each door that needs the
+% platform's HTTP libraries refuses by its own name before its first call into
+% them. Directives rather than :- if, since this file is compiled to
+% a .qlf [source: engine/metta.pl:metta_platform_load/2].
+:- metta_platform_load(http, []).
+:- (   metta_platform(http, present, _, _)
+   ->  use_module(library(http/http_open), [http_open/3]),
+       use_module(library(http/thread_httpd),
+                  [http_server/2,http_stop_server/2,http_current_server/2,
+                   http_current_worker/2]),
+       use_module(library(http/http_client), [http_read_data/3]),
+       use_module(library(http/http_stream), [stream_range_open/3]),
+       use_module(library(http/http_header), [http_parse_header_value/3]),
+       use_module(library(socket),
+                  [socket_create/2,tcp_setopt/2,tcp_bind/2,tcp_listen/2,
+                   tcp_close_socket/1]),
+       use_module(library(uri), [uri_components/2,uri_data/3])
+   ;   true
+   ).
+:- metta_platform_load(https, []).
+:- (   metta_platform(https, present, _, _)
+   ->  use_module(library(http/http_ssl_plugin), [])
+   ;   true
+   ).
 
 %! 'http-methods'(-Methods:list) is det.
 %
 % The installed client's method symbols, including extensions registered with
 % its native method map. The standard provider supplies delete/get/head/post/
 % put/patch/options. A request refuses a method outside this catalog.
-'http-methods'(Methods) :- findall(Method,http_open:map_method(Method,_),Methods).
+'http-methods'(Methods) :-
+    metta_require_platform('http-methods',http),
+    findall(Method,http_open:map_method(Method,_),Methods).
 
 %! 'http-open!'(+Method:atom, +URL:string, +Options:list, -Response:list) is det.
 %
@@ -115,6 +136,7 @@ close_if_open(Stream) :- ( is_stream(Stream) -> close(Stream) ; true ).
 
 client_arguments(Method,URL,Options,Native) :-
     must_be(atom,Method),
+    metta_require_platform('http-open!',http),
     ( http_open:map_method(Method,_) -> true ; domain_error(http_method,Method) ),
     must_be(string,URL), string_codes(URL,Codes),
     ( forall(member(C,Codes),(C>32,C=\=127)) -> true ; domain_error(http_url,URL) ),
@@ -215,6 +237,7 @@ native_data(Data,Value) :-
 % order. Missing fields give no answers. Values retain their parsed structure.
 'http-header'(Fields,Name,Value) :-
     must_be(list,Fields),maplist(field_pair,Fields),
+    metta_require_platform('http-header',http),
     field_name(Name,Native),header_name(Native,Canonical),
     member([Canonical,Value],Fields).
 
@@ -247,6 +270,7 @@ field_pair(Pair) :-
     ( var(Handler) -> must_be(nonvar,Handler) ; true ),
     ( acyclic_term(Handler) -> true ; domain_error(acyclic_http_handler,Handler) ),
     option_list(server,Options,Native),current_metta_module(Module),
+    metta_require_platform('http-server-start!',http),
     flag('$metta_http_server_id',ID,ID+1),
     with_mutex('$metta_http_start',
         setup_call_catcher_cleanup(listener(Address,Requested,Port,Socket,Queue),
@@ -299,7 +323,9 @@ queue_exists(Queue) :-
 % whose database snapshot cannot observe the workers' lifecycle changes.
 'http-server-stop!'(Server,true) :-
     lifecycle_outside_transaction('http-server-stop!'),
-    server_endpoint(Server,_,Port,ID),thread_self(Self),
+    server_endpoint(Server,_,Port,ID),
+    metta_require_platform('http-server-stop!',http),
+    thread_self(Self),
     ( http_current_server(serve(ID,_,_),Port),http_current_worker(Port,Self)
     -> permission_error(stop,current_http_server,Server)
     ; true ),
