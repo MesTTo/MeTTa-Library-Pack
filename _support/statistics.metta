@@ -7,6 +7,11 @@
 ; and preserve exact integer coefficients and literal candidate identities.
 ; [tested: weighted_subset, test_weighted_subset_matches_exhaustive;
 ; commit=e1be99ea1c08f70444c1c35cada441e089777906].
+; Guarantees: statistics-bits answers msb(N)+1 for every positive integer N and
+; 0 for 0, in about 2 log2 B shifts for a B-bit N, so the geometric mean of
+; binary64 extremes costs what an ordinary sample costs
+; [tested: lib_statistics:bit_length_is_msb_and_extremes_cost_an_ordinary_sample,
+; test_statistics_geometric_mean_precision_and_bounds; commit=WORKTREE].
 (: statistics-data (-> Expression Expression))
 (= (statistics-data $data)
    (let* (($checked (collections-expression $data))
@@ -89,13 +94,37 @@
             ($b (index-atom $pool (+ $j 1))))
        (statistics-exact (+ (* $a (- 1 $delta)) (* $b $delta))))))
 
+; The bit length of a nonnegative integer: the least K with (bit-shift-right
+; Number K) equal to 0. Doubling a probe width finds a power of two past it and
+; bisecting the last doubling finds K, so a B-bit Number costs about 2 log2 B
+; shifts. Counting one shift per bit cost B unfold steps instead, and the
+; exact ratio of a binary64 extreme has a numerator or denominator of about a
+; thousand bits: one stats-geometric-mean call over (1.0e308 1.0e308) took
+; 12,158,312 inferences where (1.0 2.0 3.0 4.0) took 98,070, and the
+; hypothesis test drawing such lists ran 218.89 s alone; it now takes 17,641
+; and the test 1.29 s [measured 2026-09-23, inferences around one warm call
+; to each; tested: lib_statistics:bit_length_is_msb_and_extremes_cost_an_ordinary_sample].
 (: statistics-bits (-> Number Number))
 (= (statistics-bits $number)
-   (size-atom
-     (unfold (|-> ($value)
-               (if (== $value 0) (empty)
-                 (let $next (bit-shift-right $value 1) ($value $next))))
-             $number)))
+   (if (== $number 0) 0
+     (let $high (statistics-bits-bound $number 1)
+       (statistics-bits-search $number (floor-div $high 2) $high))))
+
+; The least power of two Width with (bit-shift-right Number Width) equal to 0.
+(: statistics-bits-bound (-> Number Number Number))
+(= (statistics-bits-bound $number $width)
+   (if (== (bit-shift-right $number $width) 0) $width
+     (statistics-bits-bound $number (* $width 2))))
+
+; Bisect while Number shifted by Low is nonzero and shifted by High is zero;
+; the bit length is High once the two are adjacent.
+(: statistics-bits-search (-> Number Number Number Number))
+(= (statistics-bits-search $number $low $high)
+   (if (== (- $high $low) 1) $high
+     (let $middle (floor-div (+ $low $high) 2)
+       (if (== (bit-shift-right $number $middle) 0)
+         (statistics-bits-search $number $low $middle)
+         (statistics-bits-search $number $middle $high)))))
 
 (: statistics-scale (-> Number Number Number))
 (= (statistics-scale $value $exponent)
