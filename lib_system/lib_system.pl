@@ -153,10 +153,15 @@ platform_key('prolog-home').
 % [source: SWI-Prolog Reference Manual, current_prolog_flag/2].
 platform_value(architecture, Value) :-
     current_prolog_flag(arch, Atom), atom_string(Atom, Value).
+%The family is whichever of SWI's platform flags is true. A WebAssembly build
+%sets emscripten in place of unix, linux and apple [source: swipl-devel
+%src/os/pl-prologflag.c, the #ifdef __EMSCRIPTEN__ branch of initPrologFlags],
+%so it has a family of its own rather than none.
 platform_value(family, Value) :-
     (   current_prolog_flag(windows, true) -> Value = "windows"
     ;   current_prolog_flag(apple, true) -> Value = "apple"
     ;   current_prolog_flag(unix, true) -> Value = "unix"
+    ;   current_prolog_flag(emscripten, true) -> Value = "emscripten"
     ;   Value = "unknown"
     ).
 platform_value(version, Value) :-
