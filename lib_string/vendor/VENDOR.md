@@ -18,6 +18,13 @@ or rebuild it through `../support/native_build.pl`; its cache watches every
 vendor header, the adapter, recipe and shared builder. A changed or missing
 input cannot silently reuse the old object.
 
+A host that links foreign code statically, the WebAssembly one, carries the
+same sources compiled into its binary instead, by `../support/static.cmake`
+with the same flags plus C++ exception catching, which emscripten leaves off
+unless asked and which the adapter's error path needs.
+`../../_support/native_install.pl` activates that extension where the dynamic
+host loads the object.
+
 RapidFuzz receives explicit uint32 iterator ranges, unit edit costs and no score
 cutoff. It does not receive NUL-terminated convenience pointers. The adapter
 checks signals before and after its synchronous distance calculation. Owned

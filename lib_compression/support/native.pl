@@ -8,11 +8,11 @@
 :- module(lib_compression_native,
           [with_utf8/1,with_archive/4,archive_property/2,archive_next_header/2,
            archive_header_property/2,archive_open_entry/2]).
-:- use_module(library(shlib), [load_foreign_library/2]).
 :- use_module(library(lists), [member/2]).
 :- use_module(native_build, [native_object/1]).
+:- use_module('../../_support/native_install', [native_install/2]).
 :- meta_predicate with_archive(+,+,-,0), with_archive_stream(+,+,-,0).
-:- native_object(Object), load_foreign_library(Object, install_lib_compression).
+:- native_install(native_object, install_lib_compression).
 
 with_archive(Source,Options,Archive,Goal) :-
     ( Source=stream(Input)

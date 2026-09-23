@@ -38,6 +38,9 @@ only their namespace and the end-offset test, which now expects a normal
 failed match for dot at the end of the subject.
 
 The loader builds a native object under `lib_regex/.native` on first import.
+A host that links foreign code statically, the WebAssembly one, has the binding
+compiled in by `../support/static.cmake` against the same PCRE2 SWI's own pcre
+package links, and the loader activates the `metta_pcre` extension there.
 That directory is ignored by Git and wheel packaging. The build needs a C
 compiler, SWI development tools and PCRE2 headers. On Debian/Ubuntu these are
 `build-essential`, `swi-prolog-nox` and `libpcre2-dev`. Prebuild before making

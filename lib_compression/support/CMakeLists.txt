@@ -1,5 +1,12 @@
-# Purpose: compile the pinned archive provider and its private SWI binding.
+# Purpose: compile the pinned archive provider and its private SWI binding, or,
+#   configured without NATIVE_STAGE, build and install the provider alone for a
+#   SWI-Prolog that links foreign code statically.
 # Owns resources: the calling native build recipe owns this temporary build tree.
+# Guarantees: without NATIVE_STAGE, `install` puts libarchive.a, archive.h and
+#   archive_entry.h under CMAKE_INSTALL_PREFIX, built from the snapshot and ZIP
+#   correction below, which is what tools/wasm-host/Dockerfile runs and what
+#   support/static.cmake links the binding against
+#   [tested: tools/wasm-host/build.sh; commit=WORKTREE].
 # Decides: archive symbols stay local to the resulting SWI object.
 # [tested: test_archive_legacy_zip_names; commit=7b42d5ee5cecb82709617b7ed08dfa2c1441f268].
 cmake_minimum_required(VERSION 3.18)
@@ -34,6 +41,16 @@ add_subdirectory("${provider}" provider-build)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(archive_static PRIVATE
     -fvisibility=hidden -U__LIBARCHIVE_ENABLE_VISIBILITY)
+endif()
+
+if(NOT NATIVE_STAGE)
+  # The provider for a static host: libarchive's own install rules are off
+  # (ENABLE_INSTALL above), so these name what the binding needs.
+  install(TARGETS archive_static ARCHIVE DESTINATION lib)
+  install(FILES "${provider}/libarchive/archive.h"
+                "${provider}/libarchive/archive_entry.h"
+          DESTINATION include)
+  return()
 endif()
 
 # swipl-ld beside the active interpreter chooses the binding's SWI headers/ABI.

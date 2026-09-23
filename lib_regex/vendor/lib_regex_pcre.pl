@@ -55,7 +55,8 @@
 :- autoload(library(lists), [append/3]).
 
 :- use_module('../support/native_build', [native_object/1]).
-:- native_object(Object), use_foreign_library(Object, install_metta_pcre).
+:- use_module('../../_support/native_install', [native_install/2]).
+:- native_install(native_object, install_metta_pcre).
 :- autoload(library(option), [option/2]).
 
 :- meta_predicate

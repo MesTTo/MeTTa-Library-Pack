@@ -5,6 +5,6 @@
 :- module(lib_string_native,
           [find_index/4, count_matches/4, split_exact/3, replace_all/4,
            split_text/4, edit_distance/3, substring_similarity/5]).
-:- use_module(library(shlib), [load_foreign_library/2]).
 :- use_module(native_build, [native_object/1]).
-:- native_object(Object), load_foreign_library(Object, install_lib_string).
+:- use_module('../../_support/native_install', [native_install/2]).
+:- native_install(native_object, install_lib_string).

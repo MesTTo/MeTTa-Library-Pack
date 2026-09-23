@@ -5,6 +5,6 @@
 :- module(lib_crypto_native,
           [digest/4, random_bytes/2, random_below_hex/2,
            password_iterations/2, password_hash/4, password_verify/5]).
-:- use_module(library(shlib), [load_foreign_library/2]).
 :- use_module(native_build, [native_object/1]).
-:- native_object(Object), load_foreign_library(Object, install_lib_crypto).
+:- use_module('../../_support/native_install', [native_install/2]).
+:- native_install(native_object, install_lib_crypto).

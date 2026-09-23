@@ -59,6 +59,13 @@ swipl -q -s lib/lib_compression/support/native_build.pl \
   -g 'lib_compression_native_build:native_object(_)' -t halt
 ```
 
+A host that links foreign code statically, the WebAssembly one, builds the
+same provider from this snapshot and correction: configured without
+`NATIVE_STAGE`, `../support/CMakeLists.txt` builds libarchive alone and installs
+it with its two public headers, and `../support/static.cmake` links the binding
+against it. Only zlib's codecs are linked there, which covers ZIP, tar and the
+gzip layers this library validates itself.
+
 The cache is local to `lib_compression/.native` and the active SWI ABI. The
 shared builder serializes threads and processes and publishes a complete object
 atomically. Its qualified build callback joins each CMake process before closing

@@ -5,6 +5,6 @@
 :- module(lib_socket_native,
           [kind/2,endpoint/5,receive/5,shutdown/2,accept_owner/1,try_accept/4,
            finish_accept/2,abort_accept/1,abort/1,monotonic/1]).
-:- use_module(library(shlib), [load_foreign_library/2]).
 :- use_module(native_build, [native_object/1]).
-:- native_object(Object), load_foreign_library(Object, install_lib_socket).
+:- use_module('../../_support/native_install', [native_install/2]).
+:- native_install(native_object, install_lib_socket).
