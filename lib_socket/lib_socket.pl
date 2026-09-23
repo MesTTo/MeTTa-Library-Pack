@@ -8,7 +8,7 @@
 % socket-wait! answers, and every door refuses naming socket at its first socket
 % operation, after the argument and handle checks that need none
 % [tested: platform_capabilities_reduced:http_and_socket_libraries_import_and_refuse_per_call;
-% commit=WORKTREE].
+% commit=a792976c2ef095fb6c42506972322d16263804a1].
 % Owns resources: openers transfer streams to File; file-close! releases them.
 % with-socket owns its handle until exhaustion, cut or exception. The native
 % adapter owns accepted descriptors until their two stream halves close.

@@ -18,7 +18,7 @@
 %     lib_crypto's randomness refuses while its SHA digests keep working. So
 %     (process-signals) answers on a build without processes, the WebAssembly one
 %     among them [tested: platform_capabilities_reduced:process_library_imports_and_a_launch_refuses_by_name;
-%     commit=WORKTREE]
+%     commit=a792976c2ef095fb6c42506972322d16263804a1]
 % Guarantees:
 %   - a nonzero exit is a STATUS and not an error: process-run! answers
 %     (process-result Code Output Error) whatever the program exited with, and only a

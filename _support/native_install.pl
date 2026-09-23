@@ -11,7 +11,7 @@
 % native_extension_missing(Name) naming the rebuild rather than leaving the
 % library's foreign predicates undefined
 % [tested: examples/ch08-data/08-03-the-shipped-libraries/18-string_lib.metta
-% under tsmetta on the host tools/wasm-host/build.sh builds; commit=WORKTREE].
+% under tsmetta on the host tools/wasm-host/build.sh builds; commit=2126ab64eacfd1713bc10b8c50fe6b564f978a74].
 % Decides: a separate module from native_build.pl because that file is an
 % input of every native object's build, so an edit to how a half is loaded
 % would otherwise rebuild all of them [source: lib/_support/native_build.pl:native_object/6].

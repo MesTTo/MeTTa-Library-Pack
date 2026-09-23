@@ -8,7 +8,7 @@
 % answers, and every other door refuses naming http once its arguments are
 % checked; http-header too, since it reads names with http_header's grammar
 % [tested: platform_capabilities_reduced:http_and_socket_libraries_import_and_refuse_per_call;
-% commit=WORKTREE].
+% commit=a792976c2ef095fb6c42506972322d16263804a1].
 % Owns resources: http-open! transfers its response stream to File's handle table.
 % A started server belongs to its caller until http-server-stop!; with-http and
 % with-http-server retain ownership for the lifetime of their answer streams.

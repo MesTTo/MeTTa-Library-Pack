@@ -11,7 +11,7 @@
  * again, any other stream on the same file is refused with EWOULDBLOCK, and
  * the claim goes when its stream closes
  * [tested: examples/ch08-data/08-03-the-shipped-libraries/42-database_lib.metta
- * under tsmetta on the host tools/wasm-host/build.sh builds; commit=WORKTREE].
+ * under tsmetta on the host tools/wasm-host/build.sh builds; commit=2126ab64eacfd1713bc10b8c50fe6b564f978a74].
  * Assumes: under emscripten the files a claim names belong to this process,
  * which holds for a filesystem the program alone mounts; a directory shared
  * with another process through NODEFS is not claimed against it.
