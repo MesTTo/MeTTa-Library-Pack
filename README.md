@@ -16,6 +16,25 @@ only this engine can load cannot carry that.
 !(import! &self (library lib_memo))
 ```
 
+**What will not import on a default SWI.** Six of the sixty need SWI packages
+a default build does not ship, and each refuses naming the package rather than
+failing obscurely:
+
+| Library | Needs | SWI package |
+|---|---|---|
+| `lib_compression` | `library(archive)` | `packages/archive`, plus libarchive headers |
+| `lib_unicode` | `library(unicode)` | `packages/utf8proc` |
+| `lib_yaml` | `library(yaml)` | `packages/yaml`, plus libyaml |
+| `lib_redis`, `lib_tabling`, `lib_uuid` | `library(uuid)` | `packages/clib` built against OSSP uuid |
+
+The other fifty-four import against any SWI the engine itself runs on.
+
+`lib_gitimport` is the one entry here you never import. The engine boot-loads
+it (`engine/metta.pl`), so `git-import!` is already a head on a bare engine --
+`!(get-type git-import!)` answers `(-> String Bool)` with nothing imported.
+`(library lib_gitimport)` carries no MeTTa source and refuses, which is
+correct: there is nothing to add that is not already there.
+
 | Section | Libraries |
 |---|---:|
 | [Data and structures](#data-and-structures) | 9 |
@@ -23,7 +42,7 @@ only this engine can load cannot carry that.
 | [Numerics and probability](#numerics-and-probability) | 6 |
 | [IO and system](#io-and-system) | 12 |
 | [Reasoning and rewriting](#reasoning-and-rewriting) | 6 |
-| [Engine services](#engine-services) | 13 |
+| [Engine services](#engine-services) | 12 |
 | [Compatibility and programming idioms](#compatibility-and-programming-idioms) | 4 |
 
 Head lists include each library's own declarations, equations and registered native names; dependencies have their own entries.
