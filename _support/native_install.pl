@@ -32,15 +32,20 @@ static_host :-
    ).
 :- meta_predicate native_install(1, +).
 
-%! native_install(:Object, +Install) is det.
-%
-% Install a library's native half into the module calling this. Object is the
-% library's own build goal, called as call(Object, Path) for the shared object
-% to load, and Install is the object's install function. A host that links
-% foreign code statically (SWI's STATIC_EXTENSIONS, the WebAssembly build) has
-% no shared objects to load: its binary carries the half as the extension
-% swipl_plugin named after what follows install_, and activating that
-% extension in the calling module is the whole install.
+% native_install(:Object, +Install) installs a library's native half into the
+% module calling it. Object is the library's own build goal, called as
+% call(Object, Path) for the shared object to load, and Install is the object's
+% install function. A host that links foreign code statically (SWI's
+% STATIC_EXTENSIONS, the WebAssembly build) has no shared objects to load: its
+% binary carries the half as the extension swipl_plugin named after what
+% follows install_, and activating that extension in the calling module is the
+% whole install. The activation is SWI's own static use_foreign_library/1
+% [source: swipl-devel boot/syspred.pl, use_foreign_library_noi/1], called
+% directly because that predicate runs it through initialization(_, now),
+% whose '$run_init_goal'/2 prints an exception rather than raising it
+% [source: swipl-devel boot/init.pl, '$initialization_error'/3], so a host
+% missing a half would import the library and fail later on an unknown
+% procedure.
 native_install(Module:Object, Install) :-
     (   static_host
     ->  atom_concat(install_, Name, Install),
