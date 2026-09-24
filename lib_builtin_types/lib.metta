@@ -557,6 +557,14 @@
 (: py-tuple (-> %Undefined% %Undefined%))
 (: py-dict (-> %Undefined% %Undefined%))
 (: py-iter (-> %Undefined% %Undefined%))
+;; py-iter's consumptive twin, which a compiled for statement pulls.
+(: py-iter-once (-> %Undefined% %Undefined%))
+;; The py-* doors are the language's and Python's to implement: the Python seat
+;; installs them wherever it loads, and on a build where it did not load each
+;; one refuses naming the python capability instead of answering itself.
+(capability python (extension python)
+  "calling Python at all: every py-* door, and each library written over them, such as lib_torch"
+  (py-call py-atom py-dot py-list py-tuple py-dict py-iter py-iter-once))
 ;; Kwargs takes its pairs UNEVALUATED, because the name half of a pair is a
 ;; name: without the mask `(Kwargs (reverse true))` was read as a call to the
 ;; `reverse` builtin and the whole form vanished. The VALUE half is evaluated
