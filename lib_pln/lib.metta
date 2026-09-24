@@ -1,7 +1,7 @@
 ; Purpose: provide PLN truth formulas, inference rules, and bounded derivation.
 ; Guarantees: LimitSize answers at every size, an empty queue being its own
 ;   limit, so PLN.Derive given a task or belief queue size of 0 returns.
-; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/19-pln_derivation_control.metta; commit=WORKTREE]
+; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/19-pln_derivation_control.metta; commit=7f373da2b1e1ffbe2a34aa6f01c892dfbd437594]
 (= (clamp $v $min $max)
    (min $max (max $v $min)))
 

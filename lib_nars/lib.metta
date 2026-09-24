@@ -4,7 +4,7 @@
 ; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/09-nars_tuffy.metta; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
 ; Guarantees: LimitSize answers at every size, an empty queue being its own
 ;   limit, so NARS.Derive given a task or belief queue size of 0 returns.
-; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/17-nars_derivation_control.metta; commit=WORKTREE]
+; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/17-nars_derivation_control.metta; commit=7f373da2b1e1ffbe2a34aa6f01c892dfbd437594]
 !(add-atom &metta (dispatch-policy |- NoMatchEnum NoMatchFail))
 
 ;; Truth functions
