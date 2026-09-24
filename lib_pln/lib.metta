@@ -1,3 +1,7 @@
+; Purpose: provide PLN truth formulas, inference rules, and bounded derivation.
+; Guarantees: LimitSize answers at every size, an empty queue being its own
+;   limit, so PLN.Derive given a task or belief queue size of 0 returns.
+; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/19-pln_derivation_control.metta; commit=WORKTREE]
 (= (clamp $v $min $max)
    (min $max (max $v $min)))
 
@@ -415,9 +419,15 @@
 (= (PriorityRankNeg (Sentence ($x (stv $f $c)) $Ev1)) (- 0.0 $c))
 (= (PriorityRankNeg ()) -99999.0)
 
-;;Return limited-sized version of $L (bounded PQ functionality)
+;;Return limited-sized version of $L (bounded PQ functionality). An empty
+;;queue is its own limit. Upstream PeTTa's body (43705f5,
+;;lib/lib_pln.metta:410) tests the count alone, and at a size of 0 or below
+;;no count passes that test: once the queue is empty, the lowest-priority item
+;;of () is () itself, removing it leaves (), and the call recurses on its own
+;;arguments for ever. The added test is true only for (), where every size of
+;;1 or more already answered ().
 (= (LimitSize $L $size)
-   (if (< (TupleCount $L) $size)
+   (if (or (== $L ()) (< (TupleCount $L) $size))
        $L
        (let $lowestPriorityItem (BestCandidate PriorityRankNeg () $L)
             (LimitSize (Without $L $lowestPriorityItem) $size))))

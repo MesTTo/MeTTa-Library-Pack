@@ -2,6 +2,9 @@
 ; Guarantees: a term pair that matches no `|-` inference rule fails as a
 ;   relation instead of entering the derivation queue as a residual call.
 ; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/09-nars_tuffy.metta; commit=0d90e628b1f90c4b4464a2907efcb357d74b13d3]
+; Guarantees: LimitSize answers at every size, an empty queue being its own
+;   limit, so NARS.Derive given a task or belief queue size of 0 returns.
+; [tested: examples/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/17-nars_derivation_control.metta; commit=WORKTREE]
 !(add-atom &metta (dispatch-policy |- NoMatchEnum NoMatchFail))
 
 ;; Truth functions
@@ -216,9 +219,15 @@
 (= (PriorityRankNeg (Sentence ($x (stv $f $c)) $Ev1)) (- 0.0 $c))
 (= (PriorityRankNeg ()) -99999.0)
 
-;;Return limited-sized version of $L (bounded PQ functionality)
+;;Return limited-sized version of $L (bounded PQ functionality). An empty
+;;queue is its own limit. Upstream PeTTa's body (43705f5,
+;;lib/lib_nars.metta:214) tests the length alone, and at a size of 0 or below
+;;no length passes that test: once the queue is empty, the lowest-priority
+;;item of () is () itself, removing it leaves (), and the call recurses on its
+;;own arguments for ever. The added test is true only for (), where every size
+;;of 1 or more already answered ().
 (= (LimitSize $L $size)
-   (if (< (length $L) $size)
+   (if (or (== $L ()) (< (length $L) $size))
        $L
        (let $lowestPriorityItem (BestCandidate PriorityRankNeg () $L)
             (LimitSize (exclude-item $lowestPriorityItem $L) $size))))
