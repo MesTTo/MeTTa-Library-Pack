@@ -5,14 +5,21 @@
 %   declarations are cumulative and idempotent, and every operation
 %   verifies its effect and throws loudly when the engine disagrees.
 %   Live declarations reflect into &metta as (tabled space name arity)
-%   facts, input arity, asserted on declare and retracted on undeclare. On a
-%   threaded SWI the tables are shared between engines, so a Python
-%   Answers cursor and the term runner reach one answer trie and report one
-%   set of statistics. A threads-disabled SWI, including swipl-wasm, owns its
-%   table trie per engine instead: the Node seat's one-engine-per-run contract
-%   reuses answers between forms in one run and recomputes them in the next
-%   [tested: "recomputes across Node runs and reuses within one run";
-%   commit=42df19d71823b963fce5594a42f57fd23a89b7a9].
+%   facts, input arity, asserted on declare and retracted on undeclare. A
+%   shared table, the default, is shared between engines on every host: a
+%   threaded SWI shares it between its threads and engines, and a build
+%   without threads, the WebAssembly one included, carries the host patch
+%   swi-threadless-shared-table-private-per-engine, which shares it between
+%   the engines of that build. So a Python Answers cursor and the term runner
+%   reach one answer trie and report one set of statistics, and a Node run
+%   reads the table an earlier run built [tested: "reuses a table across Node
+%   runs as within one"; commit=707fc07ff19faf9b60bc45af836f2d3dbb8c1c43].
+%   A private table belongs to the engine that fills it, and every seat runs
+%   its eager asks in one engine and gives a lazy or suspending one an engine
+%   of its own, so a private table outlives an eager run and lasts one
+%   iteration [tested: "shares a private table between synchronous asks",
+%   "keeps a private table to the awaiting ask that filled it";
+%   commit=707fc07ff19faf9b60bc45af836f2d3dbb8c1c43].
 %   A (cache Name Policy) row in &metta is the developer's word on HOW a
 %   function is tabled: the catalog's cache-policy vocabulary is SWI's own
 %   table/1 option list and answer-subsumption mode spelled as MeTTa words,
