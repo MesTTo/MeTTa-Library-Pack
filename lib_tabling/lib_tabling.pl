@@ -753,7 +753,7 @@ metta_tabling_table_spec(Module, Name, CompiledArity, Moded, Spec) :-
     ).
 
 metta_tabling_join_visible(Module, Name, Join) :-
-    metta_ensure_compiled(Join),
+    metta_ensure_compiled_from(Module, Join),
     (   current_predicate(Module:Join/3)
     ->  true
     ;   metta_tabling_refuse(Name, join_missing(Join, Module))
@@ -1177,9 +1177,11 @@ metta_tabling_apply_row(Name, Members) :-
 %module happens to import, member/2 for a function named member, from being
 %read as an arity of the MeTTa name.
 metta_tabling_row_targets(Name, Targets) :-
-    metta_ensure_compiled(Name),
     current_metta_module(CallModule),
     metta_self_module(Self),
+    %Both views the targets below read, each forced from where it is read.
+    forall(member(From, [CallModule, Self]),
+           metta_ensure_compiled_from(From, Name)),
     findall(Module-CompiledArity,
             ( arity(Name, CompiledArity),
               member(From, [CallModule, Self]),
