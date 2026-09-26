@@ -753,10 +753,18 @@ memo_automatic_unsafe_reason(Fun, Module, [volatile, Fun]) :-
     \+ metta_function_cacheable(Module, Fun),
     \+ memo_cache_override(Fun, force),
     !.
+%Every arity of the name is asked rather than until the first tabled one: the
+%procedure table answers a name's arities in an order that follows the
+%functors the process allocated before them, so stopping at the first paid a
+%count that moved with them. Whether the list is empty does not depend on its
+%order [tested 2026-09-26T13:18:57+10:00:
+%memo_cache_override:asking_whether_a_name_is_tabled_costs_the_same_wherever_functors_land].
 memo_automatic_unsafe_reason(Fun, Module, 'explicit-tabling') :-
-    current_predicate(Module:Fun/Arity),
-    functor(Head, Fun, Arity),
-    predicate_property(Module:Head, tabled),
+    findall(Arity,
+            ( current_predicate(Module:Fun/Arity),
+              functor(Head, Fun, Arity),
+              predicate_property(Module:Head, tabled) ),
+            [_|_]),
     !.
 memo_automatic_unsafe_reason(Fun, Module, ['bounded-search', Control]) :-
     memo_equation(Fun, Module, any, [=, _, Body]),
