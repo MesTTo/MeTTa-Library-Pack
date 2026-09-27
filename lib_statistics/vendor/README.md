@@ -1,5 +1,5 @@
 The exact moment reduction, quantile interpolation and geometric-mean log
-reduction in `../lib_statistics.metta` and `../../_support/statistics.metta`
+reduction in `../lib.metta` and `../../_support/statistics.metta`
 adapt CPython's `statistics.py` at revision
 `ebf955df7a89ed0c7968f79faec1de49f61ed7cb`. Its license is `PYTHON-LICENSE`.
 

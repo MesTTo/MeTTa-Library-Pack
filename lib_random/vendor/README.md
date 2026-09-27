@@ -14,4 +14,4 @@ That revision's license is already shipped in
 `../../lib_vector/vendor/PYTHON-LICENSE`. Neither upstream project is a runtime
 dependency; every uniform draw uses the core random-float operation and SWI's
 existing thread-local generator. The public constructors in
-`../lib_random.metta` return sample programs as ordinary MeTTa expressions.
+`../lib.metta` return sample programs as ordinary MeTTa expressions.
