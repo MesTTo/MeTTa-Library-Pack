@@ -51,6 +51,11 @@ ship, and each refuses naming the package rather than failing obscurely:
 
 Every other library imports against any SWI the engine itself runs on.
 
+**Licences.** Each library's manifest states the licence of the whole library
+as `(package license)`, which `get-property` answers: Apache-2.0, the pack's
+licence for its own code, and the licence of everything the library vendors or
+adapts, as [.reuse/dep5](.reuse/dep5) records each file's.
+
 `lib_gitimport` is the one entry here you never import. The engine boot-loads
 it (`engine/metta.pl`), so `git-import!` is already a head on a bare engine --
 `!(get-type git-import!)` answers `(-> String Bool)` with nothing imported.
