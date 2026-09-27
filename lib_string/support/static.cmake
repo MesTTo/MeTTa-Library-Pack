@@ -1,5 +1,10 @@
-# Purpose: link lib_string's native half into a SWI-Prolog that links foreign
-#   code statically, as the extension native_install/2 activates on that host.
+# Purpose: link lib_string's permissive native half into a SWI-Prolog that
+#   links foreign code statically, as the extension native_install/2 activates
+#   on that host. The ISub half, isub_native.cpp, is not linked: its scorer is
+#   LGPL-2.0-or-later code, which a host distributed with its foreign code
+#   linked in does not carry, so the engine's census reads the isub capability
+#   absent there and string-isub refuses by that name
+#   [source 2026-09-27T22:20:42+10:00: engine/metta.pl:metta_platform_capability/3].
 # Assumes: included from the package tools/wasm-host/build.sh stages into
 #   swipl-devel's packages/, after PrologPackage.cmake, in a project with CXX.
 # Guarantees: plugin_lib_string compiles string_native.cpp with the flags

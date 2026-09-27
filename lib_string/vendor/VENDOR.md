@@ -12,16 +12,23 @@ It contains the adapters in `../support/string_native.cpp` and the sources below
 | Line and indentation utilities | [SWI 10.1.13 strings.pl](https://github.com/SWI-Prolog/swipl-devel/blob/fc7ef84b949378b729052c3ade79c90ce5416abb/library/strings.pl) | The source's BSD license is retained in `string_lines.pl`. The selected line/indentation predicates have a private module and call the corrected splitter. Dedent always empties blank lines, including when the common prefix is empty or shorter than the blank line. Quasiquotations, interpolation and sandbox hooks remain in the host. |
 | ISub | [packages-nlp dd69ae95342d7a0429a0f8bcc7deab2bd514570e](https://github.com/SWI-Prolog/packages-nlp/blob/dd69ae95342d7a0429a0f8bcc7deab2bd514570e/isub.c) | LGPL-2.0-or-later, retained in `isub.hpp` and `LGPL-2.0`. The adaptation owns codepoint vectors, uses size_t lengths, preserves NUL, checks signals and computes length sums in floating point. The wrapper normalizes with the existing host lowercase operation. Substring selection and scoring retain the upstream algorithm. |
 
-The ISub adaptation's source and license accompany its shared object so it can
-be modified and rebuilt. Consumers load the shared object dynamically. Replace
-or rebuild it through `../support/native_build.pl`; its cache watches every
-vendor header, the adapter, recipe and shared builder. A changed or missing
-input cannot silently reuse the old object.
+The ISub adaptation builds into a shared object of its own, from
+`../support/isub_native.cpp`, apart from the object `../support/string_native.cpp`
+builds, so it is the only object holding LGPL code. Its source and license
+accompany it so it can be modified and rebuilt, and consumers load it
+dynamically. Replace or rebuild either through `../support/native_build.pl`
+(`isub_object/1` for ISub, `native_object/1` for the rest); each cache watches
+the vendor headers its object includes, the adapter, the shared
+`../support/string_boundary.hpp`, the recipe and the shared builder. A changed
+or missing input cannot silently reuse the old object.
 
 A host that links foreign code statically, the WebAssembly one, carries the
-same sources compiled into its binary instead, by `../support/static.cmake`
-with the same flags plus C++ exception catching, which emscripten leaves off
-unless asked and which the adapter's error path needs.
+other object's sources compiled into its binary instead, by
+`../support/static.cmake` with the same flags plus C++ exception catching,
+which emscripten leaves off unless asked and which the adapter's error path
+needs. It links no ISub: that host is distributed with its foreign code linked
+in, which carries no copyleft code, so `static.cmake` names only
+`string_native.cpp` and `string-isub` refuses there by the `isub` capability.
 `../../_support/native_install.pl` activates that extension where the dynamic
 host loads the object.
 

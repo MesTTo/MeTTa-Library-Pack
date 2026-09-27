@@ -51,6 +51,14 @@ ship, and each refuses naming the package rather than failing obscurely:
 
 Every other library imports against any SWI the engine itself runs on.
 
+**A host that loads shared objects.** `lib_string`'s `string-isub` computes
+ISub with code adapted from SWI's `isub.c`, which is LGPL-2.0-or-later, so it
+builds into a native object of its own that loads only as a shared object
+built on the machine that runs it. The WebAssembly host links its foreign code
+statically and carries no copyleft code, so the engine reads the `isub`
+capability absent there and `string-isub` refuses by that name; the rest of
+`lib_string` runs there.
+
 **Licences.** Each library's manifest states the licence of the whole library
 as `(package license)`, which `get-property` answers: Apache-2.0, the pack's
 licence for its own code, and the licence of everything the library vendors or

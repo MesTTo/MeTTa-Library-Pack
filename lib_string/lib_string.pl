@@ -25,6 +25,18 @@
            'string-isub'/3, 'string-isub'/4, metta_text/2]).
 :- set_module(base(metta_engine)).
 :- use_module('support/native', []).
+% ISub is its own native half, whose scorer is LGPL-2.0-or-later code, loaded
+% where the census reads the isub capability present: a host that builds its
+% native halves where it runs. A host that links foreign code statically, the
+% WebAssembly one, links no ISub, and string-isub refuses there by the
+% capability's name. A directive rather than :- if, since this file is compiled
+% to a .qlf [source 2026-09-27T22:20:42+10:00: engine/metta.pl:metta_platform_capability/3].
+% Workaround: swi-relative-compound-source - resolve this atom relative to the
+% importing file instead of reusing another directory's compound-path cache.
+:- (   metta_platform(isub, present, _, _)
+   ->  use_module('support/isub', [])
+   ;   true
+   ).
 :- use_module('vendor/string_lines', []).
 :- use_module(library(error), [must_be/2, domain_error/2]).
 :- use_module(library(apply), [maplist/2, maplist/3, exclude/3]).
@@ -234,14 +246,16 @@ template_assignment(Name-Value, Name=Value).
 % is nonnegative; matched substrings must be longer than it. Normalization
 % lowercases and removes dot, underscore and ASCII space. The usual range is
 % [-1,1], or [0,1] with zero-to-one. Both empty score 1; one empty scores 0.
+% A host without the isub capability refuses it by that name.
 'string-isub'(First, Second, Score) :- 'string-isub'(First, Second, [], Score).
 'string-isub'(First, Second, Options, Score) :-
+    metta_require_platform('(string-isub ...)', isub),
     must_be(list, Options), maplist(isub_option, Options, Pairs), dict_create(Explicit, isub, Pairs),
     Config = isub{normalize:false,zero_to_one:false,threshold:2}.put(Explicit),
     metta_text(First, Text1), metta_text(Second, Text2),
     isub_text(Config.normalize, Text1, Left), isub_text(Config.normalize, Text2, Right),
     string_length(Left, L), string_length(Right, R), Threshold is min(Config.threshold,max(L,R)),
-    lib_string_native:substring_similarity(Left, Right, Threshold, Config.zero_to_one, Score).
+    lib_string_isub_native:substring_similarity(Left, Right, Threshold, Config.zero_to_one, Score).
 
 isub_option(Option, Key-Value) :-
     ( nonvar(Option), Option = [Name,Value] -> true ; domain_error(isub_option, Option) ),

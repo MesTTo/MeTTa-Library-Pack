@@ -118,12 +118,22 @@ The threshold can exclude an entire short identical label, so ISub identity
 scores depend on the chosen threshold. Normalization here is label cleanup,
 not Unicode normalization. Invalid or repeated options raise.
 
+ISub is the one part of this library under the LGPL: its scorer is adapted
+from SWI's `isub.c`, LGPL-2.0-or-later. It builds into a native object of its
+own, beside the object the other operations share, and loads as a shared object
+built on the machine that runs it. A host that links foreign code statically,
+the WebAssembly one, links no ISub, so the engine reads the `isub` capability
+absent there and `string-isub` refuses by that name, while `string-similarity`
+and `string-edit-distance` still compare text. The manifest's
+`(package license)` row states the licence of the whole library.
+
 The [provider record](vendor/VENDOR.md) pins RapidFuzz, Boost KMP and the SWI
-adaptations and includes their licenses. The String object builds at first
+adaptations and includes their licenses. The String objects build at first
 import with SWI development tools and a C++11 compiler; source distributions
-and wheels carry all inputs. Missing dependencies raise `string_native_build`
-with install and prebuild instructions. Every declared vendor header and the
-manifest participate in cache invalidation, including missing files. Temporary
+and wheels carry all inputs. Missing dependencies raise `string_native_build`,
+or `string_isub_native_build` for the ISub object, with install and prebuild
+instructions. Every vendor header an object includes and the manifest
+participate in its cache invalidation, including missing files. Temporary
 native buffers are call-owned. Owned loops deliver pending signals while
 walking; RapidFuzz delivers them after its synchronous calculation returns.
 

@@ -1,94 +1,25 @@
-/* Purpose: provide length-aware literal operations and exact String metrics.
+/* Purpose: provide length-aware literal operations and exact edit distance, the
+   permissive half of lib_string's native code; ISub is its own half,
+   isub_native.cpp, so an object built from this file links no LGPL code.
    Assumes: public wrappers coerce text; foreign entry points still check types.
-   [source: lib/lib_string/lib_string.pl:metta_text/2, lib/lib_string/support/string_native.cpp:text_codes; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+   [source 2026-09-27T22:20:42+10:00: lib/lib_string/lib_string.pl:metta_text/2, lib/lib_string/support/string_boundary.hpp:text_codes].
    Guarantees: NUL and supplementary scalars retain their codepoint positions.
-   [tested: lib_string_surface, test_string_unicode_oracles; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+   [tested 2026-09-27T22:15:44+10:00: lib_string_surface, test_string_unicode_oracles].
    Owns resources: local RAII buffers are released on success, failure and exception.
-   No query state survives a call. [source: lib/lib_string/support/string_native.cpp:boundary; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+   No query state survives a call. [source 2026-09-27T22:20:42+10:00: lib/lib_string/support/string_boundary.hpp:boundary].
    Decides: literal matching shares KMP; pending signals are checked during owned
-   walks and at RapidFuzz's call boundaries. [tested: lib_string_surface; commit=3aaad3435292e4c7d5cc3a01bfda39430aacc6e8].
+   walks and at RapidFuzz's call boundaries. [tested 2026-09-27T22:15:44+10:00: lib_string_surface].
 */
 #include <SWI-Prolog.h>
 #include <algorithm>
 #include <climits>
 #include <cstdint>
-#include <exception>
-#include <memory>
-#include <stdexcept>
 #include <unordered_set>
 #include <vector>
 #include <rapidfuzz/distance/Levenshtein.hpp>
-#include "../vendor/isub.hpp"
+#include "string_boundary.hpp"
 
 namespace {
-using Codes = std::vector<uint32_t>;
-struct Pending {};
-
-void checked(bool result)
-{
-    if (!result) throw Pending{};
-}
-
-struct Signals {
-    size_t ticks = 0;
-    void operator()()
-    {
-        if ((++ticks & 16383) == 0) checked(PL_handle_signals() >= 0);
-    }
-};
-
-template <class Operation>
-foreign_t boundary(Operation operation)
-{
-    try {
-        checked(PL_handle_signals() >= 0);
-        const bool result = operation();
-        checked(PL_handle_signals() >= 0);
-        return result;
-    } catch (const Pending&) {
-        return false;
-    } catch (const std::bad_alloc&) {
-        return PL_resource_error("memory");
-    } catch (const std::length_error&) {
-        return PL_resource_error("memory");
-    } catch (const std::exception& error) {
-        term_t exception = PL_new_term_ref();
-        if (!PL_unify_term(exception, PL_FUNCTOR_CHARS, "error", 2,
-                          PL_FUNCTOR_CHARS, "string_native_error", 1,
-                          PL_UTF8_CHARS, error.what(), PL_VARIABLE)) return false;
-        return PL_raise_exception(exception);
-    } catch (...) {
-        return PL_resource_error("string_native_exception");
-    }
-}
-
-Codes text_codes(term_t value, Signals& check)
-{
-    pl_wchar_t* raw = nullptr;
-    size_t length = 0;
-    checked(PL_get_wchars(value, &length, &raw, CVT_STRING | CVT_EXCEPTION | BUF_MALLOC));
-    std::unique_ptr<pl_wchar_t, decltype(&PL_free)> owned(raw, &PL_free);
-    Codes codes;
-    codes.reserve(length);
-    for (size_t i = 0; i < length; ++i) {
-        uint32_t code = static_cast<uint32_t>(raw[i]);
-#if WCHAR_MAX <= 0xffff
-        if (code >= 0xd800 && code <= 0xdbff && i + 1 < length) {
-            const uint32_t low = static_cast<uint32_t>(raw[i + 1]);
-            if (low >= 0xdc00 && low <= 0xdfff) {
-                code = 0x10000 + ((code - 0xd800) << 10) + low - 0xdc00;
-                ++i;
-            }
-        }
-#endif
-        if (code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff))
-            checked(PL_representation_error("unicode_scalar_value"));
-        codes.push_back(code);
-        check();
-    }
-    return codes;
-}
-
 bool unify_text(term_t output, Codes::const_iterator begin, Codes::const_iterator end,
                 Signals& check)
 {
@@ -265,21 +196,6 @@ foreign_t edit_distance(term_t first, term_t second, term_t output)
         return PL_unify_uint64(output, distance);
     });
 }
-
-// Workaround: swi-isub-nul-lengths - pass complete owned codepoint vectors to the adapted core.
-foreign_t substring_similarity(term_t first, term_t second, term_t threshold,
-                                term_t normalized, term_t output)
-{
-    return boundary([&]() {
-        Signals check;
-        Codes left = text_codes(first, check), right = text_codes(second, check);
-        size_t minimum;
-        int zero_to_one;
-        checked(PL_get_size_ex(threshold, &minimum));
-        checked(PL_get_bool_ex(normalized, &zero_to_one));
-        return PL_unify_float(output, isub_score(left, right, minimum, zero_to_one != 0, check));
-    });
-}
 } // namespace
 
 extern "C" install_t install_lib_string()
@@ -290,5 +206,4 @@ extern "C" install_t install_lib_string()
     PL_register_foreign_in_module("lib_string_native", "replace_all", 4, reinterpret_cast<pl_function_t>(replace_all), 0);
     PL_register_foreign_in_module("lib_string_native", "split_text", 4, reinterpret_cast<pl_function_t>(split_text), 0);
     PL_register_foreign_in_module("lib_string_native", "edit_distance", 3, reinterpret_cast<pl_function_t>(edit_distance), 0);
-    PL_register_foreign_in_module("lib_string_native", "substring_similarity", 5, reinterpret_cast<pl_function_t>(substring_similarity), 0);
 }

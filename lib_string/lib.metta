@@ -155,7 +155,7 @@
 (: string-isub (-> %Undefined% %Undefined% Expression Number))
 (: string-isub (-> %Undefined% %Undefined% Number))
 (@doc string-isub
-  (@desc "Return SWI's substring-based ontology-label ISub score, preserving complete text. Unique options are (normalize Bool), (zero-to-one Bool) and (substring-threshold Number), defaulting to False, False and 2. Threshold is nonnegative; matched substrings must be longer than it. Normalization lowercases and removes dot, underscore and ASCII space. The usual range is [-1,1], or [0,1] with zero-to-one. Both empty score 1; one empty scores 0.")
+  (@desc "Return SWI's substring-based ontology-label ISub score, preserving complete text. Unique options are (normalize Bool), (zero-to-one Bool) and (substring-threshold Number), defaulting to False, False and 2. Threshold is nonnegative; matched substrings must be longer than it. Normalization lowercases and removes dot, underscore and ASCII space. The usual range is [-1,1], or [0,1] with zero-to-one. Both empty score 1; one empty scores 0. A host without the isub capability refuses it by that name.")
   (@params ((@param "First") (@param "Second") (@param "Options")))
   (@return "Score"))
 
