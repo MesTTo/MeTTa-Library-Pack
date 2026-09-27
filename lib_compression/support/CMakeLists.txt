@@ -27,7 +27,12 @@ configure_file("${vendor}/archive_read_support_format_zip.c"
                "${provider}/libarchive/archive_read_support_format_zip.c" COPYONLY)
 
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-foreach(feature TEST TAR CPIO CAT UNZIP INSTALL)
+# ACL and XATTR are libarchive's reading and restoring of a file's ACLs and
+# extended attributes on disk, which link libacl and libattr (LGPL-2.1-or-later)
+# wherever their headers are installed; neither binding reads or writes the
+# disk through libarchive, and an entry's recorded ACL and attributes are
+# parsed without them.
+foreach(feature TEST TAR CPIO CAT UNZIP INSTALL ACL XATTR)
   set(ENABLE_${feature} OFF CACHE BOOL "" FORCE)
 endforeach()
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
