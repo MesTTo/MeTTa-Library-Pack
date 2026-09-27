@@ -5,7 +5,12 @@ The binding is SWI-Prolog packages-archive
 [`13a3f4af8f8219e10faf4895ce9fb189bc6aaefd`](https://github.com/SWI-Prolog/packages-archive/tree/13a3f4af8f8219e10faf4895ce9fb189bc6aaefd).
 The public headers are libarchive 3.8.5 at
 [`dd897a78c662a2c7a003e7ec158cea7909557bee`](https://github.com/libarchive/libarchive/tree/dd897a78c662a2c7a003e7ec158cea7909557bee).
-Copied files retain their upstream licenses. The archive provider is built
+Copied files retain their upstream licenses, reproduced beside them:
+`LIBARCHIVE-COPYING` is `COPYING` from the pinned snapshot, `LZ4-LICENSE` is
+`lib/LICENSE` at the LZ4 commit below, and `SWI-LICENSE` is SWI-Prolog's
+`LICENSE` at swipl-devel `69775434c8226897626b226aefcc8266499f1e2e`;
+`../../.reuse/dep5` maps each compiled file to its licence. The archive
+provider is built
 privately from that pinned source snapshot and the ZIP source correction below.
 LZ4's public headers come from version 1.10.0 at
 [`ebb370ca83af193212df4dcbadcc5d87bc0de2f0`](https://github.com/lz4/lz4/tree/ebb370ca83af193212df4dcbadcc5d87bc0de2f0).

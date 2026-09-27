@@ -1,0 +1,93 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: MeTTa Library Pack
+Source: https://github.com/MesTTo/MeTTa-Library-Pack
+Comment: Purpose: the licence of each file a binary is compiled from in this
+ pack, the native halves under */support and the code they vendor, with the
+ licence texts shipped beside it. tools/host-notices/notices.py in
+ MesTTo/MeTTa reads it when the WebAssembly host links the halves each
+ support/static.cmake names, and refuses a compiled file no paragraph here
+ names, so the map has no `Files: *`: a new file in a half needs its own
+ line before a host can ship it. Vendored Prolog and MeTTa, which ship as
+ source beside their licence files, are outside it.
+
+Files: */support/*
+Copyright: (C) MesTTo
+License: Apache-2.0
+License-File: LICENSE NOTICE
+Comment: The halves' own code, under the pack's licence; NOTICE carries PeTTa's
+ MIT notice, which the pack's LICENSE and NOTICE travel with.
+
+Files: lib_compression/vendor/config.h
+Copyright: (C) MesTTo
+License: Apache-2.0
+License-File: LICENSE NOTICE
+
+Files: lib_string/support/string_native.cpp
+Upstream-Name: lib_string's native half
+Copyright: (C) MesTTo
+           (C) Marshall Clow
+           (C) University of Amsterdam
+           (C) VU University Amsterdam
+           (C) CWI, Amsterdam
+           (C) SWI-Prolog Solutions b.v.
+License: Apache-2.0 AND BSL-1.0 AND BSD-2-Clause
+License-File: LICENSE NOTICE lib_string/vendor/BOOST-LICENSE lib_string/vendor/SWI-LICENSE
+Comment: The adapter carries Boost 1.89.0's Knuth-Morris-Pratt search (Copyright
+ (c) Marshall Clow 2010-2012) and SWI-Prolog 10.1.13's character-set splitting
+ from src/pl-string.c, as lib_string/vendor/VENDOR.md records.
+
+Files: lib_string/vendor/rapidfuzz/*
+Upstream-Name: RapidFuzz C++
+Upstream-Version: 3.3.4 (82662f3623b3ca3645e543f677fc32fb8bd1fb95)
+Source: https://github.com/rapidfuzz/rapidfuzz-cpp/tree/82662f3623b3ca3645e543f677fc32fb8bd1fb95
+Copyright: (C) Max Bachmann
+License: MIT
+License-File: lib_string/vendor/RAPIDFUZZ-LICENSE
+
+Files: lib_string/vendor/isub.hpp
+Upstream-Name: ISub, adapted from SWI-Prolog packages-nlp's isub.c
+Upstream-Version: dd69ae95342d7a0429a0f8bcc7deab2bd514570e
+Source: https://github.com/SWI-Prolog/packages-nlp/blob/dd69ae95342d7a0429a0f8bcc7deab2bd514570e/isub.c
+Copyright: (C) 2004-2011 National and Technical University of Athens
+License: LGPL-2.0-or-later
+License-File: lib_string/vendor/LGPL-2.0
+
+Files: lib_compression/vendor/archive4pl.c
+Upstream-Name: SWI-Prolog packages-archive's archive4pl.c
+Upstream-Version: 13a3f4af8f8219e10faf4895ce9fb189bc6aaefd
+Source: https://github.com/SWI-Prolog/packages-archive/tree/13a3f4af8f8219e10faf4895ce9fb189bc6aaefd
+Copyright: (C) VU University Amsterdam
+           (C) SWI-Prolog Solutions b.v.
+License: BSD-2-Clause
+License-File: lib_compression/vendor/SWI-LICENSE
+
+Files: lib_compression/vendor/archive.h lib_compression/vendor/archive_entry.h
+       lib_compression/vendor/archive_read_support_format_zip.c
+       lib_compression/vendor/libarchive-3.8.5.tar.gz
+Upstream-Name: libarchive
+Upstream-Version: 3.8.5 (dd897a78c662a2c7a003e7ec158cea7909557bee)
+Source: https://github.com/libarchive/libarchive/tree/dd897a78c662a2c7a003e7ec158cea7909557bee
+Copyright: (C) Tim Kientzle
+           (C) Martin Matuska
+License: BSD-2-Clause
+License-File: lib_compression/vendor/LIBARCHIVE-COPYING
+Comment: LIBARCHIVE-COPYING is COPYING from libarchive-3.8.5.tar.gz, whose
+ account of the snapshot's other licences it carries.
+
+Files: lib_compression/vendor/lz4/*
+Upstream-Name: LZ4's public headers
+Upstream-Version: 1.10.0 (ebb370ca83af193212df4dcbadcc5d87bc0de2f0)
+Source: https://github.com/lz4/lz4/tree/ebb370ca83af193212df4dcbadcc5d87bc0de2f0
+Copyright: (C) Yann Collet
+License: BSD-2-Clause
+License-File: lib_compression/vendor/LZ4-LICENSE
+
+Files: lib_regex/vendor/pcre4pl.c
+Upstream-Name: SWI-Prolog packages-pcre's pcre4pl.c
+Upstream-Version: 52a0e9486c4770f2fbfac3f4fb8a1cd9e8c77af1
+Source: https://github.com/SWI-Prolog/packages-pcre/tree/52a0e9486c4770f2fbfac3f4fb8a1cd9e8c77af1
+Copyright: (C) VU University Amsterdam
+           (C) SWI-Prolog Solution b.v.
+License: BSD-2-Clause
+License-File: lib_regex/vendor/SWI-LICENSE
+Comment: The second holder is spelled as the file spells it.

@@ -4,7 +4,9 @@
 The binding comes from SWI-Prolog packages-pcre commit
 [`52a0e9486c4770f2fbfac3f4fb8a1cd9e8c77af1`](https://github.com/SWI-Prolog/packages-pcre/tree/52a0e9486c4770f2fbfac3f4fb8a1cd9e8c77af1),
 the submodule used by SWI-Prolog V10.1.13. Each copied source retains its
-upstream BSD license. The linked PCRE2 library remains the host installation.
+upstream BSD license, and `SWI-LICENSE` beside it is SWI-Prolog's `LICENSE` at
+swipl-devel `69775434c8226897626b226aefcc8266499f1e2e`, which
+`../../.reuse/dep5` names for `pcre4pl.c`. The linked PCRE2 library remains the host installation.
 
 | Upstream path | Original SHA-256 |
 |---|---|
