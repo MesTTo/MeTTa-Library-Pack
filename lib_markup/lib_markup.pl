@@ -173,6 +173,7 @@
     html_dtd('markup-parse-html', DTD),
     parsed('markup-parse-html', html_structure(DTD), Text, Element).
 
+% Workaround: swi-sgml-dtd-cache-rolls-back - the thread's DTD is this library's own, in a '$notransact' row freed at thread exit, not dtd/2's cached one.
 % The DTD this thread's HTML parses read, loaded by the first of them from the
 % file dtd('HTML5') resolves to, as dtd/2 loads the one it caches
 % [source 2026-09-28T13:03:34+10:00: swipl-devel packages/sgml/sgml.pl, dtd/2].
@@ -234,6 +235,7 @@ free_retired(DTD) :-
     ;   free_dtd(DTD)
     ).
 
+% Workaround: swi-sgml-html-declaration-written-into-dtd - a declaration other than DOCTYPE retires the thread's DTD and refuses the document.
 % HTML has no markup declaration but its DOCTYPE: after `<!` a comment is
 % `--`, which reaches this as '', and anything else is an
 % incorrectly-opened-comment parse error [source 2026-09-28T13:06:59+10:00:
