@@ -168,3 +168,22 @@ License-File: LICENSE NOTICE lib_vector/vendor/PYTHON-LICENSE
 Comment: The fraction square root translates CPython 3.14.0's
  statistics._float_sqrt_of_frac and _integer_sqrt_of_frac_rto at
  ebf955df7a89ed0c7968f79faec1de49f61ed7cb (lib_vector/vendor/README.md).
+
+Files: lib_markup/DTD/HTML5.dtd
+Class: C
+Upstream-Name: WHATWG HTML Living Standard
+Upstream-Version: whatwg/html 2f441941fc523877bd9d5cd7de3b91a81a00ca2e, whatwg/html-build 283a3531a61106d07d9a7d9fb3e6f3b9bfd33d70
+Source: https://github.com/whatwg/html/blob/2f441941fc523877bd9d5cd7de3b91a81a00ca2e/source
+Copyright: (C) WHATWG (Apple, Google, Mozilla, Microsoft)
+License: BSD-3-Clause
+License-File: lib_markup/DTD/HTML5.dtd
+Comment: The SGML DTD markup-parse-html reads, which
+ extensions/python/tools/html5dtd.py in MesTTo/MeTTa generates from the
+ Standard's element, category and attribute indices and its syntax section,
+ and from html-build's entities.json, at those commits. The Standard's own
+ notice licenses it under CC BY 4.0 and, "to the extent portions of it are
+ incorporated into source code", those portions under the BSD 3-Clause
+ License, as section 7.1.1 of the WHATWG IPR Policy
+ (https://whatwg.org/ipr-policy) states, so class C decides it: the
+ upstream's published notice. The file's header carries that notice and the
+ licence's text with WHATWG's copyright line.

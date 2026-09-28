@@ -15,17 +15,53 @@
 %   whole document is inert data [measured 2026-09-12: both forms through the
 %   engine, the untagged one losing the name].
 % Assumes:
-%   - a document is TEXT, and every parse is strict: the host's parser fixes up a
+%   - a document is TEXT. An XML parse is strict: the host's parser fixes up a
 %     missing end tag, a stray close tag and stray character data with a warning
-%     on stderr and answers a DOM anyway, so both parses pass max_errors(0) and
-%     the first complaint becomes a refusal naming it
+%     on stderr and answers a DOM anyway, so it passes max_errors(0) and the
+%     first complaint becomes a refusal naming it
 %     [tested: lib_markup:a_malformed_document_is_refused_rather_than_repaired;
 %     commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
+%     An HTML parse takes the repairs the DTD decides as HTML's own rules and
+%     refuses what it cannot read: under load_html/3's syntax_errors(quiet) the
+%     host counts only an error, such as an undefined entity or an attribute
+%     written without a value no keyword of the element's holds, against
+%     max_errors(0), and drops each warning
+%     [source 2026-09-28T11:35:19+10:00: swipl-devel packages/sgml/sgml2pl.c,
+%     on_error_ and CHECKERROR]
+%     [tested 2026-09-28T13:33:55+10:00: lib_markup:an_html_parse_takes_the_dtds_repairs_and_refuses_what_it_cannot_read]
 %   - the build has library(sgml) and library(xpath), which are SWI's ext/sgml
 %     pack. The declaration below refuses the library before it loads where they
 %     are absent [source: engine/metta.pl:metta_platform_capability/3;
 %     commit=ed976b0e70c1176a7ef9feabb0359313105c786e]
 % Guarantees:
+%   - an HTML parse reads DTD/HTML5.dtd beside this file, generated from the
+%     WHATWG HTML Standard by extensions/python/tools/html5dtd.py, whatever
+%     HTML5.dtd the host's own library holds and whatever the html_dialect flag
+%     says: loading this library puts DTD/ first on file_search_path(dtd, ...),
+%     the path dtd('HTML5') resolves over in clause order, and a thread's first
+%     HTML parse loads the file that name resolves to, as dtd/2 does, rather
+%     than one the flag names, which library(sgml) resets whenever it loads
+%     [source 2026-09-28T11:39:07+10:00: swipl-patched.8
+%     library/ext/sgml/sgml.pl, dtd/2 and load_html/3, and boot/init.pl,
+%     '$chk_alias_file'/6]
+%     [tested 2026-09-28T13:33:55+10:00: lib_markup:the_html_dtd_is_this_librarys_own]
+%   - an HTML parse changes nothing a later parse reads. HTML has no markup
+%     declaration but its DOCTYPE, so a document declaring an entity, an
+%     element or an attribute list, in the DOCTYPE's internal subset or after
+%     it, is refused; the host's parser has written the declaration into the
+%     thread's DTD by then, so that DTD is freed and the next parse loads the
+%     file again. An HTML document declaring a SYSTEM entity is refused the
+%     same way, so neither kind of parse fetches one
+%     [source 2026-09-28T13:06:59+10:00:
+%     https://github.com/whatwg/html/blob/2f441941fc523877bd9d5cd7de3b91a81a00ca2e/source#L143365,
+%     markup declaration open state]
+%     [source 2026-09-28T13:02:19+10:00: swipl-devel packages/sgml/parser.c,
+%     process_declaration]
+%     [tested 2026-09-28T13:33:55+10:00: lib_markup:a_declaration_is_refused_and_no_later_parse_reads_it]
+%   - an HTML parse whose DTD cannot be found raises the host's
+%     existence_error(source_sink, dtd('HTML5')) in context of
+%     markup-parse-html, because nothing is wrong with the text
+%     [tested 2026-09-28T13:33:55+10:00: lib_markup:a_missing_dtd_is_not_a_fault_of_the_text]
 %   - an external entity is never fetched: the host refuses a SYSTEM entity by
 %     default and this library turns that refusal into an error rather than the
 %     silently empty element the warning leaves behind
@@ -41,9 +77,20 @@
 % Fails when: a caller wants namespaces resolved into prefixes of their own, a
 %   DTD validated, or an HTML5 tree builder. The host's parser reports a namespace
 %   as part of the name, validates only what the document declares, and repairs
-%   HTML the way SGML does rather than the way a browser does.
-% Owns resources: none; every answer is a new expression. A parse reads the text
+%   HTML the way SGML does rather than the way a browser does: a custom element's
+%   name, a valueless attribute other than a Boolean one or hidden, and an end
+%   tag of title, textarea, script, style or iframe with white space before its
+%   '>' are outside what the DTD can say.
+% Owns resources: one HTML5 DTD per thread, html_dtd_instance/1, loaded by the
+%   thread's first HTML parse and freed by a thread_exit listener when the
+%   thread or engine ends, the main thread's living as long as the process
+%   [source 2026-09-28T13:09:05+10:00: swipl-devel src/pl-thread.c,
+%   freePrologThread]; a DTD a declaration reached is freed as the parse that
+%   met it returns. Every answer is a new expression, and a parse reads the text
 %   it was given and opens no stream of its own.
+% Guarded by: user:file_search_path/2's registration and the thread_exit
+%   listener's each run once, at load, and are idempotent; a DTD is thread-local,
+%   so no two threads parse against one.
 % Decides: the selector language is an EXPRESSION, converted to the host's xpath
 %   term: (descendant Name), (child Name), (index N Selector), (attribute Name),
 %   (text), and a path as a collection of steps. An unknown step is refused with
@@ -72,9 +119,26 @@
 
 :- use_module(library(apply), [maplist/3]).
 :- use_module(library(lists), [append/3, member/2, memberchk/2]).
-:- use_module(library(sgml), [load_html/3, load_xml/3]).
+:- use_module(library(sgml), [free_dtd/1, load_dtd/2, load_structure/3, load_xml/3, new_dtd/2]).
 :- use_module(library(sgml_write), [xml_write/3]).
 :- use_module(library(xpath), [xpath/3]).
+
+:- multifile user:file_search_path/2.
+:- dynamic user:file_search_path/2.
+
+% This library's HTML5 DTD is DTD/HTML5.dtd beside this file, so its directory
+% goes FIRST on the dtd path: dtd/2 resolves dtd('HTML5') through
+% file_search_path(dtd, Dir) in clause order, and library(sgml) has already
+% added library('DTD'), where a host may keep an HTML5.dtd of its own. The
+% guard makes a reload leave one clause, as SWI's own library(unicode) does for
+% its data directory [source 2026-09-28T12:07:49+10:00: swipl-devel
+% library/unicode/unicode_data.pl].
+:- prolog_load_context(directory, Here),
+   directory_file_path(Here, 'DTD', Directory),
+   (   user:file_search_path(dtd, Directory)
+   ->  true
+   ;   asserta(user:file_search_path(dtd, Directory))
+   ).
 
 %! 'markup-parse-xml'(+Text:any, -Element:list) is det.
 %
@@ -95,12 +159,100 @@
 
 %! 'markup-parse-html'(+Text:any, -Element:list) is det.
 %
-% One HTML document in the same shape. HTML's own rules are the host's: an omitted
-% end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a
-% stray close tag or unparsable text is still a refusal.
+% One HTML document in the same shape. It is read against this library's own
+% HTML5 DTD, derived from the WHATWG HTML Standard, and HTML's rules are the
+% DTD's: an omitted end or start tag that HTML allows is not an error, so
+% `<p>one<p>two` parses, and so does a tag outside its parent's content model,
+% where it stays. An undefined entity, an attribute written without a value that
+% is neither Boolean nor hidden, and text that is not markup are refusals, and so
+% is a declaration of an entity, an element or an attribute list: HTML declares
+% nothing but its DOCTYPE, and the host would keep the declaration for every
+% later parse in the thread.
 'markup-parse-html'(Text, Element) :-
     text_argument('markup-parse-html', Text),
-    parsed('markup-parse-html', load_html, Text, Element).
+    html_dtd('markup-parse-html', DTD),
+    parsed('markup-parse-html', html_structure(DTD), Text, Element).
+
+% The DTD this thread's HTML parses read, loaded by the first of them from the
+% file dtd('HTML5') resolves to, as dtd/2 loads the one it caches
+% [source 2026-09-28T13:03:34+10:00: swipl-devel packages/sgml/sgml.pl, dtd/2].
+% It is this library's own rather than dtd/2's because a document can write a
+% declaration into it (html_declaration/2), and only its owner can retire it.
+% The DTD comes BEFORE the text is read, outside the catch that makes every
+% complaint of the reader a fault of the text: a DTD that cannot be found is the
+% host's, and it raises as the host named it, in context of the head.
+%
+% The row names C memory no rollback gives back, so it is '$notransact', as the
+% engine's rows naming things outside the database are: a parse inside a
+% transaction or snapshot that loads the DTD keeps it, and one whose refusal
+% retires the DTD cannot have the rollback bring back a row naming a DTD
+% html_structure/4 has freed [tested 2026-09-28T13:33:55+10:00:
+% lib_markup:a_rollback_neither_loses_a_loaded_dtd_nor_revives_a_retired_one].
+:- thread_local html_dtd_instance/1.
+:- '$notransact'(html_dtd_instance/1).
+
+html_dtd(_, DTD) :-
+    html_dtd_instance(DTD),
+    !.
+html_dtd(Head, DTD) :-
+    catch(absolute_file_name(dtd('HTML5'), File, [extensions([dtd]), access(read)]),
+          error(existence_error(source_sink, Spec), _),
+          throw(error(existence_error(source_sink, Spec),
+                      context(Head,
+                              'no HTML5 DTD is on the dtd search path; this library puts its own DTD directory there when it loads')))),
+    new_dtd(html5, DTD),
+    catch(load_dtd(DTD, File), Error, (free_dtd(DTD), throw(Error))),
+    asserta(html_dtd_instance(DTD)).
+
+% A thread's DTD goes when the thread does. The listener runs with the exiting
+% thread's own data, so html_dtd_instance/1 is that thread's, as library(sgml)
+% relies on for its own cache [source 2026-09-28T13:09:05+10:00: swipl-devel
+% src/pl-thread.c, freePrologThread]. A host without threads has only the main
+% thread.
+:- (   current_prolog_flag(threads, true)
+   ->  metta_listen(thread_exit, release_html_dtd)
+   ;   true
+   ).
+
+release_html_dtd(_Thread) :-
+    forall(retract(html_dtd_instance(DTD)), free_dtd(DTD)).
+
+% load_html/3 with its dialect named: the DTD, the dialect and quiet warnings
+% it adds, where load_html/3 would read the dialect from the html_dialect flag
+% [source 2026-09-28T11:32:57+10:00: swipl-devel packages/sgml/sgml.pl,
+% load_html/3]. Every declaration in the document reaches html_declaration/2
+% first, and a DTD one retired is freed once the parser holding it is done.
+html_structure(DTD, Source, Document, Options) :-
+    call_cleanup(load_structure(Source, Document,
+                                [dtd(DTD), dialect(html5), syntax_errors(quiet),
+                                 call(decl, html_declaration)|Options]),
+                 free_retired(DTD)).
+
+free_retired(DTD) :-
+    (   html_dtd_instance(DTD)
+    ->  true
+    ;   free_dtd(DTD)
+    ).
+
+% HTML has no markup declaration but its DOCTYPE: after `<!` a comment is
+% `--`, which reaches this as '', and anything else is an
+% incorrectly-opened-comment parse error [source 2026-09-28T13:06:59+10:00:
+% https://github.com/whatwg/html/blob/2f441941fc523877bd9d5cd7de3b91a81a00ca2e/source#L143365].
+% The host's parser calls this before it dispatches a declaration and writes
+% the declaration into the DTD whatever this answers [source
+% 2026-09-28T13:02:19+10:00: swipl-devel packages/sgml/parser.c,
+% process_declaration], so a document declaring anything else has changed the
+% DTD every later parse in the thread would read: it is refused, and the DTD
+% leaves the thread's cache here, to be freed by html_structure/4. The host
+% calls this by name with the declaration and the parser, so the DTD it retires
+% is the thread's one.
+html_declaration('', _) :- !.
+html_declaration(Declaration, _) :-
+    sub_atom_icasechk(Declaration, 0, doctype),
+    !.
+html_declaration(Declaration, _) :-
+    retractall(html_dtd_instance(_)),
+    throw(error(syntax_error(declaration(Declaration)), _)).
 
 parsed(Head, Loader, Text, Element) :-
     (   catch(call(Loader, string(Text), Document, [max_errors(0), space(preserve)]),
@@ -129,6 +281,11 @@ parsed(Head, Loader, Text, Element) :-
 refuse_parse(_, Error) :-
     control_exception(Error), !,
     throw(Error).
+refuse_parse(Head, error(syntax_error(declaration(Declaration)), _)) :-
+    !,
+    throw(error(syntax_error(markup(declaration(Declaration))),
+                context(Head,
+                        'HTML declares nothing but its DOCTYPE; a declaration would reach every later parse'))).
 refuse_parse(Head, error(syntax_error(Message), _)) :-
     !,
     throw(error(syntax_error(markup(Message)),

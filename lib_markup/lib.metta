@@ -11,11 +11,19 @@
 ; answers `(element d ("7") ())` and the attribute is gone. With the tag the row's
 ; head is `attr`, which names no function, and the whole document is inert data.
 ;
-; Every parse is STRICT. The host's parser repairs a missing end tag, a stray close
-; tag and character data outside any element, warns on stderr and answers a DOM
-; anyway; every one of those is a refusal here. An external SYSTEM entity is
+; An XML parse is STRICT. The host's parser repairs a missing end tag, a stray
+; close tag and character data outside any element, warns on stderr and answers a
+; DOM anyway; every one of those is a refusal here. An external SYSTEM entity is
 ; refused for the same reason, which is what keeps a parse from fetching a file or
 ; a URL the document names.
+;
+; An HTML parse reads HTML's own rules from this library's HTML5 DTD, generated
+; from the WHATWG HTML Standard: a tag HTML lets a document omit is no error, and
+; the repairs the DTD decides are taken. An undefined entity, an attribute written
+; without a value that is neither Boolean nor hidden, and text that is not markup
+; are refused, and so is every declaration but the DOCTYPE, which HTML does not
+; have and the host would keep for every later parse in the thread
+; [tested 2026-09-28T13:33:55+10:00: lib_markup].
 ;
 ; A selector is an expression, and a collection of steps is a path:
 ; `(descendant Name)`, `(child Name)`, `(index N Selector)`, `(attribute Name)` and
@@ -39,7 +47,7 @@
 
 (: markup-parse-html (-> %Undefined% Expression))
 (@doc markup-parse-html
-  (@desc "One HTML document in the same shape. HTML's own rules are the host's: an omitted end tag that HTML allows is not an error, so `<p>one<p>two` parses, while a stray close tag or unparsable text is still a refusal.")
+  (@desc "One HTML document in the same shape. It is read against this library's own HTML5 DTD, derived from the WHATWG HTML Standard, and HTML's rules are the DTD's: an omitted end or start tag that HTML allows is not an error, so `<p>one<p>two` parses, and so does a tag outside its parent's content model, where it stays. An undefined entity, an attribute written without a value that is neither Boolean nor hidden, and text that is not markup are refusals, and so is a declaration of an entity, an element or an attribute list: HTML declares nothing but its DOCTYPE, and the host would keep the declaration for every later parse in the thread.")
   (@params ((@param "Text")))
   (@return "Element"))
 

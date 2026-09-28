@@ -1,0 +1,6 @@
+# Purpose: tell git and GitHub which files here are not written by hand.
+# lib_markup/DTD/HTML5.dtd is extensions/python/tools/html5dtd.py's output from
+# the WHATWG HTML Standard at a pinned commit, so its words are the Standard's:
+# the named character references it declares (andd, curren, oint) are names,
+# not typos, and the html5-dtd lane refuses any edit the generator did not make.
+lib_markup/DTD/HTML5.dtd linguist-generated
