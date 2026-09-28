@@ -7,7 +7,14 @@
 ; (unimport! &space $path) removes that source's surviving atom occurrences
 ; and compiled definitions, preserving equal atoms added by other owners.
 ; Repeating undo returns true. Deleted source files can still be withdrawn.
-; Nested imports have independent ownership and remain until withdrawn.
+; A package goes with its own files, the package-relative files its manifest
+; requires, each unless the program or another package still asks for it
+; [tested 2026-09-29T05:34:02+10:00:
+; packages:withdrawing_a_package_withdraws_its_own_files,
+; packages:a_package_file_the_program_also_imported_survives_the_package,
+; packages:a_file_two_packages_require_stays_until_the_last_goes].
+; Every other nested import, the packages a manifest requires among them,
+; has independent ownership and remains until withdrawn.
 ; Undo covers recorded native atoms, including those added by runnable forms;
 ; it does not reverse external I/O or unload Prolog/Python modules.
 
@@ -58,7 +65,7 @@
       (@params ((@param "the destination space")))
       (@return "Space"))
 (@doc unimport!
-      (@desc "Withdraw exactly one MeTTa source's surviving native atoms and compiled definitions; equal atoms from other owners survive. Repeats return true and deleted source paths work. Nested imports remain independently imported. Does not reverse external I/O or unload host modules")
+      (@desc "Withdraw one MeTTa source's surviving native atoms and compiled definitions, and a package's own files with it, the package-relative files its manifest requires that nothing else still asks for; equal atoms from other owners survive. Repeats return true and deleted source paths work. Other nested imports, the packages a manifest requires among them, remain independently imported. Does not reverse external I/O or unload host modules")
       (@params ((@param "the destination space")
                 (@param "the imported module path, including a path returned by imports")))
       (@return "true"))
