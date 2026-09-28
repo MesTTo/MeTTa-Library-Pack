@@ -78,6 +78,12 @@
 %     lib_thread:a_signal_before_the_worker_installs_its_catch_still_settles,
 %     lib_thread:cancelling_a_worker_that_ended_unsettled_answers_cancelled;
 %     commit=50e34286f66c938d89d5d367c6370ad44164c97f]
+%   - a cancel charges its caller one fixed amount, plus the credit of a
+%     worker whose answer stands, whether the schedule had its task queued,
+%     running, or finished before the cancel's settle looked
+%     [tested 2026-09-28T18:39:12+10:00:
+%     lib_thread_cancellation:a_cancel_charges_the_same_however_the_schedule_resolved_it,
+%     lib_thread_cancellation:a_cancel_that_does_not_take_charges_the_standing_worker]
 %   - a blocking take parks until a matching atom arrives, removes exactly
 %     one, and two takers never claim the same atom: eight takers over four
 %     atoms claim four distinct ones and the space is left empty [tested:
@@ -1961,35 +1967,69 @@ thread_settled(Space, Answer) :-
 %Stop a future that has not finished, and say whether it actually stopped
 %rather than reporting success either way. Cancelling a timer stops the timer;
 %answers already in the space stay there, because they really were produced.
+%
+%A cancel charges its caller one fixed amount, plus the credit of a worker
+%whose answer stands, however the schedule resolved it. How the work is
+%stopped depends on where the worker is when the cancel arrives, and that is
+%the schedule's: a scheduled task still queued is disposed of here, one a
+%carrier is running is signalled and its settle takes the completion message,
+%and a completion the carrier records before the settle looks is read instead,
+%so 400 spawns and cancels of one program read 6,987 inferences 23 times and
+%6,960 377 times [measured 2026-09-28T18:18:09+10:00: consecutive spawns and
+%cancels in one process on swipl-patched.8], a settle that found the
+%completion recorded read 12 fewer than its branch [measured
+%2026-09-28T18:18:35+10:00: the same readings with each cancel's branch
+%noted], and a pool worker's cancel read two values 26 apart [measured
+%2026-09-28T18:23:54+10:00: 200 consecutive submits and cancels]. That spend
+%sizes nothing the program did, like the stopped worker's own, so what the cancel
+%spends between the two reads below is discarded, except the credit that
+%stands and except what the window discarded itself, a stopped worker's
+%credit or a nested cancel's own window
+%(docs/journal/2026-09-18-schedule-independent-counters.md, "cost follows the
+%answer"). The reads are raw because the host leaves the interrupt poll out of
+%statistics/2 [source 2026-09-28T18:21:20+10:00:
+%extensions/python/metta/_binding/control.pl, the interrupt poll's section],
+%and after the first read everything up to and including the second read's
+%own call port is the window's, as metta_join_measured/3 counts it
+%[tested 2026-09-28T18:39:12+10:00:
+%lib_thread_cancellation:a_cancel_charges_the_same_however_the_schedule_resolved_it,
+%lib_thread_cancellation:a_cancel_that_does_not_take_charges_the_standing_worker].
 thread_cancel(Space, Answer) :-
+    metta_discarded_inferences(Discarded0),
+    statistics(inferences, Before),
     with_mutex('$metta_timer_lifecycle',
                timer_cancel_prepare_(Space, TimerAction)),
-    timer_cancel_action_(TimerAction, Space, Answer).
+    timer_cancel_action_(TimerAction, Space, Answer, Stands),
+    statistics(inferences, After),
+    metta_discarded_inferences(Discarded1),
+    Spent is After - Before - 1 - Stands - (Discarded1 - Discarded0),
+    metta_discard_inferences(Spent).
 
-timer_cancel_action_(not_timer, Space, Answer) :- !,
-    cancel_future_(Space, Answer).
-timer_cancel_action_(pending(Context, Done), Space, true) :- !,
+timer_cancel_action_(not_timer, Space, Answer, Stands) :- !,
+    cancel_future_(Space, Answer, Stands).
+timer_cancel_action_(pending(Context, Done), Space, true, 0) :- !,
     metta_release_python_context(Context),
     metta_future_complete(Space, Done, cancelled).
-timer_cancel_action_(orphan(Context), _, true) :- !,
+timer_cancel_action_(orphan(Context), _, true, 0) :- !,
     metta_release_python_context(Context).
-timer_cancel_action_(active(once, Context, _Done, _Worker), Space, Answer) :- !,
+timer_cancel_action_(active(once, Context, _Done, _Worker), Space, Answer,
+                     Stands) :- !,
     %Its timer heap entry was already consumed before the worker became
     %visible, so there is no tombstone to retain once cancellation has won the
     %lifecycle mutex. The winner also owns the removed context token.
-    call_cleanup(cancel_future_(Space, Answer),
+    call_cleanup(cancel_future_(Space, Answer, Stands),
                  metta_release_python_context(Context)).
-timer_cancel_action_(active(every(_), Context, Done, Worker), Space, true) :- !,
+timer_cancel_action_(active(every(_), Context, Done, Worker), Space, true, 0) :- !,
     call_cleanup(cancel_repeating_worker_(Worker),
                  metta_release_python_context(Context)),
     metta_future_complete(Space, Done, cancelled).
 
-cancel_future_(Space, Answer) :-
+cancel_future_(Space, Answer, Stands) :-
     % An awaiter holds the await mutex while sleeping. Cancellation must be
     % able to reach the producer while such an await is outstanding.
     future_completion_mutex_(Space, Mutex),
     with_mutex(Mutex, future_cancel_probe_(Space, Status)),
-    cancel_future_status_(Status, Space, Answer).
+    cancel_future_status_(Status, Space, Answer, Stands).
 
 future_cancel_probe_(Space, terminal(Worker)) :-
     metta_future_result(Space, _),
@@ -2004,22 +2044,26 @@ future_cancel_probe_(Space, pending(Worker, Done)) :-
     metta_future(Space, Worker, Done), !.
 future_cancel_probe_(_, missing).
 
-cancel_future_status_(terminal(Worker), _, false) :- !,
-    future_join_(Worker).
-cancel_future_status_(missing, Space, _) :- !, existence_error(metta_future, Space).
-cancel_future_status_(pending(Worker, Done), Space, Answer) :-
-    cancel_future_worker_(Worker, Space, Done, Answer).
+%A future that finished first keeps its answer, so its worker's credit stands.
+cancel_future_status_(terminal(Worker), _, false, Stands) :- !,
+    future_join_(Worker, measured(Stands)).
+cancel_future_status_(missing, Space, _, _) :- !,
+    existence_error(metta_future, Space).
+cancel_future_status_(pending(Worker, Done), Space, Answer, Stands) :-
+    cancel_future_worker_(Worker, Space, Done, Answer, Stands).
 
-cancel_future_worker_(scheduler(Task), _, _, Answer) :- !,
+%A scheduled task runs on a carrier whose work no join credits to the caller,
+%and an async one runs in Python, so neither has a credit to stand.
+cancel_future_worker_(scheduler(Task), _, _, Answer, 0) :- !,
     metta_scheduler_cancel(Task, Answer).
-cancel_future_worker_(async(Token), Space, _, Answer) :- !,
+cancel_future_worker_(async(Token), Space, _, Answer, 0) :- !,
     metta_async_cancel_request_(Token, @(true), Accepted, Running),
     ( Accepted == true, Running == true
     -> future_settle_(Space, Outcome),
        ( Outcome == cancelled -> Answer = true ; Answer = false )
     ; Answer = Accepted ).
-cancel_future_worker_(none, _, _, false) :- !.
-cancel_future_worker_(ThreadId, Space, Done, Answer) :-
+cancel_future_worker_(none, _, _, false, 0) :- !.
+cancel_future_worker_(ThreadId, Space, Done, Answer, Stands) :-
     catch(thread_signal(ThreadId, lib_thread:future_cancel_signal_(Space, ThreadId)),
           error(existence_error(thread, _), _), true),
     %Wait for the thread itself rather than for its settlement: a worker that
@@ -2030,13 +2074,14 @@ cancel_future_worker_(ThreadId, Space, Done, Answer) :-
     future_join_(ThreadId, measured(Credit)),
     metta_future_complete(Space, Done, cancelled),
     future_settle_(Space, Outcome),
-    %A cancel that took discards the worker's spend, which produced no
-    %answer; a worker that settled first keeps its credit, since its answer
-    %stands and can still be awaited.
+    %A cancel that took leaves the worker's spend to thread_cancel/2's
+    %discard, since it produced no answer; a worker that settled first keeps
+    %its credit, since its answer stands and can still be awaited.
     (   Outcome == cancelled
-    ->  metta_discard_inferences(Credit),
-        Answer = true
-    ;   Answer = false
+    ->  Answer = true,
+        Stands = 0
+    ;   Answer = false,
+        Stands = Credit
     ).
 
 future_cancel_signal_(Space, Thread) :-
@@ -2048,7 +2093,7 @@ future_cancel_signal_(Space, Thread) :-
 cancel_repeating_worker_(none) :- !.
 cancel_repeating_worker_(ThreadId) :-
     catch(thread_signal(ThreadId, abort), _, true),
-    catch(metta_join_discarding(ThreadId, _), _, true).
+    catch(metta_thread_join(ThreadId, _), _, true).
 
 % ----------------------------------------------------------------- channels
 
