@@ -28,7 +28,7 @@
 %     max_errors(0), and drops each warning
 %     [source 2026-09-28T11:35:19+10:00: swipl-devel packages/sgml/sgml2pl.c,
 %     on_error_ and CHECKERROR]
-%     [tested 2026-09-28T14:47:56+10:00: lib_markup:an_html_parse_takes_the_dtds_repairs_and_refuses_what_it_cannot_read]
+%     [tested 2026-09-28T14:56:58+10:00: lib_markup:an_html_parse_takes_the_dtds_repairs_and_refuses_what_it_cannot_read]
 %   - the build has library(sgml) and library(xpath), which are SWI's ext/sgml
 %     pack. The declaration below refuses the library before it loads where they
 %     are absent [source: engine/metta.pl:metta_platform_capability/3;
@@ -44,7 +44,7 @@
 %     [source 2026-09-28T11:39:07+10:00: swipl-patched.8
 %     library/ext/sgml/sgml.pl, dtd/2 and load_html/3, and boot/init.pl,
 %     '$chk_alias_file'/6]
-%     [tested 2026-09-28T14:47:56+10:00: lib_markup:the_html_dtd_is_this_librarys_own]
+%     [tested 2026-09-28T14:56:58+10:00: lib_markup:the_html_dtd_is_this_librarys_own]
 %   - an HTML parse changes nothing a later parse reads: the host reads a
 %     declaration other than DOCTYPE as the comment HTML makes it and drops a
 %     DOCTYPE's internal subset, so an entity, element or attribute list a
@@ -54,11 +54,11 @@
 %     [source 2026-09-28T13:06:59+10:00:
 %     https://github.com/whatwg/html/blob/2f441941fc523877bd9d5cd7de3b91a81a00ca2e/source#L143365,
 %     markup declaration open state]
-%     [tested 2026-09-28T14:47:56+10:00: lib_markup:a_declaration_is_a_comment_and_no_later_parse_reads_it]
+%     [tested 2026-09-28T14:56:58+10:00: lib_markup:a_declaration_is_a_comment_and_no_later_parse_reads_it]
 %   - an HTML parse whose DTD cannot be found raises the host's
 %     existence_error(source_sink, dtd('HTML5')) in context of
 %     markup-parse-html, because nothing is wrong with the text
-%     [tested 2026-09-28T14:47:56+10:00: lib_markup:a_missing_dtd_is_not_a_fault_of_the_text]
+%     [tested 2026-09-28T14:56:58+10:00: lib_markup:a_missing_dtd_is_not_a_fault_of_the_text]
 %   - an external entity is never fetched: the host refuses a SYSTEM entity by
 %     default and this library turns that refusal into an error rather than the
 %     silently empty element the warning leaves behind
@@ -75,9 +75,9 @@
 %   DTD validated, or an HTML5 tree builder. The host's parser reports a namespace
 %   as part of the name, validates only what the document declares, and repairs
 %   HTML the way SGML does rather than the way a browser does: a custom element's
-%   name, a valueless attribute other than a Boolean one or hidden, and an end
-%   tag of title, textarea, script, style or iframe with white space before its
-%   '>' are outside what the DTD can say.
+%   name and a valueless attribute other than a Boolean one or hidden are outside
+%   what the DTD can say, and an end tag of title, textarea, script, style or
+%   iframe carrying attributes, which HTML ends the element at, is read as text.
 % Owns resources: one HTML5 DTD per thread, html_dtd_instance/1, loaded by the
 %   thread's first HTML parse and freed by a thread_exit listener when the
 %   thread or engine ends, the main thread's living as long as the process
@@ -179,7 +179,7 @@
 % The row names C memory no rollback gives back, so it is '$notransact', as the
 % engine's rows naming things outside the database are: a parse inside a
 % transaction or snapshot that loads the DTD keeps it when the rollback comes
-% [tested 2026-09-28T14:47:56+10:00: lib_markup:a_rollback_keeps_the_threads_dtd].
+% [tested 2026-09-28T14:56:58+10:00: lib_markup:a_rollback_keeps_the_threads_dtd].
 :- thread_local html_dtd_instance/1.
 :- '$notransact'(html_dtd_instance/1).
 

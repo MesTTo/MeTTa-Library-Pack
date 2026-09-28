@@ -23,7 +23,7 @@
 ; without a value that is neither Boolean nor hidden, and text that is not markup
 ; are refused, and a declaration other than the DOCTYPE is a comment, as HTML
 ; reads it, which no later parse reads either
-; [tested 2026-09-28T14:47:56+10:00: lib_markup].
+; [tested 2026-09-28T14:56:58+10:00: lib_markup].
 ;
 ; A selector is an expression, and a collection of steps is a path:
 ; `(descendant Name)`, `(child Name)`, `(index N Selector)`, `(attribute Name)` and
