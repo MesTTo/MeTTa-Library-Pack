@@ -21,9 +21,9 @@
 ; from the WHATWG HTML Standard: a tag HTML lets a document omit is no error, and
 ; the repairs the DTD decides are taken. An undefined entity, an attribute written
 ; without a value that is neither Boolean nor hidden, and text that is not markup
-; are refused, and so is every declaration but the DOCTYPE, which HTML does not
-; have and the host would keep for every later parse in the thread
-; [tested 2026-09-28T13:33:55+10:00: lib_markup].
+; are refused, and a declaration other than the DOCTYPE is a comment, as HTML
+; reads it, which no later parse reads either
+; [tested 2026-09-28T14:47:56+10:00: lib_markup].
 ;
 ; A selector is an expression, and a collection of steps is a path:
 ; `(descendant Name)`, `(child Name)`, `(index N Selector)`, `(attribute Name)` and
@@ -47,7 +47,7 @@
 
 (: markup-parse-html (-> %Undefined% Expression))
 (@doc markup-parse-html
-  (@desc "One HTML document in the same shape. It is read against this library's own HTML5 DTD, derived from the WHATWG HTML Standard, and HTML's rules are the DTD's: an omitted end or start tag that HTML allows is not an error, so `<p>one<p>two` parses, and so does a tag outside its parent's content model, where it stays. An undefined entity, an attribute written without a value that is neither Boolean nor hidden, and text that is not markup are refusals, and so is a declaration of an entity, an element or an attribute list: HTML declares nothing but its DOCTYPE, and the host would keep the declaration for every later parse in the thread.")
+  (@desc "One HTML document in the same shape. It is read against this library's own HTML5 DTD, derived from the WHATWG HTML Standard, and HTML's rules are the DTD's: an omitted end or start tag that HTML allows is not an error, so `<p>one<p>two` parses, and so does a tag outside its parent's content model, where it stays. An undefined entity, an attribute written without a value that is neither Boolean nor hidden, and text that is not markup are refusals. A declaration other than DOCTYPE is a comment, as HTML reads it, and a DOCTYPE's internal subset is dropped.")
   (@params ((@param "Text")))
   (@return "Element"))
 
