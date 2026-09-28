@@ -27,13 +27,6 @@
 ;into lib_measure: (ws-best (collapse (soft-match ...))) is the closest
 ;match, ws-softmax over them is attention over terms.
 
-(= (package backing) (prolog "lib_soft.pl" (soft-symbol?)))
-(: soft-symbol? (-> Atom Bool))
-(@doc soft-symbol?
-      (@desc "Tests written symbol representation, regardless of function registration")
-      (@params ((@param "the held atom; grounded values and expressions answer False")))
-      (@return "True for a symbol, False otherwise"))
-
 ;The degree two symbols are close: exact is 1.0, then declared similarity
 ;in either direction, then 0.0.
 ;
@@ -168,7 +161,7 @@
                0.0)
            ;A function name is Grounded under get-metatype, just like a
            ;number. Test its representation to retain symbol similarity.
-           (if (and (soft-symbol? $p) (soft-symbol? $a))
+           (if (and (is-symbol $p) (is-symbol $a))
                (sym-sim $p $a)
                (if (== $p $a) 1.0 0.0)))))
 

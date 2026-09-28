@@ -398,6 +398,7 @@
 (: is-var (-> Atom Bool))
 (: is-ground (-> Atom Bool))
 (: is-expr (-> Atom Bool))
+(: is-symbol (-> Atom Bool))
 (: is-space (-> %Undefined% Bool))
 (: get-metatype (-> Atom Atom))
 ;; An error term carries the expression that caused it, so both arguments are

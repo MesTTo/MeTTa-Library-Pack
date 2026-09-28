@@ -1756,7 +1756,7 @@ Scores structural similarity between terms and queries spaces for weighted match
 
 | Feature | Heads |
 |---|---|
-| Structural similarity | `soft-aggregation`, `soft-best`, `soft-fold`, `soft-match`, `soft-score`, `soft-score-by`, `soft-symbol?`, `soft-walk` |
+| Structural similarity | `soft-aggregation`, `soft-best`, `soft-fold`, `soft-match`, `soft-score`, `soft-score-by`, `soft-walk` |
 | Symbol similarity | `sym-sim` |
 
 Score terms by structural similarity and query a space for its best soft match ([source](https://github.com/MesTTo/MeTTa-Examples/blob/main/ch22-a-reasoner-you-can-serve/22-02-weighted-answers/02-soft.metta#L1-L39)).
