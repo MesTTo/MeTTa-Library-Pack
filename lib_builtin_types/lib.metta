@@ -235,23 +235,29 @@
 (: match (-> SpaceType Atom Atom %Undefined%))
 
 ;; --- Special forms: collections ---
-;; Each has TWO arrows, the binder spelling and the closure spelling, and both
-;; are the reference's own rows byte for byte
-;; [assumed 2026-08-24: the (: map-atom ...), (: filter-atom ...) and
-;; (: foldl-atom ...) rows and `!(get-type map-atom)` answering both were
-;; measured against an earlier reference corpus at that date, not re-measured
-;; against upstream PeTTa].
-;; The list is Expression and so arrives AS WRITTEN in either spelling:
-;; !(map-atom (cdr-atom (a b)) $y (q $y)) is ((q cdr-atom) (q (a b))) there,
-;; mapping over the two parts of the unrun call. foldl-atom's seed is Atom and
-;; is held too: !(foldl-atom (1) (+ 1 2) $a $b (size-atom $a)) is 3, the size
-;; of the held (+ 1 2), where an evaluated seed would refuse a Number.
+;; Each has TWO arrows, the binder spelling and the closure spelling, and the
+;; two spellings are one operation. Upstream PeTTa declares none of them and
+;; evaluates the list and the seed of either spelling and the closure
+;; spelling's operator, so only the binder spelling's template is Atom, held
+;; for the form to compile; the list is an evaluated Expression and the seed
+;; an evaluated %Undefined%:
+;; !(map-atom (cdr-atom (a b)) $y (q $y)) is ((q b)) and
+;; !(foldl-atom (1) (two) (|-> ($a $x) (get-metatype $a))) is Grounded,
+;; given (= (two) 2) [source 2026-09-29T16:18:38+10:00: PeTTa@ae66fa8
+;; src/translator.pl:247-265 and src/metta.pl:281-288]
+;; [measured 2026-09-29T16:58:55+10:00 against PeTTa@ae66fa8].
+;; The binder rows came from hyperon-experimental, whose masks held the list
+;; and whose foldl-atom declares the seed Atom [source 2026-09-29T16:37:02+10:00:
+;; hyperon-experimental lib/src/metta/runner/stdlib/stdlib.metta, (: foldl-atom
+;; (-> Expression Atom Variable Variable Atom %Undefined%))]. While these rows
+;; copied that Atom, the closure spelling held its seed and the binder
+;; spelling, whose form evaluates it, did not.
 (: map-atom (-> Expression Variable Atom Expression))
 (: map-atom (-> Expression Expression Expression))
 (: filter-atom (-> Expression Variable Atom Expression))
 (: filter-atom (-> Expression Expression Expression))
-(: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
-(: foldl-atom (-> Expression Atom Expression %Undefined%))
+(: foldl-atom (-> Expression %Undefined% Variable Variable Atom %Undefined%))
+(: foldl-atom (-> Expression %Undefined% Expression %Undefined%))
 
 ;; --- Special forms: transactions and threads ---
 (: transaction (-> Atom %Undefined%))
@@ -336,11 +342,12 @@
 ;; MeTTa's own, no dump entry. cons/decons are the un-suffixed spellings and
 ;; first/second-from-pair read a two-element expression.
 ;;
-;; Their RESULT is `Atom`, matching the suffixed rows two lines up, and the
-;; result type is not decoration: `Atom` says the answer is final while every
-;; other result re-enters evaluation [assumed: the `returnsAtom` rule was
-;; adopted from an earlier reference semantics, not re-measured against
-;; upstream PeTTa]. Written `Expression` here, each cons re-walked the list it
+;; Their RESULT is `Atom`, matching the suffixed rows two lines up. None of
+;; them holds an operand, so their answers are final whatever the result type
+;; says: only a call holding an operand back re-enters evaluation
+;; (engine/translator/special_forms.pl, call_result_goal/4). Before that
+;; rule the result type decided it, which is why the rows say `Atom`:
+;; written `Expression` here, each cons re-walked the list it
 ;; had just built and a million-element `range` went from linear to quadratic
 ;; [measured 2026-08-24: 20,000 elements, 0.30s to 7.01s, and the shipped
 ;; million-element holbenchmark kernel stopped finishing at all].
