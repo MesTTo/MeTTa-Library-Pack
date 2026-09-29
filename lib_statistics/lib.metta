@@ -271,7 +271,7 @@
         (foldl-atom $distributions () $acc $input
           (if (if-error $acc True False) $acc
             (let $law (ws-normalize $input)
-              (if (if-error $law True False) $law (union-atom $acc (quote ($law)))))))
+              (if (if-error $law True False) $law (append $acc (quote ($law)))))))
      (if (if-error $normalized True False) $normalized
        (let $products (collapse (tuples $normalized))
          (ws-normalize

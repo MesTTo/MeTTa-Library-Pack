@@ -61,7 +61,7 @@
        (let* (($v (+ (% $version-byte 16) (* $version 16)))
               ($r (+ (% $variant-byte 64) 128)))
          (uuid-of-bytes
-           (union-atom (quote ($a $b $c $d $e $f $v $g $r)) (quote $tail)))))))
+           (append (quote ($a $b $c $d $e $f $v $g $r)) (quote $tail)))))))
 
 (: uuid-namespaces (-> Expression))
 (@doc uuid-namespaces

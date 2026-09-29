@@ -128,7 +128,7 @@
    (let $size (collections-size $items)
      (foldl-atom $items () $rest $item
        (if (== (get-metatype $item) Expression)
-         (union-atom $rest $item) (union-atom $rest (quote ($item)))))))
+         (append $rest $item) (append $rest (quote ($item)))))))
 (@doc flatten-once
   (@desc "One level of nesting removed: the elements of every element that is itself a collection, in order, with anything else kept as it is. flatten-deep removes every level, and the bare name flatten is the host's own every-level one, which is why neither of these is spelled that way.")
   (@params ((@param "Items")))
@@ -152,8 +152,8 @@
      (foldl-atom $items (() ()) $sides $item
        (let ($yes $no) (quote $sides)
          (if (forall (apply-to $test (quote ($item))) (|-> ($verdict) (!= $verdict True)))
-           (let $next (union-atom $no (quote ($item))) (quote ($yes $next)))
-           (let $next (union-atom $yes (quote ($item))) (quote ($next $no))))))))
+           (let $next (append $no (quote ($item))) (quote ($yes $next)))
+           (let $next (append $yes (quote ($item))) (quote ($next $no))))))))
 (@doc partition
   (@desc "Split Items into (Yes No), preserving input order. The predicate runs in input order; an item belongs to Yes when some answer is True, and otherwise to No. Predicate search bindings remain local to that question.")
   (@params ((@param "Test") (@param "Items")))
@@ -197,9 +197,8 @@
 
 (: sort-by (-> %Undefined% Expression Expression))
 (= (sort-by $key $items)
-   (let $groups (group-by $key (quote $items))
-     (flatten-once (map-atom (sort-atom $groups) $group
-                   (index-atom $group 1)))))
+   (flatten-once (map-atom (sort-atom (group-by $key (quote $items))) $group
+                 (index-atom $group 1))))
 (@doc sort-by
   (@desc "Compute a key for each item, sort the groups by term order and concatenate their members. Equal keys retain input order and duplicates. Alternative key answers give alternative stable sorts.")
   (@params ((@param "Key") (@param "Items")))
@@ -211,7 +210,7 @@
      (foldl-atom $items (quote ($seed)) $running $item
        (let ((:seg $previous) $acc) (quote $running)
          (let $next (apply-to $fn (quote ($acc $item)))
-           (union-atom $running (quote ($next))))))))
+           (append $running (quote ($next))))))))
 (@doc scan
   (@desc "Every running fold result, beginning with Start. Each callback answer extends a history, so a branching function produces alternative histories and a function with no answer ends that history.")
   (@params ((@param "Function") (@param "Start") (@param "Items")))

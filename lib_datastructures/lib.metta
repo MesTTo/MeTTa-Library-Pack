@@ -294,7 +294,7 @@
 (= (map-put $map $key $value)
    (let* (($rows (datastructures-map-rows map-put $map))
           ($rest (datastructures-without-key (quote $rows) (quote $key))))
-     (map-from-pairs (union-atom $rest (quote (($key $value)))))))
+     (map-from-pairs (append $rest (quote (($key $value)))))))
 (@doc map-put
   (@desc "The map with Key holding Value, replacing whatever Key held. The input map is unchanged, because a map is a value.")
   (@params ((@param "Map") (@param "Key") (@param "Value")))
@@ -345,7 +345,7 @@
 (: pq-insert (-> %Undefined% %Undefined% %Undefined% Expression))
 (= (pq-insert $queue $priority $value)
    (let $rows (datastructures-rows PriorityQueue pq-insert $queue)
-     (pq-from-pairs (union-atom $rows (quote (($priority $value)))))))
+     (pq-from-pairs (append $rows (quote (($priority $value)))))))
 (@doc pq-insert
   (@desc "The queue with Value added at Priority, after existing entries of that priority. Every occurrence is kept; the input queue is unchanged.")
   (@params ((@param "Queue") (@param "Priority") (@param "Value")))
